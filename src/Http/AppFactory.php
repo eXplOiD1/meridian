@@ -14,10 +14,14 @@ use Meridian\Auth\SystemClock;
 use Meridian\Auth\TwoFactor;
 use Meridian\Config;
 use Meridian\Database\Connection;
+use Meridian\Job\CategoryRepository;
+use Meridian\Job\JobRepository;
+use Meridian\Job\RunRepository;
 use Meridian\Security\AccessControl;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretBox;
 use Meridian\Security\SecretMasker;
+use Meridian\Settings\Settings;
 use Meridian\User\UserRepository;
 
 /**
@@ -41,10 +45,24 @@ final class AppFactory
 
         $auth = new AuthService($users, $hasher, $sessions, $throttle, $audit, $clock, $twoFactor);
 
+        $access = new AccessControl();
+        $settings = new Settings($db, $clock);
+
         $kernel = new Kernel($config, $masker);
         (new AuthController($config, $auth, $sessionAuth, $csrf, $users, $clock, $twoFactor))->register($kernel);
         (new UiController($config->uiDir))->register($kernel);
-        (new AdminController($sessionAuth, $csrf, $users, new AccessControl(), $audit, $throttle, $masker))->register($kernel);
+        (new AdminController($sessionAuth, $csrf, $users, $access, $audit, $throttle, $masker))->register($kernel);
+        (new JobController(
+            $sessionAuth,
+            $users,
+            $access,
+            new JobRepository($db, $box, $clock),
+            new RunRepository($db),
+            new CategoryRepository($db),
+            $settings,
+            $clock,
+            new JobPresenter($access, $masker),
+        ))->register($kernel);
 
         return $kernel;
     }
