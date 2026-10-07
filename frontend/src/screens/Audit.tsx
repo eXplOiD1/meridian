@@ -155,7 +155,7 @@ export function Audit({ profile }: { profile: Profile }) {
                         <span>{action.label}</span>
                       </span>
                     </td>
-                    <td>{entry.username ?? <span className="hint">Befehlszeile / unbekannt</span>}</td>
+                    <td>{entry.username ?? <span className="hint">nicht angemeldet / Befehlszeile</span>}</td>
                     <td className="table__target">{entry.target ?? ''}</td>
                   </tr>
                 );
