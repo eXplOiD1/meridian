@@ -10,10 +10,10 @@ WORKDIR /app
 COPY composer.json composer.lock* ./
 # Die PHP-Extensions bringt das Laufzeit-Image mit; hier nur die Pakete laden.
 RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader \
-    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium
+    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium --ignore-platform-req=ext-curl
 COPY src/ src/
 RUN composer dump-autoload --no-dev --classmap-authoritative \
-    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium
+    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium --ignore-platform-req=ext-curl
 
 # --- Oberfläche (React + Vite) --------------------------------------------
 FROM node:22-alpine AS ui
@@ -32,6 +32,10 @@ RUN install-php-extensions pdo_sqlite sodium pcntl opcache \
  && mkdir -p /var/lib/meridian /etc/meridian /config/caddy /data/caddy \
  && chown -R meridian:meridian /var/lib/meridian /etc/meridian /config/caddy /data/caddy \
  && chmod 0700 /etc/meridian \
+ # Build-Zeit-Prüfung für den HTTP-Runner: curl-Erweiterung mit TLS und CA-Bündel müssen vorhanden sein.
+ && php -m | grep -qi '^curl$' \
+ && php -r 'exit(in_array("https", curl_version()["protocols"], true) ? 0 : 1);' \
+ && test -s /etc/ssl/certs/ca-certificates.crt \
  # Ohne diese Datei-Capability startet FrankenPHP nicht mit cap_drop ALL + no-new-privileges
  # (exec: "Operation not permitted"). Port 8080 braucht sie nicht.
  && setcap -r /usr/local/bin/frankenphp \
