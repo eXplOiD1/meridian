@@ -102,6 +102,11 @@ services:
       MERIDIAN_AUTO_SETUP: "1"
       MERIDIAN_ADMIN_USER: ${MERIDIAN_ADMIN_USER:-}
       MERIDIAN_ADMIN_PASSWORD: ${MERIDIAN_ADMIN_PASSWORD:-}
+      # Die Sitzung liegt in einem Secure-Cookie: Anmelden geht nur über HTTPS (z. B. hinter dem
+      # Nginx Proxy Manager). Nur zum Ausprobieren über HTTP: MERIDIAN_ENV=dev (zeigt Fehler im Klartext).
+      MERIDIAN_ENV: ${MERIDIAN_ENV:-prod}
+      # IP des Reverse-Proxys, damit Sperre und Audit die echte Client-IP sehen, z. B. 172.19.0.0/16.
+      MERIDIAN_TRUSTED_PROXIES: ${MERIDIAN_TRUSTED_PROXIES:-}
     ports:
       - "${MERIDIAN_PORT:-8090}:8080"
 

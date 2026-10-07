@@ -14,10 +14,10 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 | [x] | SQLite-`Connection`, `Migrator`, Grundschema mit Standardrollen | backend |
 | [x] | `user:create`, `migrate`, Health-Endpunkt, Sicherheits-Header | backend |
 | [x] | Dockerfile, compose.yaml, systemd-Dienste, Installer | infra |
-| [ ] | `composer install` und `composer check` erstmals ausführen, Befunde beheben | tester |
-| [ ] | Anmeldung: Login, Sitzung, CSRF, Abmelden, Sperre nach Fehlversuchen | sicherheit |
+| [ ] | `composer install` und `composer check` erstmals ausführen, Befunde beheben (PHPStan max + PHPUnit grün; Psalm und Taint-Analyse stehen noch aus) | tester |
+| [x] | Anmeldung: Login, Sitzung, CSRF, Abmelden, Sperre nach Fehlversuchen | sicherheit |
 | [ ] | 2FA mit TOTP (Secret verschlüsselt in `totp_secret_enc`) | sicherheit |
-| [ ] | Audit-Log für Anmeldungen und Rechteänderungen | backend |
+| [ ] | Audit-Log für Anmeldungen und Rechteänderungen (Anmeldung, Fehlschlag, Sperre und Abmeldung werden bereits protokolliert; Rechteänderungen und Abfrage fehlen) | backend |
 | [ ] | Review Phase 1 | sicherheit |
 
 ## Phase 2 – Scheduler (MVP 6 PT)
