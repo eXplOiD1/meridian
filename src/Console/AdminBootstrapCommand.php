@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Meridian\Console;
 
+use Meridian\Auth\AuditLog;
 use Meridian\User\UserRepository;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -33,6 +34,7 @@ final class AdminBootstrapCommand extends Command
     public function __construct(
         private readonly UserRepository $users,
         private readonly array $env,
+        private readonly AuditLog $audit,
     ) {
         parent::__construct();
     }
@@ -69,6 +71,7 @@ final class AdminBootstrapCommand extends Command
             return self::INVALID;
         }
 
+        $this->audit->record(null, 'user.created', $username . ' (Admin, aus der Umgebung)');
         $output->writeln('Admin "' . $username . '" angelegt (ID ' . $id . ').');
         if ($generated) {
             $output->writeln('Zufälliges Passwort (wird nur jetzt angezeigt, bitte nach dem Login ändern): ' . $password);

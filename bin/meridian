@@ -3,6 +3,8 @@
 
 declare(strict_types=1);
 
+use Meridian\Auth\AuditLog;
+use Meridian\Auth\SystemClock;
 use Meridian\Config;
 use Meridian\Console\AdminBootstrapCommand;
 use Meridian\Console\KeyGenerateCommand;
@@ -12,6 +14,7 @@ use Meridian\Console\UserCreateCommand;
 use Meridian\Database\Connection;
 use Meridian\Database\Migrator;
 use Meridian\Security\PasswordHasher;
+use Meridian\Security\SecretMasker;
 use Meridian\User\UserRepository;
 use Symfony\Component\Console\Application;
 
@@ -29,8 +32,9 @@ if (is_dir($config->dataDir)) {
     $db = Connection::open($config->databasePath());
     $app->add(new MigrateCommand(new Migrator($db, dirname(__DIR__) . '/migrations')));
     $users = new UserRepository($db, new PasswordHasher());
-    $app->add(new UserCreateCommand($users));
-    $app->add(new AdminBootstrapCommand($users, $env));
+    $audit = new AuditLog($db, new SystemClock(), new SecretMasker());
+    $app->add(new UserCreateCommand($users, $audit));
+    $app->add(new AdminBootstrapCommand($users, $env, $audit));
     $app->add(new SchedulerRunCommand($db));
 }
 

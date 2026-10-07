@@ -32,7 +32,7 @@ final class AuthController
     public function __construct(
         private readonly Config $config,
         private readonly AuthService $auth,
-        private readonly SessionManager $sessions,
+        private readonly SessionAuth $sessionAuth,
         private readonly CsrfGuard $csrf,
         private readonly UserRepository $users,
         private readonly Clock $clock,
@@ -214,9 +214,7 @@ final class AuthController
 
     private function authenticate(Request $request): ?Session
     {
-        $token = $request->cookies->get($this->cookieName());
-
-        return is_string($token) ? $this->sessions->resolve($token) : null;
+        return $this->sessionAuth->authenticate($request);
     }
 
     private function profile(Session $session): ?JsonResponse
@@ -286,8 +284,7 @@ final class AuthController
 
     private function cookieName(): string
     {
-        // Das Präfix __Host- erzwingt Secure, Path=/ und kein Domain-Attribut. In dev (HTTP) nicht möglich.
-        return $this->config->isDev() ? 'meridian_session' : '__Host-meridian_session';
+        return $this->sessionAuth->cookieName();
     }
 
     private function cookie(#[\SensitiveParameter] string $token): Cookie

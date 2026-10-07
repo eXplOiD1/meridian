@@ -17,7 +17,7 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 | [ ] | `composer install` und `composer check` erstmals ausführen, Befunde beheben (PHPStan max + PHPUnit grün; Psalm und Taint-Analyse stehen noch aus) | tester |
 | [x] | Anmeldung: Login, Sitzung, CSRF, Abmelden, Sperre nach Fehlversuchen | sicherheit |
 | [x] | 2FA mit TOTP (Secret verschlüsselt in `totp_secret_enc`) | sicherheit |
-| [ ] | Audit-Log für Anmeldungen und Rechteänderungen (Anmeldung, Fehlschlag, Sperre und Abmeldung werden bereits protokolliert; Rechteänderungen und Abfrage fehlen) | backend |
+| [x] | Audit-Log für Anmeldungen und Rechteänderungen: Anmeldung, Fehlschlag, Sperre, Entsperren, 2FA und das Anlegen von Benutzern per Befehlszeile werden protokolliert und sind über `GET /api/audit` lesbar. Rechteänderungen per API folgen mit der Benutzerverwaltung | backend |
 | [ ] | Review Phase 1 | sicherheit |
 
 ## Phase 2 – Scheduler (MVP 6 PT)
