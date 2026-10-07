@@ -84,7 +84,12 @@ final class Connection
     private function prepare(string $sql): \PDOStatement
     {
         // Mit ERRMODE_EXCEPTION wirft PDO selbst; false wäre ein unerwarteter Zustand.
-        return $this->pdo->prepare($sql) ?: throw new \RuntimeException('SQL-Anweisung konnte nicht vorbereitet werden.');
+        $statement = $this->pdo->prepare($sql);
+        if ($statement === false) {
+            throw new \RuntimeException('SQL-Anweisung konnte nicht vorbereitet werden.');
+        }
+
+        return $statement;
     }
 
     public function lastInsertId(): int
