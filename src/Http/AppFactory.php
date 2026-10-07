@@ -16,7 +16,13 @@ use Meridian\Config;
 use Meridian\Database\Connection;
 use Meridian\Job\CategoryRepository;
 use Meridian\Job\JobRepository;
+use Meridian\Job\JobService;
+use Meridian\Job\JobValidator;
 use Meridian\Job\RunRepository;
+use Meridian\Runner\Http\AddressPolicy;
+use Meridian\Runner\Http\DbInternalTargetSource;
+use Meridian\Schedule\Planner;
+use Meridian\Schedule\SchedulerLease;
 use Meridian\Security\AccessControl;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretBox;
@@ -47,6 +53,12 @@ final class AppFactory
 
         $access = new AccessControl();
         $settings = new Settings($db, $clock);
+        $jobs = new JobRepository($db, $box, $clock);
+        $categories = new CategoryRepository($db);
+        // Das Web berechnet nur den ersten Termin eines Jobs (Planner::reschedule()); die Scheduler-Sperre gehört
+        // dem Scheduler-Prozess und wird hier nie genommen.
+        $planner = new Planner($db, $clock, new SchedulerLease($db, $clock, SchedulerLease::newOwnerId()));
+        $validator = new JobValidator($categories, $settings, $clock, new AddressPolicy(new DbInternalTargetSource($db)), $config->timezone);
 
         $kernel = new Kernel($config, $masker);
         (new AuthController($config, $auth, $sessionAuth, $csrf, $users, $clock, $twoFactor))->register($kernel);
@@ -54,14 +66,16 @@ final class AppFactory
         (new AdminController($sessionAuth, $csrf, $users, $access, $audit, $throttle, $masker))->register($kernel);
         (new JobController(
             $sessionAuth,
+            $csrf,
             $users,
             $access,
-            new JobRepository($db, $box, $clock),
+            $jobs,
             new RunRepository($db),
-            new CategoryRepository($db),
+            $categories,
             $settings,
             $clock,
             new JobPresenter($access, $masker),
+            new JobService($db, $jobs, $validator, $access, $audit, $planner),
         ))->register($kernel);
 
         return $kernel;
