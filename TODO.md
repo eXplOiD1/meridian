@@ -37,29 +37,32 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 
 ## Phase 3 – HTTP-Jobs (MVP 3 PT)
 
-Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). Vor S1 die offenen Entscheidungen O1–O13 (§8) mit Alex klären.
+Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). O1–O13 von Alex entschieden (§8.1); offen nur R1–R3 (§8.2). Regeländerungen für `CLAUDE.md` und Skills: §10.
 
 | Status | Aufgabe | Agent |
 |---|---|---|
-| [x] | Entwurf Phase 3: Datenmodell, API, HTTP-Runner, Oberfläche, Reihenfolge | architekt |
-| [ ] | S1 Recht `network.internal_targets` (nur Admin, gefährlich), Migration `0007_http_jobs.sql` (§3.1), `CategoryScope` + `AccessControl::scope()` mit Test `scope ≡ can` | sicherheit |
+| [x] | Entwurf Phase 3: Datenmodell, API, HTTP-Runner, Einstellungen, Oberfläche, Reihenfolge | architekt |
+| [ ] | S1 Rechte `network.internal_targets` und `settings.manage` (nur Admin, gefährlich), Migration `0007_http_jobs.sql` mit `settings` und `http_internal_targets` (§3.1), `CategoryScope` + `AccessControl::scope()` mit Test `scope ≡ can` | sicherheit |
 | [ ] | S2 Kernel `put`/`delete`/`post` mit Pfadparametern, `ValidationFailed` → 422, JSON-Helfer mit `no-store` und `JSON_INVALID_UTF8_SUBSTITUTE` (H3), `JsonBody` mit Tiefe | backend |
-| [ ] | S3 `HttpPayload` (verschlüsselt, Format v1), `UrlPolicy`, `AddressPolicy`, `TargetGuard`, `HostResolver` – SSRF-Fälle §7.1 als Tests | sicherheit |
-| [ ] | S4 `HttpJobConfig`, Validierung §3.2, `JobRepository`/`RunRepository` mit gemeinsamem Scope-Prädikat, Roundtrip-Test | backend |
-| [ ] | S5 Lesende Job-API (Liste, Detail, Verlauf, Lauf, Kategorien, Zeitplan-Vorschau) mit Rollen-Matrix, IDOR-Tests, H2 (`runs.worker` nie ausgeben) | backend |
-| [ ] | S6 Schreibende Job-API (anlegen, ändern mit „Anfrage nur als Ganzes ersetzen“, löschen, aktivieren/deaktivieren), CSRF, Audit, H6 (`next_run_at = NULL` in der Transaktion, danach `Planner::reschedule()`), Leak-Tests | backend |
-| [ ] | S7 Worker: Masker pro Lauf (H4, neue `Runner`-Signatur), H1 im `claim()` über `RunAuthorizer`, Wiederholung übernimmt `started_by`, Testlauf auch für deaktivierte Jobs, `RunResult::retryable`; Skill `mer-scheduler` anpassen | sicherheit |
+| [ ] | S3 `HttpPayload` (Format v1), `UrlPolicy`, `UrlDisplay` (maskierte Anzeige-URL, E2, mit allen Leak-Tests), `AddressPolicy` mit Freigaben global/je Kategorie, `TargetGuard`, `HostResolver` – Fälle §7.1/§7.2 | sicherheit |
+| [ ] | S4 `HttpJobConfig`, Validierung §3.2, `JobRepository`/`RunRepository` mit gemeinsamem Scope-Prädikat, `Settings` (Standardwerte, Validierung), Roundtrip-Test | backend |
+| [ ] | S5 Lesende Job-API (Liste, Detail mit `display_url`, Verlauf, Lauf, Kategorien, Vorschau, `/api/jobs/limits`) mit Rollen-Matrix, IDOR-Tests, H2 | backend |
+| [ ] | S6 Schreibende Job-API (Anfrage nur als Ganzes ersetzen, Zeitlimit ≤ globales Maximum), löschen, aktivieren/deaktivieren, CSRF, Audit, H6, Leak-Tests | backend |
+| [ ] | S7 Worker: Masker pro Lauf (H4, neue `Runner`-Signatur), H1 im `claim()` über `RunAuthorizer`, Wiederholung übernimmt `started_by`, Testlauf auch für deaktivierte Jobs, `RunResult::retryable` | sicherheit |
 | [ ] | S8 Manueller Lauf und Testlauf (202 über die Warteschlange, H1 beim Einreihen + Audit, 409/429-Grenzen); erledigt auch den offenen Punkt aus Phase 2 | backend |
-| [ ] | S9 `HttpRunner` + `CurlTransport` (§5): gepinnte IP, Weiterleitungen manuell, TLS an, Proxy ignoriert, Rohausgabe beim Lesen begrenzt (H3), `Heartbeat::beat()` in der `curl_multi`-Schleife, bei `false` sofort abbrechen; Verdrahtung in `bin/meridian` | backend |
-| [ ] | S10 Freigabeliste interner Ziele: API + CLI `http:internal-targets`, Audit, nie freigebbare Netze | sicherheit |
-| [ ] | S11 Leak- und SSRF-Gesamtsuite: Geheimnis in URL, Header und Body taucht in keiner Ausgabe auf (Verlauf, Notiz, API, Audit, Prozessausgabe, `error_log`) | tester |
+| [ ] | S9 `HttpRunner` + `CurlTransport` (§5): gepinnte IP, Freigaben je Hop, Weiterleitungen manuell, TLS an, Proxy ignoriert, Zeitlimit `min(Job, Maximum)`, Antwort speichern global/Job (`never` gewinnt), Rohausgabe beim Lesen begrenzt (H3), `Heartbeat::beat()` in der `curl_multi`-Schleife; Verdrahtung in `bin/meridian` | backend |
+| [ ] | S10 Freigaben interner Ziele (Host/CIDR + Port, global oder je Kategorie): API + CLI `http:internal-targets`, Audit, nie freigebbare Netze | sicherheit |
+| [ ] | S11 Leak- und SSRF-Gesamtsuite: Geheimnis in URL, Header und Body taucht in keiner Ausgabe auf (Verlauf, Notiz, API inkl. `display_url`, Audit, Prozessausgabe, `error_log`) | tester |
 | [ ] | S12 `ext-curl` in `composer.json`, `php-curl` im Installer, Image und CA-Bündel prüfen | infra |
-| [ ] | S13 `category:create` (CLI) – nur nach Zustimmung zu O7 | backend |
-| [ ] | U1 Router mit Parametern, `request()` PUT/DELETE, Typen, Rechte-Helfer, Menüpunkt „Jobs“ | frontend |
-| [ ] | U2 Übersicht „Nächste Abfahrten“ befüllen, Jobliste mit Filtern | frontend |
-| [ ] | U3 Job anlegen/bearbeiten: Anfrage nur schreibend („Anfrage ersetzen“), Cron mit Presets und Vorschau | frontend |
+| [ ] | S13 `category:create` (CLI, Audit) | backend |
+| [ ] | S14 Einstellungs-API `GET /api/settings`, `PUT /api/settings/{key}` (Allowlist, Validierung, Audit); bei `http.display_path = hidden` bestehende `display_url` verschärfen | sicherheit |
+| [ ] | U1 Router mit Parametern, `request()` PUT/DELETE, Typen, Rechte-Helfer, Menüpunkte „Jobs“ und „Einstellungen“ | frontend |
+| [ ] | U2 Übersicht „Nächste Abfahrten“ befüllen (Ziel nur Host), Jobliste mit Filtern | frontend |
+| [ ] | U3 Job anlegen/bearbeiten: maskierte `display_url` als Text, „Anfrage ersetzen“, Cron mit Presets und Vorschau, Zeitlimit mit Hinweis, Antwort speichern (erben/an/aus) | frontend |
 | [ ] | U4 Job-Detail: Verlauf, Ausgabe als Text, „Jetzt ausführen“, Testlauf mit Abfrage des Ergebnisses | frontend |
-| [ ] | Review Phase 3 | sicherheit |
+| [ ] | U5 Einstellungen für Admins: HTTP-Grenzwerte und Freigaben interner Ziele | frontend |
+| [ ] | Regeländerungen aus §10 in `CLAUDE.md` und Skills eintragen | Koordinator |
+| [ ] | Review Phase 3 (inkl. Ausnahme `display_url`) | sicherheit |
 
 ## Phase 4 – Shell-Jobs (MVP 6 PT)
 
