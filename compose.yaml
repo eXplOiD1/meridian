@@ -1,0 +1,84 @@
+# Meridian mit Docker Compose (z. B. UGOS-Docker-App)
+#
+# Diese eine Datei genügt auf dem NAS. Das Image wird direkt aus GitHub gebaut:
+#   MERIDIAN_REPO_REF (Branch, Tag oder Commit) bestimmt die Version, Standard siehe unten.
+#
+# Einmalig vorbereiten (im Ordner der compose.yaml):
+#   mkdir -p data secrets
+#   openssl rand -base64 32 > secrets/master.key
+#   chmod 600 secrets/master.key && sudo chown 1000:1000 secrets/master.key data
+#   Datei .env anlegen (Vorlage: .env.example), mit MERIDIAN_ADMIN_USER und MERIDIAN_ADMIN_PASSWORD
+#   docker compose up -d --build
+#
+# Aktualisieren auf die neueste Version:
+#   docker compose build --pull --no-cache && docker compose up -d
+#
+# Der Admin wird beim ersten Start aus MERIDIAN_ADMIN_USER / MERIDIAN_ADMIN_PASSWORD angelegt
+# (Passwort mind. 8 Zeichen). Danach können die beiden Zeilen aus der .env entfernt werden.
+# Weitere Benutzer: docker compose exec web php bin/meridian user:create <name> --role Operator
+
+name: meridian
+
+x-common: &common
+  build:
+    # GitHub-Repository als Build-Kontext; bei lokalem Checkout stattdessen: context: .
+    context: https://github.com/eXplOiD1/meridian.git#${MERIDIAN_REPO_REF:-claude/great-clarke-ubr0vc}
+    dockerfile: docker/Dockerfile
+  image: meridian:local
+  pull_policy: build
+  restart: unless-stopped
+  environment:
+    TZ: Europe/Berlin
+    MERIDIAN_TIMEZONE: Europe/Berlin
+    MERIDIAN_KEY_FILE: /run/secrets/meridian_key
+  secrets:
+    - meridian_key
+  volumes:
+    - ./data:/var/lib/meridian
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /config/caddy:uid=1000,gid=1000
+    - /data/caddy:uid=1000,gid=1000
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  web:
+    <<: *common
+    container_name: meridian-web
+    environment:
+      TZ: Europe/Berlin
+      MERIDIAN_TIMEZONE: Europe/Berlin
+      MERIDIAN_KEY_FILE: /run/secrets/meridian_key
+      # Beim ersten Start: Datenbank anlegen und Admin aus diesen Variablen erstellen.
+      MERIDIAN_AUTO_SETUP: "1"
+      MERIDIAN_ADMIN_USER: ${MERIDIAN_ADMIN_USER:-}
+      MERIDIAN_ADMIN_PASSWORD: ${MERIDIAN_ADMIN_PASSWORD:-}
+    ports:
+      - "${MERIDIAN_PORT:-8090}:8080"
+
+  scheduler:
+    <<: *common
+    container_name: meridian-scheduler
+    command: ["php", "bin/meridian", "scheduler:run", "-v"]
+    healthcheck:
+      disable: true
+
+  # Ab Phase 4 (Shell-Jobs): Zugriff auf Docker nur über diesen Proxy,
+  # nie direkt über /var/run/docker.sock im Meridian-Container.
+  # docker-proxy:
+  #   image: tecnativa/docker-socket-proxy:latest
+  #   restart: unless-stopped
+  #   environment:
+  #     CONTAINERS: 1
+  #     EXEC: 1
+  #     POST: 1
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+
+secrets:
+  meridian_key:
+    file: ./secrets/master.key

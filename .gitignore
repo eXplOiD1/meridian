@@ -1,0 +1,22 @@
+/vendor/
+/var/
+/frontend/node_modules/
+/frontend/dist/
+.env
+*.key
+*.sqlite
+*.sqlite-*
+/data/
+/secrets/
+
+# Entwicklungswerkzeuge: bleiben nur lokal, nicht im Repository
+/.claude/
+/CLAUDE.md
+/tests/
+/phpstan.neon
+/psalm.xml
+/phpunit.xml
+/.gitleaks.toml
+/.pre-commit-config.yaml
+/.github/
+/Meridian.zip
