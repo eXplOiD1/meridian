@@ -33,7 +33,7 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 | [x] | Verpasste Läufe nach Neustart (nachholen oder überspringen, höchstens ein Nachholen), hängende Läufe → `aborted` | scheduler |
 | [x] | Tests Sommerzeit März und Oktober, Neustart, Überlappung, Sperre, atomare Übernahme (auch mit parallelen Prozessen), SIGTERM | tester |
 | [ ] | Manuellen Lauf und Testlauf auslösen (mit `jobs.run`-Prüfung) – kommt mit der Job-API | backend |
-| [ ] | Review Phase 2: durchgeführt; Befunde behoben (Herzschlag pro Lauf statt Abbruch lebender Läufe, Ersatzeintrag bei Speicherfehler, Fehlerausgabe ohne Meldung, strenges `Timestamp::parse`); Punkte H1–H4, H6 stehen unter Phase 3. Offen: Nachprüfung der Behebung | sicherheit |
+| [x] | Review Phase 2: durchgeführt; Befunde behoben (Herzschlag pro Lauf statt Abbruch lebender Läufe, Ersatzeintrag bei Speicherfehler, Fehlerausgabe ohne Meldung, strenges `Timestamp::parse`); Punkte H1–H4, H6 stehen unter Phase 3. Nachprüfung durch sicherheit: alle behoben, N1 (Herzschlag wirft nie) in a8235f0 behoben | sicherheit |
 
 ## Phase 3 – HTTP-Jobs (MVP 3 PT)
 
