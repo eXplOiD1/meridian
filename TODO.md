@@ -58,7 +58,7 @@ Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). O1�
 | [ ] | S14 Einstellungs-API `GET /api/settings`, `PUT /api/settings/{key}` (Allowlist, Validierung, Audit); bei `http.display_path = hidden` bestehende `display_url` verschärfen | sicherheit |
 | [x] | U1 Router mit Parametern, `request()` PUT/DELETE, Typen, Rechte-Helfer, Menüpunkte „Jobs“ und „Einstellungen“ | frontend |
 | [x] | U2 Übersicht „Nächste Abfahrten“ befüllen (Ziel nur Host), Jobliste mit Filtern | frontend |
-| [ ] | U3 Job anlegen/bearbeiten: maskierte `display_url` als Text, „Anfrage ersetzen“, Cron mit Presets und Vorschau, Zeitlimit mit Hinweis, Antwort speichern (erben/an/aus) | frontend |
+| [x] | U3 Job anlegen/bearbeiten: maskierte `display_url` als Text, „Anfrage ersetzen“, Cron mit Presets und Vorschau, Zeitlimit mit Hinweis, Antwort speichern (erben/an/aus) | frontend |
 | [ ] | U4 Job-Detail: Verlauf, Ausgabe als Text, „Jetzt ausführen“, Testlauf mit Abfrage des Ergebnisses | frontend |
 | [ ] | U5 Einstellungen für Admins: HTTP-Grenzwerte und Freigaben interner Ziele | frontend |
 | [ ] | Regeländerungen aus §10 in `CLAUDE.md` und Skills eintragen | Koordinator |
