@@ -235,3 +235,30 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
   .board__table tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--tafel-linie); }
   .board__table td { display: block; border: 0; padding: 2px 0; }
 }
+
+/* --- Job-Editor -------------------------------------------------------------------------------- */
+.editor { gap: 20px; max-width: 920px; }
+.editor .card { gap: 14px; }
+.editor__actions { gap: 12px; }
+.input--short { max-width: 260px; }
+.input--mono-plain { font-family: var(--schrift-mono); font-size: 14px; }
+.input--area { min-height: 110px; padding: 10px 16px; resize: vertical; font-family: var(--schrift-mono); font-size: 14px; }
+.input[aria-invalid='true'] { border-color: var(--fehler); }
+.field__error { color: var(--fehler); font-size: 13px; font-weight: 600; }
+.errlist { margin: 0; padding-left: 18px; }
+.stored { background: var(--emaille); border: 1px solid var(--linie); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 8px; }
+.stored__label { font-size: 13px; color: var(--schiefer); font-weight: 600; }
+.stored__facts { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 14px; }
+.display-url { font-family: var(--schrift-mono); font-size: 14px; overflow-wrap: anywhere; background: #fff; border: 1px solid var(--linie); border-radius: 8px; padding: 10px 12px; display: block; user-select: text; }
+.replace, .headers { display: grid; gap: 12px; }
+.headers { border: 0; padding: 0; margin: 0; }
+.headers__row > .input { flex: 1 1 180px; min-width: 0; }
+.preview { background: var(--tafel); color: #fff; border-radius: var(--radius); padding: 14px 18px; display: grid; gap: 4px; }
+.preview__title { font-family: var(--schrift-kopf); font-weight: 600; font-size: 13px; letter-spacing: 0.18em; color: var(--signal); }
+.preview__row { font-family: var(--schrift-mono); font-size: 14px; }
+.preview__error { color: var(--fehler-hell); font-weight: 600; }
+.confirm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 12px; border: 1px solid var(--fehler); border-radius: var(--radius); background: #fbeceb; }
+.confirm__q { font-weight: 600; color: #7a1f12; }
+.btn--danger-text { color: var(--fehler); border-color: #e6b3ab; }
+.btn--danger-text:hover:not(:disabled) { background: #fbeceb; }
+.headers > .btn { justify-self: start; }

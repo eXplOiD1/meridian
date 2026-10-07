@@ -6,6 +6,7 @@ import type { Route } from './lib/useHashRoute';
 import { navigate, useHashRoute } from './lib/useHashRoute';
 import { Account } from './screens/Account';
 import { Audit } from './screens/Audit';
+import { JobEdit } from './screens/JobEdit';
 import { Jobs } from './screens/Jobs';
 import { Login } from './screens/Login';
 import { Overview } from './screens/Overview';
@@ -96,6 +97,8 @@ export function App() {
       {effective.name === 'konto' && <Account profile={profile} onChanged={refresh} />}
       {effective.name === 'audit' && <Audit profile={profile} />}
       {effective.name === 'jobs' && <Jobs profile={profile} />}
+      {effective.name === 'job-new' && <JobEdit profile={profile} id={null} />}
+      {effective.name === 'job-edit' && <JobEdit key={effective.id} profile={profile} id={effective.id} />}
     </Layout>
   );
 }
