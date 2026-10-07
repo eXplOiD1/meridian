@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Meridian\Console;
 
-use Meridian\Database\Connection;
+use Meridian\Schedule\RunEvent;
+use Meridian\Schedule\Scheduler;
+use Meridian\Security\SecretMasker;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -12,23 +14,38 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Dauerprozess des Schedulers. Phase 1: Takt-Schleife und Erkennung fälliger Jobs.
- * Phase 2 ergänzt Warteschlange, Überlappung, Wiederholen und verpasste Läufe.
+ * Dauerprozess des Schedulers: alle {@see self::TICK_SECONDS} Sekunden ein Takt (Sperre, Planen, Ausführen).
+ *
+ * SIGTERM/SIGINT setzen nur ein Flag: die laufende Transaktion und ein laufender Lauf werden zu Ende geführt,
+ * danach wird nichts Neues angefangen, die Sperre freigegeben und der Prozess beendet.
+ * Ausgabe: nur Job-ID, Lauf-ID und Status, nie Payload oder Laufausgabe.
  */
 #[AsCommand(name: 'scheduler:run', description: 'Startet den Scheduler (Dauerprozess)')]
 final class SchedulerRunCommand extends Command
 {
+    public const TICK_SECONDS = 5;
+
     private bool $stop = false;
 
-    public function __construct(private readonly Connection $db)
-    {
+    public function __construct(
+        private readonly Scheduler $scheduler,
+        private readonly SecretMasker $masker,
+    ) {
         parent::__construct();
+    }
+
+    /**
+     * Beendet die Schleife nach dem aktuellen Schritt (für Signale und Tests).
+     */
+    public function requestStop(): void
+    {
+        $this->stop = true;
     }
 
     #[\Override]
     protected function configure(): void
     {
-        $this->addOption('once', null, InputOption::VALUE_NONE, 'Nur einen Durchlauf, dann beenden');
+        $this->addOption('once', null, InputOption::VALUE_NONE, 'Genau einen Takt (Planen und Ausführen), dann beenden');
     }
 
     #[\Override]
@@ -36,30 +53,52 @@ final class SchedulerRunCommand extends Command
     {
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
-            pcntl_signal(SIGTERM, function (): void { $this->stop = true; });
-            pcntl_signal(SIGINT, function (): void { $this->stop = true; });
+            pcntl_signal(SIGTERM, function (): void { $this->requestStop(); });
+            pcntl_signal(SIGINT, function (): void { $this->requestStop(); });
         }
 
         $once = $input->getOption('once') === true;
-        do {
-            $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-            $due = $this->db->fetchAll(
-                'SELECT id, name FROM jobs WHERE is_enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= :now',
-                ['now' => $now->format('Y-m-d\TH:i:s\Z')],
-            );
-            $output->writeln($now->format('H:i:s') . ' fällig: ' . count($due), OutputInterface::VERBOSITY_VERBOSE);
+        $stopRequested = fn (): bool => $this->stop;
+        $waiting = false;
 
-            // TODO Phase 2: Läufe in die Warteschlange stellen und next_run_at neu berechnen.
-
-            if (!$once) {
-                // Bis zum Beginn der nächsten Minute schlafen.
-                $sleep = 60 - (int) $now->format('s');
-                for ($i = 0; $i < $sleep && !$this->stop; $i++) {
-                    sleep(1);
+        try {
+            do {
+                try {
+                    $events = $this->scheduler->tick($stopRequested);
+                } catch (\Throwable $e) {
+                    // Ein Takt darf den Dienst nicht beenden (z. B. Datenbank kurz gesperrt). Meldung maskiert.
+                    $output->writeln('<error>Takt fehlgeschlagen: ' . $this->masker->mask($e->getMessage()) . '</error>');
+                    $events = [];
                 }
-            }
-        } while (!$once && !$this->stop);
+
+                if (!$this->scheduler->holdsLease() && !$waiting) {
+                    $output->writeln('Ein anderer Scheduler hält die Sperre. Warte, bis sie frei wird.');
+                }
+                $waiting = !$this->scheduler->holdsLease();
+
+                foreach ($events as $event) {
+                    $output->writeln(self::describe($event));
+                }
+
+                if (!$once) {
+                    for ($i = 0; $i < self::TICK_SECONDS * 4 && !$this->stop; ++$i) {
+                        usleep(250_000);
+                    }
+                }
+            } while (!$once && !$this->stop);
+        } finally {
+            $this->scheduler->shutdown();
+        }
+
+        if ($this->stop) {
+            $output->writeln('Scheduler beendet (Signal).', OutputInterface::VERBOSITY_VERBOSE);
+        }
 
         return self::SUCCESS;
+    }
+
+    private static function describe(RunEvent $event): string
+    {
+        return sprintf('Job %d, Lauf %d: %s', $event->jobId, $event->runId, $event->status->value);
     }
 }

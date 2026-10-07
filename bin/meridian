@@ -17,6 +17,11 @@ use Meridian\Console\UserPasswordCommand;
 use Meridian\Console\UserCreateCommand;
 use Meridian\Database\Connection;
 use Meridian\Database\Migrator;
+use Meridian\Runner\RunnerRegistry;
+use Meridian\Schedule\Planner;
+use Meridian\Schedule\Scheduler;
+use Meridian\Schedule\SchedulerLease;
+use Meridian\Schedule\Worker;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretMasker;
 use Meridian\User\PasswordReset;
@@ -43,7 +48,16 @@ if (is_dir($config->dataDir)) {
     $throttle = new LoginThrottle($db, new SystemClock());
     $app->add(new UnlockCommand($throttle, $audit));
     $app->add(new UserPasswordCommand(new PasswordReset($users, new PasswordHasher(), new SessionManager($db, new SystemClock()), $throttle, $audit)));
-    $app->add(new SchedulerRunCommand($db));
+    // Scheduler: eine Besitzer-ID pro Prozess; Runner kommen mit Phase 3 (HTTP) und 4 (Shell).
+    $clock = new SystemClock();
+    $masker = new SecretMasker();
+    $lease = new SchedulerLease($db, $clock, SchedulerLease::newOwnerId());
+    $scheduler = new Scheduler(
+        $lease,
+        new Planner($db, $clock, $lease),
+        new Worker($db, $clock, $lease, new RunnerRegistry(), $masker),
+    );
+    $app->add(new SchedulerRunCommand($scheduler, $masker));
 }
 
 exit($app->run());
