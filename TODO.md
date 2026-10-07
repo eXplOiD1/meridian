@@ -37,20 +37,28 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 
 ## Phase 3 – HTTP-Jobs (MVP 3 PT)
 
+Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). Vor S1 die offenen Entscheidungen O1–O13 (§8) mit Alex klären.
+
 | Status | Aufgabe | Agent |
 |---|---|---|
-| [ ] | HTTP-Runner: Methode, Header, Body, Zeitlimit, Weiterleitungen begrenzen | backend |
-| [ ] | Payload verschlüsselt speichern, nur im Runner entschlüsseln, im Masker registrieren | sicherheit |
-| [ ] | Antwort maskiert und gekürzt im Verlauf speichern | backend |
-| [ ] | Testlauf ohne Statistik | backend |
-| [ ] | Schutz vor Anfragen ins interne Netz konfigurierbar (SSRF) | sicherheit |
-| [ ] | Leak-Tests: Geheimnis in URL, Header und Body taucht in keiner Ausgabe auf | tester |
-| [ ] | H1 Manueller Lauf/Testlauf: Recht beim Einreihen mit `AccessControl::require()` (Kategorie aus der DB) plus Audit-Eintrag; in `Worker::claim()` bei Trigger `manual`/`test` prüfen, ob `started_by` noch aktiv und berechtigt ist, sonst `skipped`; Wiederholungen übernehmen `started_by` | sicherheit |
-| [ ] | H2 `runs.worker` (Rechnername/PID) nie in API oder Oberfläche ausgeben | backend |
-| [ ] | H3 Runner begrenzen die Rohausgabe schon beim Lesen (Speicher); die API nutzt `JSON_INVALID_UTF8_SUBSTITUTE` | backend |
-| [ ] | H4 Masker pro Lauf statt ewig wachsender globaler Liste erwägen | sicherheit |
-| [ ] | H6 Job-API ruft beim Anlegen, bei Zeitplanänderung und beim Aktivieren `Planner::reschedule()` auf, nach der Rechteprüfung | backend |
-| [ ] | HTTP-Runner ruft `Heartbeat::beat()` mindestens alle 20 s, auch während des Wartens auf die Antwort (curl-Fortschritt bzw. `curl_multi`); bei `false` die Übertragung sofort abbrechen | backend |
+| [x] | Entwurf Phase 3: Datenmodell, API, HTTP-Runner, Oberfläche, Reihenfolge | architekt |
+| [ ] | S1 Recht `network.internal_targets` (nur Admin, gefährlich), Migration `0007_http_jobs.sql` (§3.1), `CategoryScope` + `AccessControl::scope()` mit Test `scope ≡ can` | sicherheit |
+| [ ] | S2 Kernel `put`/`delete`/`post` mit Pfadparametern, `ValidationFailed` → 422, JSON-Helfer mit `no-store` und `JSON_INVALID_UTF8_SUBSTITUTE` (H3), `JsonBody` mit Tiefe | backend |
+| [ ] | S3 `HttpPayload` (verschlüsselt, Format v1), `UrlPolicy`, `AddressPolicy`, `TargetGuard`, `HostResolver` – SSRF-Fälle §7.1 als Tests | sicherheit |
+| [ ] | S4 `HttpJobConfig`, Validierung §3.2, `JobRepository`/`RunRepository` mit gemeinsamem Scope-Prädikat, Roundtrip-Test | backend |
+| [ ] | S5 Lesende Job-API (Liste, Detail, Verlauf, Lauf, Kategorien, Zeitplan-Vorschau) mit Rollen-Matrix, IDOR-Tests, H2 (`runs.worker` nie ausgeben) | backend |
+| [ ] | S6 Schreibende Job-API (anlegen, ändern mit „Anfrage nur als Ganzes ersetzen“, löschen, aktivieren/deaktivieren), CSRF, Audit, H6 (`next_run_at = NULL` in der Transaktion, danach `Planner::reschedule()`), Leak-Tests | backend |
+| [ ] | S7 Worker: Masker pro Lauf (H4, neue `Runner`-Signatur), H1 im `claim()` über `RunAuthorizer`, Wiederholung übernimmt `started_by`, Testlauf auch für deaktivierte Jobs, `RunResult::retryable`; Skill `mer-scheduler` anpassen | sicherheit |
+| [ ] | S8 Manueller Lauf und Testlauf (202 über die Warteschlange, H1 beim Einreihen + Audit, 409/429-Grenzen); erledigt auch den offenen Punkt aus Phase 2 | backend |
+| [ ] | S9 `HttpRunner` + `CurlTransport` (§5): gepinnte IP, Weiterleitungen manuell, TLS an, Proxy ignoriert, Rohausgabe beim Lesen begrenzt (H3), `Heartbeat::beat()` in der `curl_multi`-Schleife, bei `false` sofort abbrechen; Verdrahtung in `bin/meridian` | backend |
+| [ ] | S10 Freigabeliste interner Ziele: API + CLI `http:internal-targets`, Audit, nie freigebbare Netze | sicherheit |
+| [ ] | S11 Leak- und SSRF-Gesamtsuite: Geheimnis in URL, Header und Body taucht in keiner Ausgabe auf (Verlauf, Notiz, API, Audit, Prozessausgabe, `error_log`) | tester |
+| [ ] | S12 `ext-curl` in `composer.json`, `php-curl` im Installer, Image und CA-Bündel prüfen | infra |
+| [ ] | S13 `category:create` (CLI) – nur nach Zustimmung zu O7 | backend |
+| [ ] | U1 Router mit Parametern, `request()` PUT/DELETE, Typen, Rechte-Helfer, Menüpunkt „Jobs“ | frontend |
+| [ ] | U2 Übersicht „Nächste Abfahrten“ befüllen, Jobliste mit Filtern | frontend |
+| [ ] | U3 Job anlegen/bearbeiten: Anfrage nur schreibend („Anfrage ersetzen“), Cron mit Presets und Vorschau | frontend |
+| [ ] | U4 Job-Detail: Verlauf, Ausgabe als Text, „Jetzt ausführen“, Testlauf mit Abfrage des Ergebnisses | frontend |
 | [ ] | Review Phase 3 | sicherheit |
 
 ## Phase 4 – Shell-Jobs (MVP 6 PT)
@@ -63,6 +71,7 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 | [ ] | Ausführung in Containern über docker-socket-proxy | backend |
 | [ ] | Live-Log per Server-Sent Events | backend |
 | [ ] | docker-socket-proxy in compose.yaml aktivieren | infra |
+| [ ] | Adressen des docker-socket-proxy in `AddressPolicy` fest sperren, nicht freigebbar (sonst wird ein HTTP-Job zum Shell-Job, siehe `docs/decisions/0003-phase3-http-jobs.md` E5) | sicherheit |
 | [ ] | Review Phase 4 | sicherheit |
 
 ## Phase 5 – Oberfläche (MVP 8 PT)
