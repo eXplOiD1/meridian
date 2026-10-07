@@ -16,6 +16,8 @@ final class Migrator
     }
 
     /**
+     * @phpstan-impure
+     *
      * @return list<string> Namen der neu eingespielten Migrationen
      */
     public function migrate(): array
