@@ -40,6 +40,7 @@ final class AdminBootstrapCommand extends Command
         parent::__construct();
     }
 
+    #[\Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $username = trim($this->env['MERIDIAN_ADMIN_USER'] ?? '');

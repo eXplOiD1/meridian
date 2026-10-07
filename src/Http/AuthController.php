@@ -272,18 +272,7 @@ final class AuthController
      */
     private function body(Request $request): ?array
     {
-        $body = $request->getContent();
-        if (strlen($body) > self::MAX_BODY) {
-            return null;
-        }
-
-        try {
-            $data = json_decode($body, true, 4, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return null;
-        }
-
-        return is_array($data) ? $data : null;
+        return JsonBody::object($request->getContent(), self::MAX_BODY);
     }
 
     private function cookieName(): string

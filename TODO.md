@@ -14,7 +14,7 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 | [x] | SQLite-`Connection`, `Migrator`, Grundschema mit Standardrollen | backend |
 | [x] | `user:create`, `migrate`, Health-Endpunkt, Sicherheits-Header | backend |
 | [x] | Dockerfile, compose.yaml, systemd-Dienste, Installer | infra |
-| [ ] | `composer install` und `composer check` erstmals ausführen, Befunde beheben (PHPStan max + PHPUnit grün; Psalm und Taint-Analyse stehen noch aus) | tester |
+| [x] | `composer install` und `composer check` erstmals ausführen, Befunde beheben (PHPStan max mit Strict-Rules, Psalm Level 1, Taint-Analyse, PHPUnit 159 Tests und `composer audit` grün; Psalm lief in der Entwicklungsumgebung auf PHP 8.3.6 mit umgangener Patch-Versionsprüfung, bitte einmal lokal bestätigen) | tester |
 | [x] | Anmeldung: Login, Sitzung, CSRF, Abmelden, Sperre nach Fehlversuchen | sicherheit |
 | [x] | 2FA mit TOTP (Secret verschlüsselt in `totp_secret_enc`) | sicherheit |
 | [x] | Audit-Log für Anmeldungen und Rechteänderungen: Anmeldung, Fehlschlag, Sperre, Entsperren, 2FA und das Anlegen von Benutzern per Befehlszeile werden protokolliert und sind über `GET /api/audit` lesbar. Rechteänderungen per API folgen mit der Benutzerverwaltung | backend |

@@ -104,17 +104,8 @@ final class AdminController
      */
     private function unlockTarget(Request $request): ?array
     {
-        $body = $request->getContent();
-        if (strlen($body) > self::MAX_BODY) {
-            return null;
-        }
-
-        try {
-            $data = json_decode($body, true, 4, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return null;
-        }
-        if (!is_array($data) || (isset($data['username']) === isset($data['ip']))) {
+        $data = JsonBody::object($request->getContent(), self::MAX_BODY);
+        if ($data === null || (isset($data['username']) === isset($data['ip']))) {
             return null;
         }
 

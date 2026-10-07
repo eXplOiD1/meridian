@@ -14,11 +14,13 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'key:generate', description: 'Erzeugt den Hauptschlüssel als Datei mit Rechten 0600')]
 final class KeyGenerateCommand extends Command
 {
+    #[\Override]
     protected function configure(): void
     {
         $this->addArgument('path', InputArgument::REQUIRED, 'Zieldatei, z. B. /etc/meridian/master.key');
     }
 
+    #[\Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $path = $input->getArgument('path');

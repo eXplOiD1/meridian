@@ -25,11 +25,13 @@ final class SchedulerRunCommand extends Command
         parent::__construct();
     }
 
+    #[\Override]
     protected function configure(): void
     {
         $this->addOption('once', null, InputOption::VALUE_NONE, 'Nur einen Durchlauf, dann beenden');
     }
 
+    #[\Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         if (function_exists('pcntl_async_signals')) {

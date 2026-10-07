@@ -23,6 +23,7 @@ final class UserCreateCommand extends Command
         parent::__construct();
     }
 
+    #[\Override]
     protected function configure(): void
     {
         $this
@@ -32,6 +33,7 @@ final class UserCreateCommand extends Command
         // Kein --password: Passwörter gehören nicht in die Shell-History oder die Prozessliste.
     }
 
+    #[\Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $username = $input->getArgument('username');
