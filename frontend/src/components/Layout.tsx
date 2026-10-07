@@ -1,3 +1,4 @@
+import { InsecureWarning } from './InsecureWarning';
 import type { ReactNode } from 'react';
 import { canManageUsers, roleNames } from '../lib/permissions';
 import type { Route } from '../lib/useHashRoute';
@@ -85,6 +86,7 @@ export function Layout({ profile, route, kicker, title, onLogout, children }: La
             <h1>{title}</h1>
           </div>
         </header>
+        <InsecureWarning />
         {children}
       </main>
     </div>

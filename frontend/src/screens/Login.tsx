@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert } from '../components/Alert';
+import { InsecureWarning } from '../components/InsecureWarning';
 import { Brand } from '../components/Brand';
 import { Field } from '../components/Field';
 import { ApiError, request } from '../lib/api';
@@ -38,7 +39,7 @@ export function Login({ onLoggedIn }: LoginProps) {
         onLoggedIn(await request<Profile>('GET', '/api/auth/me'));
       } catch (probe) {
         if (probe instanceof ApiError && probe.status === 401) {
-          setError('Der Browser hat die Sitzung nicht gespeichert. Meridian im Betriebsmodus „prod“ braucht HTTPS. Im reinen LAN-Test MERIDIAN_ENV=dev setzen (siehe README), sonst eine HTTPS-Adresse verwenden.');
+          setError('Der Browser hat die Sitzung nicht gespeichert. Bitte Cookies für diese Adresse erlauben und es erneut versuchen.');
           return;
         }
         throw probe;
@@ -81,6 +82,7 @@ export function Login({ onLoggedIn }: LoginProps) {
       <main className="login__main">
         <form className="login__card form" onSubmit={(event) => void submit(event)} noValidate>
           <h1>{needsCode ? 'Zweiter Faktor' : 'Anmelden'}</h1>
+          <InsecureWarning />
           {error !== null && <Alert tone="err">{error}</Alert>}
           {!needsCode ? (
             <>
