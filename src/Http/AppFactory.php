@@ -11,9 +11,11 @@ use Meridian\Auth\CsrfGuard;
 use Meridian\Auth\LoginThrottle;
 use Meridian\Auth\SessionManager;
 use Meridian\Auth\SystemClock;
+use Meridian\Auth\TwoFactor;
 use Meridian\Config;
 use Meridian\Database\Connection;
 use Meridian\Security\PasswordHasher;
+use Meridian\Security\SecretBox;
 use Meridian\Security\SecretMasker;
 use Meridian\User\UserRepository;
 
@@ -22,13 +24,14 @@ use Meridian\User\UserRepository;
  */
 final class AppFactory
 {
-    public static function create(Config $config, Connection $db, ?Clock $clock = null): Kernel
+    public static function create(Config $config, Connection $db, SecretBox $box, ?Clock $clock = null): Kernel
     {
         $clock ??= new SystemClock();
         $masker = new SecretMasker();
         $hasher = new PasswordHasher();
         $users = new UserRepository($db, $hasher);
         $sessions = new SessionManager($db, $clock);
+        $twoFactor = new TwoFactor($db, $box, $hasher, $clock);
 
         $auth = new AuthService(
             $users,
@@ -37,10 +40,11 @@ final class AppFactory
             new LoginThrottle($db, $clock),
             new AuditLog($db, $clock, $masker),
             $clock,
+            $twoFactor,
         );
 
         $kernel = new Kernel($config, $masker);
-        (new AuthController($config, $auth, $sessions, new CsrfGuard(), $users, $clock))->register($kernel);
+        (new AuthController($config, $auth, $sessions, new CsrfGuard(), $users, $clock, $twoFactor))->register($kernel);
 
         return $kernel;
     }
