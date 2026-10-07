@@ -43,7 +43,7 @@ Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). O1�
 |---|---|---|
 | [x] | Entwurf Phase 3: Datenmodell, API, HTTP-Runner, Einstellungen, Oberfläche, Reihenfolge | architekt |
 | [ ] | S1 Rechte `network.internal_targets` und `settings.manage` (nur Admin, gefährlich), Migration `0007_http_jobs.sql` mit `settings` und `http_internal_targets` (§3.1), `CategoryScope` + `AccessControl::scope()` mit Test `scope ≡ can` | sicherheit |
-| [ ] | S2 Kernel `put`/`delete`/`post` mit Pfadparametern, `ValidationFailed` → 422, JSON-Helfer mit `no-store` und `JSON_INVALID_UTF8_SUBSTITUTE` (H3), `JsonBody` mit Tiefe | backend |
+| [x] | S2 Kernel `put`/`delete`/`post` mit Pfadparametern, `ValidationFailed` → 422, JSON-Helfer mit `no-store` und `JSON_INVALID_UTF8_SUBSTITUTE` (H3), `JsonBody` mit Tiefe | backend |
 | [ ] | S3 `HttpPayload` (Format v1), `UrlPolicy`, `UrlDisplay` (maskierte Anzeige-URL, E2, mit allen Leak-Tests), `AddressPolicy` mit Freigaben global/je Kategorie, `TargetGuard`, `HostResolver` – Fälle §7.1/§7.2 | sicherheit |
 | [ ] | S4 `HttpJobConfig`, Validierung §3.2, `JobRepository`/`RunRepository` mit gemeinsamem Scope-Prädikat, `Settings` (Standardwerte, Validierung), Roundtrip-Test | backend |
 | [ ] | S5 Lesende Job-API (Liste, Detail mit `display_url`, Verlauf, Lauf, Kategorien, Vorschau, `/api/jobs/limits`) mit Rollen-Matrix, IDOR-Tests, H2 | backend |

@@ -10,16 +10,18 @@ namespace Meridian\Http;
 final class JsonBody
 {
     /**
-     * @return array<mixed>|null null bei zu großem, ungültigem oder nicht-objektförmigem Inhalt
+     * @param int $depth Höchste erlaubte Verschachtelungstiefe (Standard 4), auf 1 bis 8 begrenzt
+     *
+     * @return array<mixed>|null null bei zu großem, ungültigem, zu tiefem oder nicht-objektförmigem Inhalt
      */
-    public static function object(string $body, int $maxBytes): ?array
+    public static function object(string $body, int $maxBytes, int $depth = 4): ?array
     {
         if (strlen($body) > $maxBytes) {
             return null;
         }
 
         try {
-            return self::onlyArray(json_decode($body, true, 4, JSON_THROW_ON_ERROR));
+            return self::onlyArray(json_decode($body, true, max(1, min(8, $depth)), JSON_THROW_ON_ERROR));
         } catch (\JsonException) {
             return null;
         }

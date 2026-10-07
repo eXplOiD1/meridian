@@ -145,14 +145,11 @@ final class AdminController
      */
     private static function json(array $data, int $status = 200): JsonResponse
     {
-        $response = new JsonResponse($data, $status);
-        $response->headers->set('Cache-Control', 'no-store');
-
-        return $response;
+        return JsonReply::json($data, $status);
     }
 
     private static function error(int $status, string $message): JsonResponse
     {
-        return self::json(['error' => $message], $status);
+        return JsonReply::error($status, $message);
     }
 }
