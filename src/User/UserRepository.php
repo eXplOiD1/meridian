@@ -37,7 +37,8 @@ final class UserRepository
             );
             $userId = $db->lastInsertId();
             $db->execute(
-                'INSERT INTO user_roles (user_id, role_id) VALUES (:u, :r)',
+                // Ausdrücklich uneingeschränkt: so legt die Befehlszeile (Admin, Operator ...) Zuweisungen an.
+                'INSERT INTO user_roles (user_id, role_id, all_categories) VALUES (:u, :r, 1)',
                 ['u' => $userId, 'r' => $roleId],
             );
 
@@ -84,7 +85,7 @@ final class UserRepository
     public function grantsFor(int $userId): array
     {
         $rows = $this->db->fetchAll(
-            'SELECT ur.id AS user_role_id, r.name AS role, rp.permission
+            'SELECT ur.id AS user_role_id, ur.all_categories, r.name AS role, rp.permission
                FROM user_roles ur
                JOIN roles r ON r.id = ur.role_id
                JOIN role_permissions rp ON rp.role_id = r.id
@@ -93,7 +94,7 @@ final class UserRepository
             ['id' => $userId],
         );
 
-        /** @var array<int, array{role: string, permissions: list<Permission>}> $byGrant */
+        /** @var array<int, array{role: string, all: bool, permissions: list<Permission>}> $byGrant */
         $byGrant = [];
         foreach ($rows as $row) {
             $grantId = $row['user_role_id'] ?? null;
@@ -102,7 +103,7 @@ final class UserRepository
             if (!is_int($grantId) || !is_string($roleName) || $permission === null) {
                 continue;
             }
-            $byGrant[$grantId] ??= ['role' => $roleName, 'permissions' => []];
+            $byGrant[$grantId] ??= ['role' => $roleName, 'all' => isset($row['all_categories']) && $row['all_categories'] === 1, 'permissions' => []];
             $byGrant[$grantId]['permissions'][] = $permission;
         }
 
@@ -118,7 +119,9 @@ final class UserRepository
                     $categories[] = $categoryRow['name'];
                 }
             }
-            $grants[] = new RoleGrant($grant['role'], $grant['permissions'], $categories === [] ? null : $categories);
+            // „Alle Kategorien“ nur mit dem ausdrücklichen Flag. Eine leere Liste (auch nach dem Löschen der
+            // letzten Kategorie) erlaubt nichts.
+            $grants[] = new RoleGrant($grant['role'], $grant['permissions'], $grant['all'] ? null : $categories);
         }
 
         return $grants;

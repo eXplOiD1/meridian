@@ -62,6 +62,11 @@ final class AuthController
             return self::error(400, 'Ungültige Anfrage: JSON mit username und password erwartet.');
         }
 
+        if ($request->headers->has('X-Forwarded-For') && $this->config->trustedProxies === []) {
+            // Sonst zählt die Sperre alle Clients als eine IP (die des Proxys) und sperrt im Zweifel alle gemeinsam.
+            error_log('Meridian: Die Anfrage kommt über einen Proxy (X-Forwarded-For), aber MERIDIAN_TRUSTED_PROXIES ist nicht gesetzt. Die Sperre nach Fehlversuchen sieht nur die IP des Proxys.');
+        }
+
         $result = $this->auth->login($credentials['username'], $credentials['password'], $request->getClientIp() ?? 'unbekannt', $credentials['totp_code']);
         if ($result->status === LoginStatus::Locked) {
             $response = self::error(429, 'Zu viele Fehlversuche. Bitte später erneut versuchen.');
@@ -143,14 +148,13 @@ final class AuthController
         }
 
         $data = $this->body($request);
-        $code = $data !== null && isset($data['code']) && is_string($data['code']) && strlen($data['code']) <= self::MAX_CODE ? $data['code'] : null;
-        if ($code === null) {
-            return self::error(400, 'Ungültige Anfrage: JSON mit code erwartet.');
+        if ($data === null || !isset($data['code'], $data['password']) || !is_string($data['code']) || !is_string($data['password']) || strlen($data['code']) > self::MAX_CODE) {
+            return self::error(400, 'Ungültige Anfrage: JSON mit password und code erwartet.');
         }
 
-        $recovery = $this->auth->enableTwoFactor($user, $code, $ip);
+        $recovery = $this->auth->enableTwoFactor($user, $data['password'], $data['code'], $ip);
         if ($recovery === null) {
-            return self::error(400, 'Code ungültig oder abgelaufen. Erst /api/auth/2fa/setup aufrufen und den aktuellen Code der App eingeben.');
+            return self::error(400, 'Passwort oder Code falsch. Erst /api/auth/2fa/setup aufrufen und den aktuellen Code der App eingeben.');
         }
 
         return self::json(['status' => 'ok', 'recovery_codes' => $recovery]);

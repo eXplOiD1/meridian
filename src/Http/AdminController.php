@@ -84,18 +84,25 @@ final class AdminController
             return self::error(403, 'CSRF-Prüfung fehlgeschlagen.');
         }
 
-        $username = $this->username($request);
-        if ($username === null) {
-            return self::error(400, 'Ungültige Anfrage: JSON mit username erwartet (2 bis 64 Zeichen: Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich).');
+        $target = $this->unlockTarget($request);
+        if ($target === null) {
+            return self::error(400, 'Ungültige Anfrage: JSON mit username (2 bis 64 Zeichen: Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich) oder ip erwartet.');
         }
 
-        $this->throttle->unlockUser($username);
-        $this->audit->record($session->userId, 'auth.unlocked', $username);
+        if ($target['kind'] === 'ip') {
+            $this->throttle->unlockIp($target['value']);
+        } else {
+            $this->throttle->unlockUser($target['value']);
+        }
+        $this->audit->record($session->userId, 'auth.unlocked', ($target['kind'] === 'ip' ? 'ip:' : '') . $target['value']);
 
         return self::json(['status' => 'ok']);
     }
 
-    private function username(Request $request): ?string
+    /**
+     * @return array{kind: 'user'|'ip', value: string}|null genau eines von username oder ip, sonst null
+     */
+    private function unlockTarget(Request $request): ?array
     {
         $body = $request->getContent();
         if (strlen($body) > self::MAX_BODY) {
@@ -107,12 +114,19 @@ final class AdminController
         } catch (\JsonException) {
             return null;
         }
-
-        if (!is_array($data) || !isset($data['username']) || !is_string($data['username']) || preg_match('/^[a-z0-9._-]{2,64}$/i', $data['username']) !== 1) {
+        if (!is_array($data) || (isset($data['username']) === isset($data['ip']))) {
             return null;
         }
 
-        return $data['username'];
+        if (isset($data['username'])) {
+            return is_string($data['username']) && preg_match('/^[a-z0-9._-]{2,64}$/i', $data['username']) === 1
+                ? ['kind' => 'user', 'value' => $data['username']]
+                : null;
+        }
+
+        return is_string($data['ip']) && filter_var($data['ip'], FILTER_VALIDATE_IP) !== false
+            ? ['kind' => 'ip', 'value' => $data['ip']]
+            : null;
     }
 
     /**

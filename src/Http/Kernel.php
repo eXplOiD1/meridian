@@ -75,7 +75,7 @@ final class Kernel
             );
         }
 
-        return SecurityHeaders::apply($response);
+        return SecurityHeaders::apply($response, !$this->config->isDev() && $request->isSecure());
     }
 
     private function error(int $status, string $message): JsonResponse
