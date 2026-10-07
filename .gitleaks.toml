@@ -18,3 +18,8 @@ tags = ["url", "secret"]
 [allowlist]
 description = "Bewusst unechte Testwerte"
 paths = ['''tests/Fixtures/''']
+# Die Tests für SecretBox und SecretMasker brauchen erkennbar falsche Beispielwerte.
+regexes = [
+    '''abc123def456''',
+    '''1234567890abcdef''',
+]
