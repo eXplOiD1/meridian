@@ -1,0 +1,142 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Meridian\Settings;
+
+use Meridian\Auth\Clock;
+use Meridian\Auth\SystemClock;
+use Meridian\Database\Connection;
+use Meridian\Database\Timestamp;
+use Meridian\Security\SecretMasker;
+
+/**
+ * Globale Einstellungen aus `settings` (docs/decisions/0003, E10).
+ *
+ * Fehlt eine Zeile, gilt der Standard aus dem Code (nichts wird beim Start geseedet). Ist ein Wert in der
+ * Datenbank ungültig, gilt ebenfalls der Standard und ein Fehlerlog nennt den Schlüssel, nie den Wert: ein
+ * kaputter Eintrag macht nie lockerer als der Standard. Lesen ist überall erlaubt; Schreiben nur über
+ * {@see self::set()} aus der Admin-API (`settings.manage`), nie aus Hintergrundprozessen.
+ */
+final class Settings
+{
+    public const DEFAULT_MAX_TIMEOUT_SECONDS = 300;
+    public const MIN_TIMEOUT_SECONDS = 1;
+    public const MAX_TIMEOUT_SECONDS = 3600;
+
+    public function __construct(
+        private readonly Connection $db,
+        private readonly Clock $clock = new SystemClock(),
+    ) {
+    }
+
+    /** Globales Maximum für das Zeitlimit eines HTTP-Jobs, 1 bis 3600 s. */
+    public function maxTimeoutSeconds(): int
+    {
+        $value = $this->read(SettingKey::HttpMaxTimeout);
+
+        return is_int($value) ? $value : Settings::DEFAULT_MAX_TIMEOUT_SECONDS;
+    }
+
+    public function responseStorage(): ResponseStorage
+    {
+        $value = $this->read(SettingKey::HttpResponseStorage);
+
+        return is_string($value) ? (ResponseStorage::tryFrom($value) ?? ResponseStorage::default()) : ResponseStorage::default();
+    }
+
+    public function displayPath(): DisplayPathMode
+    {
+        $value = $this->read(SettingKey::HttpDisplayPath);
+
+        return is_string($value) ? (DisplayPathMode::tryFrom($value) ?? DisplayPathMode::default()) : DisplayPathMode::default();
+    }
+
+    /**
+     * Gültiger Wert der Einstellung (Zeile oder Standard), für die Admin-Ansicht.
+     */
+    public function value(SettingKey $key): int|string
+    {
+        return $this->read($key);
+    }
+
+    /**
+     * Prüft einen neuen Wert streng (Typ und Bereich, kein Umdeuten von „300“ zu 300).
+     *
+     * @throws InvalidSetting mit fester Meldung ohne den Wert
+     */
+    public static function validate(SettingKey $key, mixed $value): int|string
+    {
+        switch ($key) {
+            case SettingKey::HttpMaxTimeout:
+                if (!is_int($value) || $value < self::MIN_TIMEOUT_SECONDS || $value > self::MAX_TIMEOUT_SECONDS) {
+                    throw new InvalidSetting('Das Maximum für das Zeitlimit muss eine ganze Zahl von 1 bis 3600 (Sekunden) sein.');
+                }
+
+                return $value;
+            case SettingKey::HttpResponseStorage:
+                $storage = is_string($value) ? ResponseStorage::tryFrom($value) : null;
+                if ($storage === null) {
+                    throw new InvalidSetting('Antworten speichern: erlaubt sind „off“, „on“ und „never“.');
+                }
+
+                return $storage->value;
+            case SettingKey::HttpDisplayPath:
+                $mode = is_string($value) ? DisplayPathMode::tryFrom($value) : null;
+                if ($mode === null) {
+                    throw new InvalidSetting('Pfad in der URL-Anzeige: erlaubt sind „auto“ und „hidden“.');
+                }
+
+                return $mode->value;
+        }
+    }
+
+    /**
+     * Setzt eine Einstellung; `null` setzt sie auf den Standard zurück (Zeile löschen). Die Rechteprüfung
+     * (`settings.manage`) und den Audit-Eintrag macht der Aufrufer.
+     *
+     * @throws InvalidSetting
+     */
+    public function set(SettingKey $key, mixed $value, int $userId): void
+    {
+        if ($value === null) {
+            $this->db->execute('DELETE FROM settings WHERE key = :key', ['key' => $key->value]);
+
+            return;
+        }
+
+        $valid = self::validate($key, $value);
+        $this->db->execute(
+            'INSERT INTO settings (key, value_json, updated_by, updated_at) VALUES (:key, :value, :user, :at)
+             ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json, updated_by = excluded.updated_by, updated_at = excluded.updated_at',
+            [
+                'key' => $key->value,
+                'value' => json_encode($valid, JSON_THROW_ON_ERROR),
+                'user' => $userId,
+                'at' => Timestamp::format($this->clock->now()),
+            ],
+        );
+    }
+
+    private function read(SettingKey $key): int|string
+    {
+        $row = $this->db->fetchOne('SELECT value_json FROM settings WHERE key = :key', ['key' => $key->value]);
+        if ($row === null) {
+            return $key->default();
+        }
+
+        $json = $row['value_json'] ?? null;
+        try {
+            if (!is_string($json)) {
+                throw new InvalidSetting('Wert fehlt.');
+            }
+
+            return self::validate($key, json_decode($json, false, 4, JSON_THROW_ON_ERROR));
+        } catch (InvalidSetting | \JsonException) {
+            // Nur der Schlüssel ins Log, nie der Wert; es gilt der Standard.
+            error_log((new SecretMasker())->mask('Meridian: Die Einstellung ' . $key->value . ' ist in der Datenbank ungültig, der Standardwert gilt. Wert im Admin-Bereich neu setzen.'));
+
+            return $key->default();
+        }
+    }
+}
