@@ -1,40 +1,86 @@
-# Meridian mit Docker Compose (z. B. UGOS-Docker-App)
+# Meridian für Docker Compose (z. B. UGOS-Docker-App). Diese eine Datei genügt, es ist nichts vorzubereiten:
+# Das Image wird beim Start aus GitHub gebaut. Beim ersten Start legt der Container selbst an:
+#   - den Hauptschlüssel (Volume meridian-secrets, wird nie überschrieben),
+#   - die Datenbank (Volume meridian-data),
+#   - den ersten Admin. Ohne Angabe: Benutzer "admin" mit zufälligem Passwort, einmalig im Log
+#     (docker compose logs web). Eigene Zugangsdaten über MERIDIAN_ADMIN_USER / MERIDIAN_ADMIN_PASSWORD
+#     (mind. 8 Zeichen) in einer .env neben dieser Datei oder unter "environment" setzen.
 #
-# Diese eine Datei genügt auf dem NAS. Das Image wird direkt aus GitHub gebaut:
-#   MERIDIAN_REPO_REF (Branch, Tag oder Commit) bestimmt die Version, Standard siehe unten.
-#
-# Einmalig vorbereiten (im Ordner der compose.yaml):
-#   mkdir -p data secrets
-#   openssl rand -base64 32 > secrets/master.key
-#   chmod 600 secrets/master.key && sudo chown 1000:1000 secrets/master.key data
-#   Datei .env anlegen (Vorlage: .env.example), mit MERIDIAN_ADMIN_USER und MERIDIAN_ADMIN_PASSWORD
-#   docker compose up -d --build
-#
-# Aktualisieren auf die neueste Version:
-#   docker compose build --pull --no-cache && docker compose up -d
-#
-# Der Admin wird beim ersten Start aus MERIDIAN_ADMIN_USER / MERIDIAN_ADMIN_PASSWORD angelegt
-# (Passwort mind. 8 Zeichen). Danach können die beiden Zeilen aus der .env entfernt werden.
-# Weitere Benutzer: docker compose exec web php bin/meridian user:create <name> --role Operator
+# Aktualisieren: Projekt neu bereitstellen bzw. docker compose build --pull --no-cache && docker compose up -d
+# Version wählen: MERIDIAN_REPO_REF (Branch, Tag oder Commit), Port: MERIDIAN_PORT (Standard 8090).
+# Der Inline-Dockerfile entspricht docker/Dockerfile im Repository, bei Änderungen beide anpassen.
 
 name: meridian
 
 x-common: &common
   build:
-    # GitHub-Repository als Build-Kontext; bei lokalem Checkout stattdessen: context: .
-    context: https://github.com/eXplOiD1/meridian.git#${MERIDIAN_REPO_REF:-claude/great-clarke-ubr0vc}
-    dockerfile: docker/Dockerfile
+    context: .
+    dockerfile_inline: |
+        # --- Quellcode von GitHub (Archiv per HTTPS, auf dem Host wird kein git gebraucht) ---------
+        FROM alpine:3 AS source
+        ADD https://github.com/eXplOiD1/meridian/archive/${MERIDIAN_REPO_REF:-claude/great-clarke-ubr0vc}.tar.gz /src.tar.gz
+        RUN mkdir /src && tar xzf /src.tar.gz -C /src --strip-components=1
+
+        # --- Abhängigkeiten -------------------------------------------------------
+        FROM composer:2 AS vendor
+        WORKDIR /app
+        COPY --from=source /src/composer.json /src/composer.lock* ./
+        # Die PHP-Extensions bringt das Laufzeit-Image mit; hier nur die Pakete laden.
+        RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader \
+            --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium
+        COPY --from=source /src/src/ src/
+        RUN composer dump-autoload --no-dev --classmap-authoritative \
+            --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium
+
+        # --- Laufzeit -------------------------------------------------------------
+        FROM dunglas/frankenphp:1-php8.4-alpine
+
+        RUN install-php-extensions pdo_sqlite sodium pcntl opcache \
+         && addgroup -S -g 1000 meridian \
+         && adduser -S -u 1000 -G meridian -h /var/lib/meridian meridian \
+         && mkdir -p /var/lib/meridian /etc/meridian /config/caddy /data/caddy \
+         && chown -R meridian:meridian /var/lib/meridian /etc/meridian /config/caddy /data/caddy \
+         && chmod 0700 /etc/meridian \
+         # Ohne diese Datei-Capability startet FrankenPHP nicht mit cap_drop ALL + no-new-privileges
+         # (exec: "Operation not permitted"). Port 8080 braucht sie nicht.
+         && setcap -r /usr/local/bin/frankenphp \
+         && cp "$$PHP_INI_DIR/php.ini-production" "$$PHP_INI_DIR/php.ini" \
+         && printf 'expose_php=Off\ndisplay_errors=Off\nlog_errors=On\nsession.cookie_httponly=1\nsession.cookie_secure=1\nsession.cookie_samesite=Strict\n' > "$$PHP_INI_DIR/conf.d/meridian.ini"
+
+        WORKDIR /app
+        COPY --from=vendor /app/vendor ./vendor
+        COPY --from=source /src/bin/ bin/
+        COPY --from=source /src/migrations/ migrations/
+        COPY --from=source /src/public/ public/
+        COPY --from=source /src/src/ src/
+        COPY --from=source --chmod=0755 /src/docker/entrypoint.sh /usr/local/bin/meridian-entrypoint
+
+        ENV MERIDIAN_DATA_DIR=/var/lib/meridian \
+            MERIDIAN_KEY_FILE=/etc/meridian/master.key \
+            MERIDIAN_ENV=prod \
+            SERVER_NAME=":8080" \
+            SERVER_ROOT=/app/public
+
+        USER meridian
+        EXPOSE 8080
+        # Daten und Schlüssel in Volumes; Docker übernimmt dabei die Besitzer aus dem Image.
+        VOLUME ["/var/lib/meridian", "/etc/meridian"]
+
+        ENTRYPOINT ["meridian-entrypoint", "docker-php-entrypoint"]
+        # CMD kommt unverändert aus dem FrankenPHP-Image.
+
+        HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+          CMD wget -qO- http://127.0.0.1:8080/api/health || exit 1
+
   image: meridian:local
   pull_policy: build
   restart: unless-stopped
-  environment:
+  environment: &env
     TZ: Europe/Berlin
     MERIDIAN_TIMEZONE: Europe/Berlin
-    MERIDIAN_KEY_FILE: /run/secrets/meridian_key
-  secrets:
-    - meridian_key
   volumes:
-    - ./data:/var/lib/meridian
+    - meridian-data:/var/lib/meridian
+    - meridian-secrets:/etc/meridian
   read_only: true
   tmpfs:
     - /tmp
@@ -50,10 +96,8 @@ services:
     <<: *common
     container_name: meridian-web
     environment:
-      TZ: Europe/Berlin
-      MERIDIAN_TIMEZONE: Europe/Berlin
-      MERIDIAN_KEY_FILE: /run/secrets/meridian_key
-      # Beim ersten Start: Datenbank anlegen und Admin aus diesen Variablen erstellen.
+      <<: *env
+      # Beim ersten Start: Schlüssel, Datenbank und Admin automatisch anlegen.
       MERIDIAN_AUTO_SETUP: "1"
       MERIDIAN_ADMIN_USER: ${MERIDIAN_ADMIN_USER:-}
       MERIDIAN_ADMIN_PASSWORD: ${MERIDIAN_ADMIN_PASSWORD:-}
@@ -66,6 +110,9 @@ services:
     command: ["php", "bin/meridian", "scheduler:run", "-v"]
     healthcheck:
       disable: true
+    depends_on:
+      web:
+        condition: service_healthy
 
   # Ab Phase 4 (Shell-Jobs): Zugriff auf Docker nur über diesen Proxy,
   # nie direkt über /var/run/docker.sock im Meridian-Container.
@@ -79,6 +126,6 @@ services:
   #   volumes:
   #     - /var/run/docker.sock:/var/run/docker.sock:ro
 
-secrets:
-  meridian_key:
-    file: ./secrets/master.key
+volumes:
+  meridian-data:
+  meridian-secrets:

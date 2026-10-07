@@ -21,8 +21,9 @@ FROM dunglas/frankenphp:1-php8.4-alpine
 RUN install-php-extensions pdo_sqlite sodium pcntl opcache \
  && addgroup -S -g 1000 meridian \
  && adduser -S -u 1000 -G meridian -h /var/lib/meridian meridian \
- && mkdir -p /var/lib/meridian /config/caddy /data/caddy \
- && chown -R meridian:meridian /var/lib/meridian /config/caddy /data/caddy \
+ && mkdir -p /var/lib/meridian /etc/meridian /config/caddy /data/caddy \
+ && chown -R meridian:meridian /var/lib/meridian /etc/meridian /config/caddy /data/caddy \
+ && chmod 0700 /etc/meridian \
  # Ohne diese Datei-Capability startet FrankenPHP nicht mit cap_drop ALL + no-new-privileges
  # (exec: "Operation not permitted"). Port 8080 braucht sie nicht.
  && setcap -r /usr/local/bin/frankenphp \
@@ -38,13 +39,15 @@ COPY src/ src/
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/meridian-entrypoint
 
 ENV MERIDIAN_DATA_DIR=/var/lib/meridian \
+    MERIDIAN_KEY_FILE=/etc/meridian/master.key \
     MERIDIAN_ENV=prod \
     SERVER_NAME=":8080" \
     SERVER_ROOT=/app/public
 
 USER meridian
 EXPOSE 8080
-VOLUME ["/var/lib/meridian"]
+# Daten und Schlüssel in Volumes; Docker übernimmt dabei die Besitzer aus dem Image.
+VOLUME ["/var/lib/meridian", "/etc/meridian"]
 
 ENTRYPOINT ["meridian-entrypoint", "docker-php-entrypoint"]
 # CMD kommt unverändert aus dem FrankenPHP-Image.
