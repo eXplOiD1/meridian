@@ -1,0 +1,53 @@
+{
+    "name": "meridian/meridian",
+    "description": "Self-hosted job scheduler: HTTP and shell jobs, users, roles and status pages.",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3",
+        "ext-pdo_sqlite": "*",
+        "ext-sodium": "*",
+        "dragonmantank/cron-expression": "^3.4",
+        "symfony/console": "^7.1",
+        "symfony/http-foundation": "^7.1",
+        "symfony/routing": "^7.1"
+    },
+    "require-dev": {
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.0",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpunit/phpunit": "^11.4",
+        "roave/security-advisories": "dev-latest",
+        "vimeo/psalm": "^6.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Meridian\\": "Meridian/src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Meridian\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "phpstan/extension-installer": true
+        },
+        "vendor-dir": "Meridian/vendor"
+    },
+    "scripts": {
+        "phpstan": "phpstan analyse --memory-limit=1G",
+        "psalm": "psalm --no-cache",
+        "taint": "psalm --taint-analysis --no-cache",
+        "test": "phpunit",
+        "check": [
+            "@phpstan",
+            "@psalm",
+            "@taint",
+            "@test",
+            "@composer audit"
+        ]
+    }
+}

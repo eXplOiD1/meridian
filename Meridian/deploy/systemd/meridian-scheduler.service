@@ -1,0 +1,34 @@
+[Unit]
+Description=Meridian Scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=meridian
+Group=meridian
+WorkingDirectory=/opt/meridian/Meridian
+EnvironmentFile=/etc/meridian/meridian.env
+ExecStart=/usr/bin/php /opt/meridian/Meridian/bin/meridian scheduler:run -v
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Härtung
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/meridian
+LoadCredential=meridian_key:/etc/meridian/master.key
+Environment=MERIDIAN_KEY_FILE=%d/meridian_key
+
+[Install]
+WantedBy=multi-user.target

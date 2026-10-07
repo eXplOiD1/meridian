@@ -1,0 +1,20 @@
+title = "Meridian"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "meridian-master-key"
+description = "Meridian-Hauptschlüssel (base64, 32 Byte)"
+regex = '''MERIDIAN_KEY\s*=\s*['"]?[A-Za-z0-9+/]{43}=['"]?'''
+tags = ["key", "meridian"]
+
+[[rules]]
+id = "url-key-parameter"
+description = "Geheimer Schlüssel als URL-Parameter"
+regex = '''[?&](key|token|apikey|api_key|secret)=[A-Za-z0-9]{16,}'''
+tags = ["url", "secret"]
+
+[allowlist]
+description = "Bewusst unechte Testwerte"
+paths = ['''tests/Fixtures/''']
