@@ -28,17 +28,57 @@ Aktualisieren auf die neueste Version:
 docker compose build --pull --no-cache && docker compose up -d
 ```
 
-Passwort vergessen oder neuen Benutzer anlegen (Befehle im laufenden Container, das Passwort wird verdeckt abgefragt):
-
-```bash
-docker exec -it meridian-web php bin/meridian user:password <benutzername>
-docker exec -it meridian-web php bin/meridian user:create <benutzername> --name "Anzeigename" --role Admin
-```
-
+Benutzer verwalten, Passwort zurücksetzen, Sperren aufheben: siehe [Befehle](#befehle).
 `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD` gelten nur beim allerersten Start, solange es noch keinen Benutzer gibt.
 
 Das Volume `meridian-secrets` sicher aufbewahren (Sicherung mitnehmen): ohne den Schlüssel sind gespeicherte
 Geheimnisse verloren.
+
+## Befehle
+
+Meridian bringt Befehle für die Verwaltung mit. Sie laufen im Container bzw. auf dem Server, nicht im Browser.
+
+**Aufruf im Docker-Betrieb** (Containername `meridian-web`; `-it` ist bei Befehlen nötig, die ein Passwort abfragen):
+
+```bash
+docker exec -it meridian-web php bin/meridian <befehl> [argumente]
+# oder im Ordner der compose.yaml:
+docker compose exec web php bin/meridian <befehl> [argumente]
+```
+
+**Aufruf bei der Linux-Installation (systemd):**
+
+```bash
+sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/meridian <befehl> [argumente]
+```
+
+| Befehl | Wofür |
+|---|---|
+| `list` | Zeigt alle Befehle. `<befehl> --help` erklärt Argumente und Optionen. |
+| `user:create <name> [--name="Anzeigename"] [--role=Admin\|Operator\|Beobachter]` | Legt einen Benutzer an. Das Passwort (mind. 8 Zeichen) wird verdeckt abgefragt. Standardrolle ist `Beobachter`. |
+| `user:password <name>` | Setzt das Passwort neu, z. B. wenn es vergessen wurde. Beendet alle Sitzungen des Benutzers und hebt eine Sperre auf. Eine eingerichtete 2FA bleibt bestehen. |
+| `auth:unlock <benutzername-oder-ip>` | Hebt die Sperre nach zu vielen Fehlversuchen auf, auch wenn sich niemand mehr anmelden kann. |
+| `admin:bootstrap` | Legt den ersten Admin aus `MERIDIAN_ADMIN_USER` / `MERIDIAN_ADMIN_PASSWORD` an. Nur wenn es noch keinen Benutzer gibt; der Docker-Start ruft das selbst auf. |
+| `migrate` | Spielt ausstehende Datenbank-Änderungen ein. Docker-Start und Installer machen das selbst. |
+| `key:generate <pfad>` | Erzeugt den Hauptschlüssel als Datei (Rechte 0600). Überschreibt nie eine vorhandene Datei. Docker-Start und Installer machen das selbst. |
+| `scheduler:run [--once] [-v]` | Startet den Scheduler als Dauerprozess. Läuft als eigener Container (`meridian-scheduler`) bzw. systemd-Dienst. |
+
+Beispiele:
+
+```bash
+# Passwort von "admin" neu setzen (Docker)
+docker exec -it meridian-web php bin/meridian user:password admin
+
+# Weiteren Benutzer anlegen
+docker exec -it meridian-web php bin/meridian user:create jana --name "Jana" --role Operator
+
+# Gesperrten Benutzer oder gesperrte IP freigeben
+docker exec -it meridian-web php bin/meridian auth:unlock jana
+docker exec -it meridian-web php bin/meridian auth:unlock 192.168.0.25
+```
+
+Passwörter werden nie als Argument übergeben (sie würden in der Shell-History und der Prozessliste landen),
+sondern immer verdeckt abgefragt. Jeder dieser Befehle, der Benutzer oder Sperren ändert, schreibt einen Eintrag ins Audit-Log.
 
 ## Anmeldung (API)
 
