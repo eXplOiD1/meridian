@@ -20,6 +20,8 @@ use Meridian\Job\JobService;
 use Meridian\Job\JobValidator;
 use Meridian\Job\RunRepository;
 use Meridian\Job\RunService;
+use Meridian\Network\InternalTargetController;
+use Meridian\Network\InternalTargetStore;
 use Meridian\Runner\Http\AddressPolicy;
 use Meridian\Runner\Http\DbInternalTargetSource;
 use Meridian\Schedule\Planner;
@@ -79,6 +81,8 @@ final class AppFactory
             new JobService($db, $jobs, $validator, $access, $audit, $planner),
             new RunService($db, $jobs, $access, $audit, $clock),
         ))->register($kernel);
+        // Freigaben interner Ziele (network.internal_targets, nur Admin).
+        (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock), $masker))->register($kernel);
 
         return $kernel;
     }
