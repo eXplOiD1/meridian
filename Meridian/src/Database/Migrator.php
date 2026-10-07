@@ -27,7 +27,7 @@ final class Migrator
         );
 
         $applied = array_map(
-            static fn (array $row): string => is_string($row['name'] ?? null) ? $row['name'] : '',
+            static fn (array $row): string => isset($row['name']) && is_string($row['name']) ? $row['name'] : '',
             $this->db->fetchAll('SELECT name FROM schema_migrations'),
         );
 

@@ -49,8 +49,7 @@ final class Kernel
         try {
             $matcher = new UrlMatcher($this->routes, (new RequestContext())->fromRequest($request));
             $match = $matcher->matchRequest($request);
-            $name = $match['_route'] ?? null;
-            $handler = is_string($name) ? ($this->handlers[$name] ?? null) : null;
+            $handler = isset($match['_route']) && is_string($match['_route']) ? ($this->handlers[$match['_route']] ?? null) : null;
             $response = $handler !== null ? $handler($request) : $this->error(404, 'Nicht gefunden.');
         } catch (ResourceNotFoundException) {
             $response = $this->error(404, 'Nicht gefunden.');
