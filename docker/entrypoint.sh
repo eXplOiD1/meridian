@@ -5,8 +5,8 @@
 set -eu
 
 if [ "${MERIDIAN_AUTO_SETUP:-0}" = "1" ]; then
-  php /app/Meridian/bin/meridian migrate
-  php /app/Meridian/bin/meridian admin:bootstrap
+  php /app/bin/meridian migrate
+  php /app/bin/meridian admin:bootstrap
 fi
 
 exec "$@"

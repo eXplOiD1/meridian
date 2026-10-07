@@ -7,9 +7,9 @@ Wants=network-online.target
 Type=simple
 User=meridian
 Group=meridian
-WorkingDirectory=/opt/meridian/Meridian
+WorkingDirectory=/opt/meridian
 EnvironmentFile=/etc/meridian/meridian.env
-ExecStart=/usr/local/bin/frankenphp php-server --root /opt/meridian/Meridian/public --listen :8080
+ExecStart=/usr/local/bin/frankenphp php-server --root /opt/meridian/public --listen :8080
 Restart=on-failure
 RestartSec=5
 

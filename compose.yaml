@@ -21,9 +21,9 @@ name: meridian
 
 x-common: &common
   build:
-    # GitHub-Repository als Build-Kontext; bei lokalem Checkout stattdessen: context: .. 
+    # GitHub-Repository als Build-Kontext; bei lokalem Checkout stattdessen: context: .
     context: https://github.com/eXplOiD1/meridian.git#${MERIDIAN_REPO_REF:-claude/great-clarke-ubr0vc}
-    dockerfile: Meridian/docker/Dockerfile
+    dockerfile: docker/Dockerfile
   image: meridian:local
   pull_policy: build
   restart: unless-stopped

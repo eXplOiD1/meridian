@@ -4,33 +4,31 @@ Selbst gehosteter Job-Scheduler für HTTP- und Shell-Jobs, mit Benutzern, Rollen
 
 > Stand: Phase 1 (Fundament) in Arbeit. Noch nicht für den Betrieb geeignet.
 
-## Entwicklung
-
-```bash
-composer install
-composer check        # PHPStan max, Psalm, Taint-Analyse, Tests, composer audit
-php tests/smoke.php   # Schnelltest ohne Abhängigkeiten
-```
-
-Pre-Commit-Hook gegen eingecheckte Geheimnisse:
-
-```bash
-pipx install pre-commit && pre-commit install
-```
+Plan und Aufgaben: [`docs/PLAN.md`](docs/PLAN.md), [`TODO.md`](TODO.md).
 
 ## Betrieb mit Docker
+
+Auf dem Server genügt die Datei `compose.yaml` (das Image wird direkt aus GitHub gebaut):
 
 ```bash
 mkdir -p data secrets
 openssl rand -base64 32 > secrets/master.key
 chmod 600 secrets/master.key && sudo chown 1000:1000 secrets/master.key data
-docker compose build
-docker compose run --rm web php bin/meridian migrate
-docker compose run --rm -it web php bin/meridian user:create alex --name Alex --role Admin
-docker compose up -d
+cp .env.example .env     # MERIDIAN_ADMIN_USER und MERIDIAN_ADMIN_PASSWORD eintragen (mind. 8 Zeichen)
+docker compose up -d --build
 ```
 
-Danach erreichbar unter `http://<host>:8089`. Den Schlüssel in `secrets/master.key` sicher aufbewahren: ohne ihn sind gespeicherte Geheimnisse verloren.
+Beim ersten Start legt Meridian die Datenbank an und erstellt den Admin aus `MERIDIAN_ADMIN_USER` und
+`MERIDIAN_ADMIN_PASSWORD` (oder `MERIDIAN_ADMIN_PASSWORD_FILE` für ein Docker-Secret). Danach können die
+beiden Zeilen aus der `.env` entfernt werden. Erreichbar unter `http://<host>:8090` (Port über `MERIDIAN_PORT`).
+
+Aktualisieren auf die neueste Version:
+
+```bash
+docker compose build --pull --no-cache && docker compose up -d
+```
+
+Den Schlüssel in `secrets/master.key` sicher aufbewahren: ohne ihn sind gespeicherte Geheimnisse verloren.
 
 ## Betrieb auf Linux mit systemd
 
@@ -38,8 +36,4 @@ Danach erreichbar unter `http://<host>:8089`. Den Schlüssel in `secrets/master.
 sudo ./deploy/install.sh
 ```
 
-Installiert nach `/opt/meridian`, Daten in `/var/lib/meridian`, Konfiguration und Schlüssel in `/etc/meridian`.
-
-## Mit Claude Code weiterentwickeln
-
-`CLAUDE.md` enthält Regeln und Arbeitsweise, `.claude/agents/` die Subagenten mit festem Modell, `TODO.md` die Aufgaben je Phase.
+Der Installer fragt nach dem Benutzernamen und dem Passwort des ersten Admins.

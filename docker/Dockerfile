@@ -1,16 +1,19 @@
 # syntax=docker/dockerfile:1
 #
-# Build-Kontext ist das Repository-Root (nicht Meridian/), weil composer.json dort liegt:
-#   docker build -f Meridian/docker/Dockerfile .
-#   docker build -f Meridian/docker/Dockerfile https://github.com/eXplOiD1/meridian.git#main
+# Build-Kontext ist das Repository-Root:
+#   docker build -f docker/Dockerfile .
+#   docker build -f docker/Dockerfile https://github.com/eXplOiD1/meridian.git#main
 
 # --- Abhängigkeiten -------------------------------------------------------
 FROM composer:2 AS vendor
 WORKDIR /app
 COPY composer.json composer.lock* ./
-RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader
-COPY Meridian/src/ Meridian/src/
-RUN composer dump-autoload --no-dev --classmap-authoritative
+# Die PHP-Extensions bringt das Laufzeit-Image mit; hier nur die Pakete laden.
+RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader \
+    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium
+COPY src/ src/
+RUN composer dump-autoload --no-dev --classmap-authoritative \
+    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium
 
 # --- Laufzeit -------------------------------------------------------------
 FROM dunglas/frankenphp:1-php8.4-alpine
@@ -26,19 +29,18 @@ RUN install-php-extensions pdo_sqlite sodium pcntl opcache \
  && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
  && printf 'expose_php=Off\ndisplay_errors=Off\nlog_errors=On\nsession.cookie_httponly=1\nsession.cookie_secure=1\nsession.cookie_samesite=Strict\n' > "$PHP_INI_DIR/conf.d/meridian.ini"
 
-# Die Ordnerstruktur Meridian/ bleibt erhalten: der Composer-Autoloader verweist darauf.
-WORKDIR /app/Meridian
-COPY --from=vendor /app/Meridian/vendor ./vendor
-COPY Meridian/bin/ bin/
-COPY Meridian/migrations/ migrations/
-COPY Meridian/public/ public/
-COPY Meridian/src/ src/
-COPY --chmod=0755 Meridian/docker/entrypoint.sh /usr/local/bin/meridian-entrypoint
+WORKDIR /app
+COPY --from=vendor /app/vendor ./vendor
+COPY bin/ bin/
+COPY migrations/ migrations/
+COPY public/ public/
+COPY src/ src/
+COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/meridian-entrypoint
 
 ENV MERIDIAN_DATA_DIR=/var/lib/meridian \
     MERIDIAN_ENV=prod \
     SERVER_NAME=":8080" \
-    SERVER_ROOT=/app/Meridian/public
+    SERVER_ROOT=/app/public
 
 USER meridian
 EXPOSE 8080
