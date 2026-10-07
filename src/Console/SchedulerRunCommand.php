@@ -6,6 +6,7 @@ namespace Meridian\Console;
 
 use Meridian\Schedule\RunEvent;
 use Meridian\Schedule\Scheduler;
+use Meridian\Security\SecretException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -18,6 +19,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  * SIGTERM/SIGINT setzen nur ein Flag: die laufende Transaktion und ein laufender Lauf werden zu Ende geführt,
  * danach wird nichts Neues angefangen, die Sperre freigegeben und der Prozess beendet.
  * Ausgabe: nur Job-ID, Lauf-ID und Status, nie Payload oder Laufausgabe.
+ *
+ * `$prepare` läuft erst, wenn der Befehl ausgeführt wird (lädt z. B. den Schlüssel und registriert die Runner).
+ * Scheitert es, endet der Befehl mit Exit 1, bevor er die Sperre übernimmt.
  */
 #[AsCommand(name: 'scheduler:run', description: 'Startet den Scheduler (Dauerprozess)')]
 final class SchedulerRunCommand extends Command
@@ -26,8 +30,13 @@ final class SchedulerRunCommand extends Command
 
     private bool $stop = false;
 
-    public function __construct(private readonly Scheduler $scheduler)
-    {
+    /**
+     * @param (\Closure(): void)|null $prepare
+     */
+    public function __construct(
+        private readonly Scheduler $scheduler,
+        private readonly ?\Closure $prepare = null,
+    ) {
         parent::__construct();
     }
 
@@ -48,6 +57,21 @@ final class SchedulerRunCommand extends Command
     #[\Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        if ($this->prepare !== null) {
+            try {
+                ($this->prepare)();
+            } catch (SecretException $e) {
+                // Meldungen von KeyLoader/SecretBox sind feste Texte ohne Schlüssel.
+                $output->writeln('<error>' . $e->getMessage() . '</error>');
+
+                return self::FAILURE;
+            } catch (\Throwable $e) {
+                $output->writeln('<error>Start fehlgeschlagen (' . self::shortClass($e) . ').</error>');
+
+                return self::FAILURE;
+            }
+        }
+
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
             pcntl_signal(SIGTERM, function (): void { $this->requestStop(); });

@@ -17,14 +17,26 @@ use Meridian\Console\UserPasswordCommand;
 use Meridian\Console\UserCreateCommand;
 use Meridian\Database\Connection;
 use Meridian\Database\Migrator;
+use Meridian\Runner\Http\AddressPolicy;
+use Meridian\Runner\Http\CurlTransport;
+use Meridian\Runner\Http\DbHttpJobSource;
+use Meridian\Runner\Http\DbInternalTargetSource;
+use Meridian\Runner\Http\HttpRunner;
+use Meridian\Runner\Http\StoredHttpRunSettings;
+use Meridian\Runner\Http\SystemHostResolver;
+use Meridian\Runner\Http\TargetGuard;
+use Meridian\Runner\JobType;
 use Meridian\Runner\RunnerRegistry;
 use Meridian\Schedule\DbRunAuthorizer;
 use Meridian\Schedule\Planner;
 use Meridian\Schedule\Scheduler;
 use Meridian\Schedule\SchedulerLease;
 use Meridian\Schedule\Worker;
+use Meridian\Security\KeyLoader;
 use Meridian\Security\PasswordHasher;
+use Meridian\Security\SecretBox;
 use Meridian\Security\SecretMasker;
+use Meridian\Settings\Settings;
 use Meridian\User\PasswordReset;
 use Meridian\User\UserRepository;
 use Symfony\Component\Console\Application;
@@ -53,12 +65,23 @@ if (is_dir($config->dataDir)) {
     // erzeugt der Worker je Lauf (H4); H1 prüft ausgelöste Läufe beim Übernehmen mit frischen Rechten.
     $clock = new SystemClock();
     $lease = new SchedulerLease($db, $clock, SchedulerLease::newOwnerId());
+    $runners = new RunnerRegistry();
     $scheduler = new Scheduler(
         $lease,
         new Planner($db, $clock, $lease),
-        new Worker($db, $clock, $lease, new RunnerRegistry(), new DbRunAuthorizer($db, $users)),
+        new Worker($db, $clock, $lease, $runners, new DbRunAuthorizer($db, $users)),
     );
-    $app->add(new SchedulerRunCommand($scheduler));
+    // Der Schlüssel wird erst geladen, wenn scheduler:run ausgeführt wird (andere Befehle brauchen ihn nicht);
+    // ohne lesbaren Schlüssel endet der Befehl mit Exit 1 und der Meldung von KeyLoader.
+    $app->add(new SchedulerRunCommand($scheduler, static function () use ($env, $db, $runners, $config, $clock): void {
+        $runners->register(JobType::Http, new HttpRunner(
+            new DbHttpJobSource($db),
+            new SecretBox(KeyLoader::load($env)),
+            new StoredHttpRunSettings(new Settings($db, $clock)),
+            new TargetGuard(new SystemHostResolver(), new AddressPolicy(new DbInternalTargetSource($db))),
+            new CurlTransport('Meridian/' . $config->version),
+        ));
+    }));
 }
 
 exit($app->run());
