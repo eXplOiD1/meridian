@@ -3,6 +3,9 @@
  * hier steht nur das CSRF-Token im Arbeitsspeicher (nie in localStorage, sessionStorage oder der URL).
  */
 
+/** Wird ausgelöst, wenn der Server eine bestehende Sitzung nicht mehr annimmt (abgelaufen, beendet). */
+export const SESSION_ENDED_EVENT = 'meridian:session-ended';
+
 export class ApiError extends Error {
   readonly status: number;
   readonly retryAfter: number | null;
@@ -50,6 +53,10 @@ export async function request<T>(method: 'GET' | 'POST', path: string, options: 
   }
 
   if (!response.ok) {
+    // 401 bei Anmeldung und Profilabfrage ist normal (falsches Passwort, nicht angemeldet); überall sonst ist die Sitzung weg.
+    if (response.status === 401 && path !== '/api/auth/login' && path !== '/api/auth/me') {
+      window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
+    }
     const message = isRecord(data) && typeof data.error === 'string' ? data.error : 'Unerwarteter Fehler (' + String(response.status) + ').';
     const retry = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
     throw new ApiError(

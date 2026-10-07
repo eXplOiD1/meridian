@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
-import { ApiError, request } from './lib/api';
+import { ApiError, request, SESSION_ENDED_EVENT } from './lib/api';
 import { canManageUsers } from './lib/permissions';
 import type { Route } from './lib/useHashRoute';
 import { navigate, useHashRoute } from './lib/useHashRoute';
@@ -38,6 +38,16 @@ export function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Der Server hat die Sitzung beendet (z. B. Passwort per Befehl neu gesetzt): zurück zur Anmeldung statt Fehlermeldungen.
+  useEffect(() => {
+    const ended = (): void => {
+      navigate('');
+      setSession({ status: 'anonymous' });
+    };
+    window.addEventListener(SESSION_ENDED_EVENT, ended);
+    return () => window.removeEventListener(SESSION_ENDED_EVENT, ended);
+  }, []);
 
   const logout = useCallback(async (profile: Profile): Promise<void> => {
     try {
