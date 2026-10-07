@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Meridian\Http;
 
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Gemeinsamer Aufbau von JSON-Antworten der Controller: immer `Cache-Control: no-store`, und
@@ -20,6 +21,15 @@ final class JsonReply
         $response = new JsonResponse(null, $status);
         $response->setEncodingOptions($response->getEncodingOptions() | JSON_INVALID_UTF8_SUBSTITUTE);
         $response->setData($data);
+        $response->headers->set('Cache-Control', 'no-store');
+
+        return $response;
+    }
+
+    /** 204 ohne Inhalt (Löschen), ebenfalls `no-store`. */
+    public static function noContent(): Response
+    {
+        $response = new Response('', 204);
         $response->headers->set('Cache-Control', 'no-store');
 
         return $response;

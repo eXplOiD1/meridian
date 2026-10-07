@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Meridian\Http;
 
 use Meridian\Auth\Clock;
+use Meridian\Auth\CsrfGuard;
 use Meridian\Auth\Session;
 use Meridian\Job\CategoryRepository;
 use Meridian\Job\JobRepository;
+use Meridian\Job\JobService;
+use Meridian\Job\JobValidator;
 use Meridian\Job\JobSort;
 use Meridian\Job\RunRepository;
 use Meridian\Runner\JobType;
@@ -39,6 +42,7 @@ final class JobController
 
     public function __construct(
         private readonly SessionAuth $sessionAuth,
+        private readonly CsrfGuard $csrf,
         private readonly UserRepository $users,
         private readonly AccessControl $access,
         private readonly JobRepository $jobs,
@@ -47,6 +51,7 @@ final class JobController
         private readonly Settings $settings,
         private readonly Clock $clock,
         private readonly JobPresenter $presenter,
+        private readonly JobService $service,
     ) {
     }
 
@@ -60,6 +65,69 @@ final class JobController
         $kernel->get('runs_show', '/api/runs/{id}', $this->runDetail(...), $id);
         $kernel->get('schedule_preview', '/api/schedule/preview', $this->preview(...));
         $kernel->get('categories_list', '/api/categories', $this->categoryList(...));
+        $kernel->post('jobs_create', '/api/jobs', $this->create(...));
+        $kernel->put('jobs_update', '/api/jobs/{id}', $this->update(...), $id);
+        $kernel->delete('jobs_delete', '/api/jobs/{id}', $this->delete(...), $id);
+        $kernel->post('jobs_enable', '/api/jobs/{id}/enable', fn (Request $r): Response => $this->setEnabled($r, true), $id);
+        $kernel->post('jobs_disable', '/api/jobs/{id}/disable', fn (Request $r): Response => $this->setEnabled($r, false), $id);
+    }
+
+    public function create(Request $request): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        $job = $this->service->create($session->userId, $grants, self::body($request));
+
+        return $job === null
+            ? JsonReply::error(404, 'Job nicht gefunden.')
+            : JsonReply::json(['job' => $this->presenter->detail($job, $grants)], 201);
+    }
+
+    public function update(Request $request): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        $job = $this->service->update($session->userId, $grants, self::id($request), self::body($request));
+
+        return $job === null
+            ? JsonReply::error(404, 'Job nicht gefunden.')
+            : JsonReply::json(['job' => $this->presenter->detail($job, $grants)]);
+    }
+
+    public function delete(Request $request): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        return $this->service->delete($session->userId, $grants, self::id($request))
+            ? JsonReply::noContent()
+            : JsonReply::error(404, 'Job nicht gefunden.');
+    }
+
+    private function setEnabled(Request $request, bool $enabled): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        $job = $this->service->setEnabled($session->userId, $grants, self::id($request), $enabled);
+
+        return $job === null
+            ? JsonReply::error(404, 'Job nicht gefunden.')
+            : JsonReply::json(['job' => $this->presenter->detail($job, $grants)]);
     }
 
     public function list(Request $request): Response
@@ -297,18 +365,43 @@ final class JobController
     }
 
     /**
-     * Sitzung prüfen (401 ohne) und die frischen Rechte laden. Rechte werden bei jeder Anfrage neu gelesen.
+     * Sitzung prüfen (401 ohne), bei ändernden Anfragen CSRF-Token und Herkunft (403, vor dem Laden jedes Datensatzes)
+     * und die frischen Rechte laden. Rechte werden bei jeder Anfrage neu gelesen.
      *
      * @return array{0: Session, 1: list<RoleGrant>}|JsonResponse
      */
-    private function authenticate(Request $request): array|JsonResponse
+    private function authenticate(Request $request, bool $mutating = false): array|JsonResponse
     {
         $session = $this->sessionAuth->authenticate($request);
         if ($session === null) {
             return JsonReply::error(401, 'Nicht angemeldet.');
         }
+        if ($mutating && !$this->csrf->check($request, $session->token)) {
+            return JsonReply::error(403, 'CSRF-Prüfung fehlgeschlagen.');
+        }
 
         return [$session, $this->users->grantsFor($session->userId)];
+    }
+
+    /**
+     * Der Anfragekörper als JSON-Objekt (höchstens 160 KiB, Tiefe 5).
+     *
+     * @return array<mixed>
+     *
+     * @throws ValidationFailed
+     */
+    private static function body(Request $request): array
+    {
+        $data = JsonBody::object($request->getContent(), JobValidator::MAX_BODY_BYTES, 5);
+        $message = 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 160 KiB, höchstens 5 Ebenen tief).';
+        if ($data === null) {
+            throw ValidationFailed::field('body', $message);
+        }
+        if ($data !== [] && array_is_list($data)) {
+            throw ValidationFailed::field('body', $message);
+        }
+
+        return $data;
     }
 
     private static function id(Request $request): int
