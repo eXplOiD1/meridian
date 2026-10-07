@@ -12,10 +12,14 @@ import type { Profile } from './types';
 
 type Session = { status: 'loading' } | { status: 'anonymous' } | { status: 'failed'; message: string } | { status: 'in'; profile: Profile };
 
-const HEADINGS: Record<Route, { kicker: string; title: string }> = {
-  '': { kicker: 'Alles auf einen Blick', title: 'Übersicht' },
+const HEADINGS: Record<Route['name'], { kicker: string; title: string }> = {
+  home: { kicker: 'Alles auf einen Blick', title: 'Übersicht' },
   audit: { kicker: 'Wer hat wann was getan', title: 'Audit-Log' },
   konto: { kicker: 'Anmeldung und Sicherheit', title: 'Mein Konto' },
+  jobs: { kicker: 'Zeitgesteuerte Aufgaben', title: 'Jobs' },
+  'job-new': { kicker: 'Jobs', title: 'Neuer Job' },
+  job: { kicker: 'Jobs', title: 'Job' },
+  'job-edit': { kicker: 'Jobs', title: 'Job bearbeiten' },
 };
 
 export function App() {
@@ -82,14 +86,14 @@ export function App() {
 
   const { profile } = session;
   // Nur Bedienkomfort: Die Seite „Audit-Log“ prüft der Server selbst; ohne Recht antwortet er mit 403.
-  const effective: Route = route === 'audit' && !canManageUsers(profile) ? '' : route;
-  const heading = HEADINGS[effective];
+  const effective: Route = route.name === 'audit' && !canManageUsers(profile) ? { name: 'home' } : route;
+  const heading = HEADINGS[effective.name];
 
   return (
     <Layout profile={profile} route={effective} kicker={heading.kicker} title={heading.title} onLogout={() => void logout(profile)}>
-      {effective === '' && <Overview profile={profile} />}
-      {effective === 'konto' && <Account profile={profile} onChanged={refresh} />}
-      {effective === 'audit' && <Audit profile={profile} />}
+      {effective.name === 'home' && <Overview profile={profile} />}
+      {effective.name === 'konto' && <Account profile={profile} onChanged={refresh} />}
+      {effective.name === 'audit' && <Audit profile={profile} />}
     </Layout>
   );
 }
