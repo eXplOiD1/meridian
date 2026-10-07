@@ -41,6 +41,8 @@ Geheimnisse verloren.
 | `POST /api/auth/2fa/setup` | startet die Einrichtung der Zwei-Faktor-Anmeldung, liefert das Secret und die `otpauth://`-Adresse (einmalig) |
 | `POST /api/auth/2fa/enable` | `{"code": "123456"}` bestätigt die Einrichtung und liefert 8 Wiederherstellungscodes (einmalig) |
 | `POST /api/auth/2fa/disable` | `{"password": "...", "code": "..."}` schaltet 2FA ab |
+| `GET /api/audit` | Audit-Log (neueste zuerst), nur mit Recht `users.manage`. Parameter: `limit` (1 bis 200), `before_id`, `action` |
+| `POST /api/users/unlock` | `{"username": "..."}` hebt die Sperre eines Kontos auf (`users.manage`, CSRF nötig) |
 
 Ist 2FA aktiv, antwortet die Anmeldung nach richtigem Passwort mit `401` und `"totp_required": true`; dann
 `totp_code` (App-Code oder Wiederherstellungscode) mitschicken.

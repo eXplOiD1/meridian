@@ -74,6 +74,15 @@ final class LoginThrottle
         );
     }
 
+    /**
+     * Hebt Zähler und Sperre eines Benutzernamens auf (nur durch einen Administrator).
+     * Die Sperre der IP bleibt: sie schützt vor Angriffen mit vielen Namen.
+     */
+    public function unlockUser(string $username): void
+    {
+        $this->clearUser($username);
+    }
+
     private function bump(string $scope, string $subject, int $threshold): bool
     {
         $now = $this->clock->now();

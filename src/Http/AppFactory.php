@@ -14,6 +14,7 @@ use Meridian\Auth\SystemClock;
 use Meridian\Auth\TwoFactor;
 use Meridian\Config;
 use Meridian\Database\Connection;
+use Meridian\Security\AccessControl;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretBox;
 use Meridian\Security\SecretMasker;
@@ -33,18 +34,16 @@ final class AppFactory
         $sessions = new SessionManager($db, $clock);
         $twoFactor = new TwoFactor($db, $box, $hasher, $clock);
 
-        $auth = new AuthService(
-            $users,
-            $hasher,
-            $sessions,
-            new LoginThrottle($db, $clock),
-            new AuditLog($db, $clock, $masker),
-            $clock,
-            $twoFactor,
-        );
+        $throttle = new LoginThrottle($db, $clock);
+        $audit = new AuditLog($db, $clock, $masker);
+        $sessionAuth = new SessionAuth($config, $sessions);
+        $csrf = new CsrfGuard();
+
+        $auth = new AuthService($users, $hasher, $sessions, $throttle, $audit, $clock, $twoFactor);
 
         $kernel = new Kernel($config, $masker);
-        (new AuthController($config, $auth, $sessions, new CsrfGuard(), $users, $clock, $twoFactor))->register($kernel);
+        (new AuthController($config, $auth, $sessionAuth, $csrf, $users, $clock, $twoFactor))->register($kernel);
+        (new AdminController($sessionAuth, $csrf, $users, new AccessControl(), $audit, $throttle, $masker))->register($kernel);
 
         return $kernel;
     }
