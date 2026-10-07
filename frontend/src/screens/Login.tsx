@@ -73,7 +73,7 @@ export function Login({ onLoggedIn }: LoginProps) {
       <aside className="login__side">
         <Brand />
         <h2 className="login__headline">
-          Jeder Job <span>pünktlich</span> auf seinem Gleis.
+          Jeder Job <span>pünktlich</span> zur richtigen Zeit.
         </h2>
         <p className="login__tagline">
           Selbst gehosteter Zeitplaner für HTTP- und Shell-Jobs.

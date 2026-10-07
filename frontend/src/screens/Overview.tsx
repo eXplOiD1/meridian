@@ -3,7 +3,7 @@ import { Alert } from '../components/Alert';
 import { navigate } from '../lib/useHashRoute';
 import type { Profile } from '../types';
 
-/** Uhr der Abfahrtstafel: eigener kleiner Zustand, damit nur sie jede Sekunde neu gezeichnet wird. */
+/** Uhr der Übersichtstafel: eigener kleiner Zustand, damit nur sie jede Sekunde neu gezeichnet wird. */
 function BoardClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -40,19 +40,18 @@ export function Overview({ profile }: { profile: Profile }) {
           .
         </Alert>
       )}
-      <section className="board" aria-label="Nächste Abfahrten">
+      <section className="board" aria-label="Nächste Läufe">
         <div className="board__head">
           <div>
-            <div className="board__title">NÄCHSTE ABFAHRTEN</div>
-            <div className="board__sub">Alle Jobs, sortiert nach dem nächsten Lauf</div>
+            <div className="board__title">NÄCHSTE LÄUFE</div>
+            <div className="board__sub">Aktive Jobs, sortiert nach dem nächsten Ausführungszeitpunkt</div>
           </div>
           <BoardClock />
         </div>
         <div className="board__empty">
-          <strong>Noch keine Abfahrten</strong>
+          <strong>Noch keine Jobs</strong>
           <span>
-            Sobald Jobs angelegt sind, erscheinen sie hier mit Zeit, Gleis, Ziel und Status. Der Scheduler und die Jobs kommen in den nächsten
-            Ausbaustufen.
+            Sobald ein Job angelegt ist, erscheint er hier mit Zeitpunkt, Kategorie, Ziel und Status.
           </span>
         </div>
       </section>
