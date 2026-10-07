@@ -10,6 +10,7 @@ use Meridian\Auth\SystemClock;
 use Meridian\Config;
 use Meridian\Console\AdminBootstrapCommand;
 use Meridian\Console\CategoryCreateCommand;
+use Meridian\Console\InternalTargetsCommand;
 use Meridian\Console\KeyGenerateCommand;
 use Meridian\Console\MigrateCommand;
 use Meridian\Console\SchedulerRunCommand;
@@ -19,6 +20,7 @@ use Meridian\Console\UserCreateCommand;
 use Meridian\Database\Connection;
 use Meridian\Database\Migrator;
 use Meridian\Job\CategoryRepository;
+use Meridian\Network\InternalTargetStore;
 use Meridian\Runner\Http\AddressPolicy;
 use Meridian\Runner\Http\CurlTransport;
 use Meridian\Runner\Http\DbHttpJobSource;
@@ -64,6 +66,7 @@ if (is_dir($config->dataDir)) {
     $throttle = new LoginThrottle($db, new SystemClock());
     $app->add(new UnlockCommand($throttle, $audit));
     $app->add(new UserPasswordCommand(new PasswordReset($users, new PasswordHasher(), new SessionManager($db, new SystemClock()), $throttle, $audit)));
+    $app->add(new InternalTargetsCommand(new InternalTargetStore($db, new SystemClock()), $audit));
     // Scheduler: eine Besitzer-ID pro Prozess; Runner kommen mit Phase 3 (HTTP) und 4 (Shell). Den Masker
     // erzeugt der Worker je Lauf (H4); H1 prüft ausgelöste Läufe beim Übernehmen mit frischen Rechten.
     $clock = new SystemClock();
