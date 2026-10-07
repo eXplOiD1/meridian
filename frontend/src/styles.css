@@ -262,3 +262,17 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .btn--danger-text { color: var(--fehler); border-color: #e6b3ab; }
 .btn--danger-text:hover:not(:disabled) { background: #fbeceb; }
 .headers > .btn { justify-self: start; }
+
+/* --- Job-Ansicht ------------------------------------------------------------------------------- */
+.crumbs { margin: 0; }
+.jobhead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.jobhead__main { display: grid; gap: 6px; min-width: 0; }
+.jobhead__main h2 { overflow-wrap: anywhere; }
+.jobhead__actions { gap: 10px; }
+.cron--inline { display: inline; }
+.linkbtn { background: none; border: 0; padding: 4px 0; font-weight: 600; text-decoration: underline; color: var(--tafel); text-align: left; }
+.table--runs tr.is-selected td { background: var(--emaille); }
+.rundetail { border-top: 1px solid var(--linie); padding-top: 14px; display: grid; gap: 8px; }
+.rundetail__head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.rundetail__note { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.runout { margin: 0; background: var(--tafel-tief); color: var(--text-auf-tafel); border-radius: var(--radius); padding: 14px 16px; font-family: var(--schrift-mono); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
