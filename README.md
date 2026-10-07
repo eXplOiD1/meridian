@@ -54,6 +54,21 @@ Läuft Meridian hinter einem Proxy, dessen IP oder Netz in `MERIDIAN_TRUSTED_PRO
 Sperre alle Clients als eine IP (im Log steht dann eine Warnung). Wer sich selbst ausgesperrt hat, hebt die Sperre an der
 Befehlszeile auf: `docker compose exec web php bin/meridian auth:unlock <benutzername-oder-ip>`.
 
+## Oberfläche
+
+Die Weboberfläche (React + Vite, im Stil des Klickdummys „Takt“) liegt unter `frontend/` und wird vom Server unter
+`/app/` ausgeliefert, mit allen Sicherheits-Headern. Das Docker-Image baut sie selbst. Zum Entwickeln:
+
+```bash
+cd frontend && npm ci
+npm run dev        # Entwicklungsserver auf :5173, leitet /api an http://127.0.0.1:8080 weiter
+npm run build      # Produktionsbuild nach frontend/dist
+# Server lokal mit der gebauten Oberfläche (Entwicklungsmodus, weil die Anmeldung sonst HTTPS braucht):
+MERIDIAN_ENV=dev MERIDIAN_UI_DIR=frontend/dist php -S 127.0.0.1:8080 -t public public/index.php
+```
+
+Nach Änderungen an `docker/Dockerfile` den Inline-Teil der `compose.yaml` neu erzeugen: `python3 docker/sync-compose.py`.
+
 ## Betrieb auf Linux mit systemd
 
 ```bash

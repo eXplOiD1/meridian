@@ -43,6 +43,7 @@ final class AppFactory
 
         $kernel = new Kernel($config, $masker);
         (new AuthController($config, $auth, $sessionAuth, $csrf, $users, $clock, $twoFactor))->register($kernel);
+        (new UiController($config->uiDir))->register($kernel);
         (new AdminController($sessionAuth, $csrf, $users, new AccessControl(), $audit, $throttle, $masker))->register($kernel);
 
         return $kernel;
