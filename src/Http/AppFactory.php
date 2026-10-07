@@ -19,6 +19,7 @@ use Meridian\Job\JobRepository;
 use Meridian\Job\JobService;
 use Meridian\Job\JobValidator;
 use Meridian\Job\RunRepository;
+use Meridian\Job\RunService;
 use Meridian\Runner\Http\AddressPolicy;
 use Meridian\Runner\Http\DbInternalTargetSource;
 use Meridian\Schedule\Planner;
@@ -76,6 +77,7 @@ final class AppFactory
             $clock,
             new JobPresenter($access, $masker),
             new JobService($db, $jobs, $validator, $access, $audit, $planner),
+            new RunService($db, $jobs, $access, $audit, $clock),
         ))->register($kernel);
 
         return $kernel;
