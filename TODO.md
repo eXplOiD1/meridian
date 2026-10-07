@@ -37,14 +37,14 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 
 ## Phase 3 – HTTP-Jobs (MVP 3 PT)
 
-Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). O1–O13 von Alex entschieden (§8.1); offen nur R1–R3 (§8.2). Regeländerungen für `CLAUDE.md` und Skills: §10.
+Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). O1–O13 von Alex entschieden (§8.1); R1–R3 ebenfalls (R1 `http.display_path` Standard `auto`, R2 neue Rechte per Migration nur an Admin, R3 Sperr-Notiz nennt die Freigabe durch einen Admin, ohne IP). Regeländerungen für `CLAUDE.md` und Skills: §10.
 
 | Status | Aufgabe | Agent |
 |---|---|---|
 | [x] | Entwurf Phase 3: Datenmodell, API, HTTP-Runner, Einstellungen, Oberfläche, Reihenfolge | architekt |
-| [ ] | S1 Rechte `network.internal_targets` und `settings.manage` (nur Admin, gefährlich), Migration `0007_http_jobs.sql` mit `settings` und `http_internal_targets` (§3.1), `CategoryScope` + `AccessControl::scope()` mit Test `scope ≡ can` | sicherheit |
+| [x] | S1 Rechte `network.internal_targets` und `settings.manage` (nur Admin, gefährlich), Migration `0007_http_jobs.sql` mit `settings` und `http_internal_targets` (§3.1), `CategoryScope` + `AccessControl::scope()` mit Test `scope ≡ can` (dazu: `Connection` bindet Parameter mit Typ, sonst wäre `:scope_all = 1` nie wahr) | sicherheit |
 | [x] | S2 Kernel `put`/`delete`/`post` mit Pfadparametern, `ValidationFailed` → 422, JSON-Helfer mit `no-store` und `JSON_INVALID_UTF8_SUBSTITUTE` (H3), `JsonBody` mit Tiefe | backend |
-| [ ] | S3 `HttpPayload` (Format v1), `UrlPolicy`, `UrlDisplay` (maskierte Anzeige-URL, E2, mit allen Leak-Tests), `AddressPolicy` mit Freigaben global/je Kategorie, `TargetGuard`, `HostResolver` – Fälle §7.1/§7.2 | sicherheit |
+| [x] | S3 `HttpPayload` (Format v1), `UrlPolicy`, `UrlDisplay` (maskierte Anzeige-URL, E2, mit allen Leak-Tests), `AddressPolicy` mit Freigaben global/je Kategorie, `TargetGuard`, `HostResolver` – Fälle §7.1/§7.2 (dazu `InternalTarget::create()` als gemeinsame Prüfung für Anlegen und Laden, `DbInternalTargetSource`, `DisplayPathMode` mit Standard `auto` nach R1) | sicherheit |
 | [ ] | S4 `HttpJobConfig`, Validierung §3.2, `JobRepository`/`RunRepository` mit gemeinsamem Scope-Prädikat, `Settings` (Standardwerte, Validierung), Roundtrip-Test | backend |
 | [ ] | S5 Lesende Job-API (Liste, Detail mit `display_url`, Verlauf, Lauf, Kategorien, Vorschau, `/api/jobs/limits`) mit Rollen-Matrix, IDOR-Tests, H2 | backend |
 | [ ] | S6 Schreibende Job-API (Anfrage nur als Ganzes ersetzen, Zeitlimit ≤ globales Maximum), löschen, aktivieren/deaktivieren, CSRF, Audit, H6, Leak-Tests | backend |

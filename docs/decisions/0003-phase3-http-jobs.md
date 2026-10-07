@@ -1,7 +1,7 @@
 # 0003 – Phase 3: HTTP-Jobs inklusive Job-Bildschirmen
 
-Status: **Entschieden** (Alex, 07.10.2026: O1–O13, mit Änderungen bei O3, O6, O8, O9). Offen sind nur
-noch die Rückfragen in §8.2. Verfasser: architekt. Gilt für die Umsetzung von Phase 3 in `TODO.md`
+Status: **Entschieden** (Alex, 07.10.2026: O1–O13, mit Änderungen bei O3, O6, O8, O9; R1–R3 wie empfohlen,
+siehe §8.2). Verfasser: architekt. Gilt für die Umsetzung von Phase 3 in `TODO.md`
 (Schritte S1–S14, U1–U5, R).
 
 Dieser Entwurf ändert keinen Produktcode. Interfaces und die Migration stehen hier als Skizze; die
@@ -799,13 +799,16 @@ auf fremden Ursprung. Umgebung: `HTTP_PROXY`/`HTTPS_PROXY` gesetzt → wird nich
 | O12 | Proxy-Umgebung ignorieren? | Ja. |
 | O13 | Eigene CA für interne HTTPS-Ziele? | Später. |
 
-### 8.2 Noch offen (kurz, mit Empfehlung)
+### 8.2 Rückfragen (entschieden von Alex, 07.10.2026: jeweils wie empfohlen)
 
 | # | Frage | Empfehlung |
 |---|---|---|
 | R1 | Standard für `http.display_path`: `auto` (Wörter aus Kleinbuchstaben im Pfad sichtbar, Restrisiko E2 Punkt 5) oder `hidden`? | **`auto`** für den Klickdummy-Eindruck, mit Hinweis im Editor; Unternehmen stellen auf `hidden`. Wer das Restrisiko nicht will: `hidden` als Standard. |
 | R2 | Bekommen Admins die zwei neuen Rechte in bestehenden Installationen automatisch (per Migration)? | **Ja**, nur der Rolle Admin (Regel „neue Rechte nur an Admin“). |
 | R3 | Soll ein Operator sehen, **dass** sein Ziel an einer fehlenden Freigabe scheitert (Notiz nennt „Admin kann freigeben“)? | **Ja** (Notiz ohne IP, wie in 5.3). |
+
+Entschieden: R1 `auto` (Standard in `DisplayPathMode::default()`), R2 ja, nur Rolle Admin (Migration 0007), R3 ja,
+ohne IP; bei nie freigebbaren Netzen nennt die Notiz stattdessen, dass keine Freigabe möglich ist (`TargetBlocked`).
 
 ---
 
