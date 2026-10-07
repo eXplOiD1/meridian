@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Meridian auf einem Linux-Server installieren (Debian/Ubuntu, als root).
-# Voraussetzungen: PHP 8.3+ mit pdo_sqlite, sodium, pcntl; Composer; rsync; FrankenPHP unter /usr/local/bin.
+# Voraussetzungen: PHP 8.3+ mit pdo_sqlite, sodium, pcntl, curl (Debian/Ubuntu: php-curl, ca-certificates); Composer; rsync; FrankenPHP unter /usr/local/bin.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,6 +14,18 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 id meridian &>/dev/null || useradd --system --home "$DATA" --shell /usr/sbin/nologin meridian
+
+# Erweiterungen und CA-Bündel prüfen, bevor etwas installiert wird (der HTTP-Runner braucht curl mit TLS).
+for ext in pdo_sqlite sodium pcntl curl; do
+  if ! php -r 'exit(extension_loaded($argv[1]) ? 0 : 1);' "$ext"; then
+    echo "PHP-Erweiterung $ext fehlt. Bitte installieren (z. B. apt install php-cli php-sqlite3 php-curl) und erneut starten." >&2
+    exit 1
+  fi
+done
+if [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
+  echo "CA-Bündel /etc/ssl/certs/ca-certificates.crt fehlt. Bitte 'apt install ca-certificates' ausführen und erneut starten." >&2
+  exit 1
+fi
 
 install -d -o root -g root -m 0755 "$APP"
 install -d -o meridian -g meridian -m 0750 "$DATA"
