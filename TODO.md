@@ -25,13 +25,14 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 
 | Status | Aufgabe | Agent |
 |---|---|---|
-| [ ] | Entwurf: Warteschlange, Sperre gegen zwei Scheduler, Ablauf eines Laufs | architekt |
-| [ ] | `next_run_at` berechnen und nach jedem Lauf fortschreiben | scheduler |
-| [ ] | Warteschlange und Worker-Prozess | scheduler |
-| [ ] | Überlappung `skip`/`parallel`/`queue` | scheduler |
-| [ ] | Wiederholen mit wachsendem Abstand | scheduler |
-| [ ] | Verpasste Läufe nach Neustart (nachholen oder überspringen) | scheduler |
-| [ ] | Tests Sommerzeit März und Oktober, Neustart, Überlappung | tester |
+| [x] | Entwurf: Warteschlange, Sperre gegen zwei Scheduler, Ablauf eines Laufs (festgehalten im Skill `mer-scheduler`; Migration `0005_scheduler.sql`: Status `skipped`, `runs.scheduled_for/attempt/note/worker`, `jobs.catch_up/retry_delay_seconds`, Tabelle `scheduler_lease`) | architekt |
+| [x] | `next_run_at` berechnen und nach jedem Lauf fortschreiben (`Planner`, `CronSchedule::nextAfter()` mit Filter gegen Sommerzeit-Fehler der Bibliothek; `Planner::reschedule()` für Anlegen/Ändern/Aktivieren eines Jobs) | scheduler |
+| [x] | Warteschlange und Worker-Prozess (`Worker`, `Runner`-Schnittstelle mit `RunnerRegistry`; bis Phase 3/4 endet ein Lauf ohne Runner als `failed` mit Notiz), Lease-Sperre, `scheduler:run` mit 5-s-Takt und SIGTERM | scheduler |
+| [x] | Überlappung `skip`/`parallel`/`queue` | scheduler |
+| [x] | Wiederholen mit wachsendem Abstand (`retry_delay_seconds · 2^(Versuch−1)`, höchstens 1 h) | scheduler |
+| [x] | Verpasste Läufe nach Neustart (nachholen oder überspringen, höchstens ein Nachholen), hängende Läufe → `aborted` | scheduler |
+| [x] | Tests Sommerzeit März und Oktober, Neustart, Überlappung, Sperre, atomare Übernahme (auch mit parallelen Prozessen), SIGTERM | tester |
+| [ ] | Manuellen Lauf und Testlauf auslösen (mit `jobs.run`-Prüfung) – kommt mit der Job-API | backend |
 | [ ] | Review Phase 2 | sicherheit |
 
 ## Phase 3 – HTTP-Jobs (MVP 3 PT)
