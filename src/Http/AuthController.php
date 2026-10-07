@@ -10,8 +10,10 @@ use Meridian\Auth\CsrfGuard;
 use Meridian\Auth\LoginStatus;
 use Meridian\Auth\Session;
 use Meridian\Auth\SessionManager;
+use Meridian\Auth\TwoFactor;
 use Meridian\Config;
 use Meridian\Security\Permission;
+use Meridian\User\UserAccount;
 use Meridian\User\UserRepository;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -25,6 +27,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class AuthController
 {
     private const MAX_BODY = 4096;
+    private const MAX_CODE = 32;
 
     public function __construct(
         private readonly Config $config,
@@ -33,6 +36,7 @@ final class AuthController
         private readonly CsrfGuard $csrf,
         private readonly UserRepository $users,
         private readonly Clock $clock,
+        private readonly TwoFactor $twoFactor,
     ) {
     }
 
@@ -41,6 +45,9 @@ final class AuthController
         $kernel->post('auth_login', '/api/auth/login', $this->login(...));
         $kernel->post('auth_logout', '/api/auth/logout', $this->logout(...));
         $kernel->get('auth_me', '/api/auth/me', $this->me(...));
+        $kernel->post('auth_2fa_setup', '/api/auth/2fa/setup', $this->twoFactorSetup(...));
+        $kernel->post('auth_2fa_enable', '/api/auth/2fa/enable', $this->twoFactorEnable(...));
+        $kernel->post('auth_2fa_disable', '/api/auth/2fa/disable', $this->twoFactorDisable(...));
     }
 
     public function login(Request $request): Response
@@ -55,12 +62,16 @@ final class AuthController
             return self::error(400, 'Ungültige Anfrage: JSON mit username und password erwartet.');
         }
 
-        $result = $this->auth->login($credentials['username'], $credentials['password'], $request->getClientIp() ?? 'unbekannt');
+        $result = $this->auth->login($credentials['username'], $credentials['password'], $request->getClientIp() ?? 'unbekannt', $credentials['totp_code']);
         if ($result->status === LoginStatus::Locked) {
             $response = self::error(429, 'Zu viele Fehlversuche. Bitte später erneut versuchen.');
             $response->headers->set('Retry-After', (string) $result->retryAfter);
 
             return $response;
+        }
+        if ($result->status === LoginStatus::TotpRequired) {
+            // Erst nach richtigem Passwort: die Oberfläche fragt dann den Code ab.
+            return self::json(['error' => 'Zweiter Faktor erforderlich.', 'totp_required' => true], 401);
         }
         if ($result->status !== LoginStatus::Success || $result->session === null) {
             return self::error(401, AuthService::MESSAGE_INVALID);
@@ -99,6 +110,108 @@ final class AuthController
         return $this->profile($session) ?? self::error(401, 'Nicht angemeldet.');
     }
 
+    /**
+     * Einrichtung: liefert das Secret genau einmal im Klartext, damit es in die App übernommen werden kann.
+     * Betrifft nur das eigene Konto, deshalb kein Recht aus AccessControl, aber Sitzung und CSRF.
+     */
+    public function twoFactorSetup(Request $request): Response
+    {
+        $user = $this->ownAccount($request);
+        if ($user instanceof Response) {
+            return $user;
+        }
+
+        $setup = $this->auth->startTwoFactorSetup($user);
+        if ($setup === null) {
+            return self::error(409, 'Die Zwei-Faktor-Anmeldung ist bereits aktiv. Zum Neueinrichten zuerst deaktivieren.');
+        }
+
+        return self::json(['secret' => $setup['secret'], 'otpauth_uri' => $setup['uri']]);
+    }
+
+    public function twoFactorEnable(Request $request): Response
+    {
+        $user = $this->ownAccount($request);
+        if ($user instanceof Response) {
+            return $user;
+        }
+
+        $ip = $request->getClientIp() ?? 'unbekannt';
+        $locked = $this->lockedResponse($user, $ip);
+        if ($locked !== null) {
+            return $locked;
+        }
+
+        $data = $this->body($request);
+        $code = $data !== null && isset($data['code']) && is_string($data['code']) && strlen($data['code']) <= self::MAX_CODE ? $data['code'] : null;
+        if ($code === null) {
+            return self::error(400, 'Ungültige Anfrage: JSON mit code erwartet.');
+        }
+
+        $recovery = $this->auth->enableTwoFactor($user, $code, $ip);
+        if ($recovery === null) {
+            return self::error(400, 'Code ungültig oder abgelaufen. Erst /api/auth/2fa/setup aufrufen und den aktuellen Code der App eingeben.');
+        }
+
+        return self::json(['status' => 'ok', 'recovery_codes' => $recovery]);
+    }
+
+    public function twoFactorDisable(Request $request): Response
+    {
+        $user = $this->ownAccount($request);
+        if ($user instanceof Response) {
+            return $user;
+        }
+
+        $ip = $request->getClientIp() ?? 'unbekannt';
+        $locked = $this->lockedResponse($user, $ip);
+        if ($locked !== null) {
+            return $locked;
+        }
+
+        $data = $this->body($request);
+        if ($data === null || !isset($data['password'], $data['code']) || !is_string($data['password']) || !is_string($data['code']) || strlen($data['code']) > self::MAX_CODE) {
+            return self::error(400, 'Ungültige Anfrage: JSON mit password und code erwartet.');
+        }
+
+        if (!$this->auth->disableTwoFactor($user, $data['password'], $data['code'], $ip)) {
+            return self::error(400, 'Passwort oder Code falsch.');
+        }
+
+        return self::json(['status' => 'ok']);
+    }
+
+    /**
+     * Sitzung, CSRF und aktives Konto für Aktionen am eigenen Konto.
+     */
+    private function ownAccount(Request $request): UserAccount|Response
+    {
+        $session = $this->authenticate($request);
+        if ($session === null) {
+            return self::error(401, 'Nicht angemeldet.');
+        }
+        if (!$this->csrf->check($request, $session->token)) {
+            return self::error(403, 'CSRF-Prüfung fehlgeschlagen.');
+        }
+
+        $user = $this->users->findById($session->userId);
+
+        return $user !== null && $user->isActive ? $user : self::error(401, 'Nicht angemeldet.');
+    }
+
+    private function lockedResponse(UserAccount $user, string $ip): ?Response
+    {
+        $locked = $this->auth->lockedFor($user, $ip);
+        if ($locked <= 0) {
+            return null;
+        }
+
+        $response = self::error(429, 'Zu viele Fehlversuche. Bitte später erneut versuchen.');
+        $response->headers->set('Retry-After', (string) $locked);
+
+        return $response;
+    }
+
     private function authenticate(Request $request): ?Session
     {
         $token = $request->cookies->get($this->cookieName());
@@ -126,14 +239,36 @@ final class AuthController
         return self::json([
             'user' => ['id' => $user->id, 'username' => $user->username, 'display_name' => $user->displayName],
             'roles' => $roles,
+            'totp_enabled' => $this->twoFactor->isEnabled($user->id),
             'csrf_token' => $this->csrf->tokenFor($session->token),
         ]);
     }
 
     /**
-     * @return array{username: string, password: string}|null
+     * @return array{username: string, password: string, totp_code: string|null}|null
      */
     private function credentials(Request $request): ?array
+    {
+        $data = $this->body($request);
+        if ($data === null || !isset($data['username'], $data['password']) || !is_string($data['username']) || !is_string($data['password'])) {
+            return null;
+        }
+
+        $code = null;
+        if (isset($data['totp_code'])) {
+            if (!is_string($data['totp_code']) || strlen($data['totp_code']) > self::MAX_CODE) {
+                return null;
+            }
+            $code = $data['totp_code'];
+        }
+
+        return ['username' => $data['username'], 'password' => $data['password'], 'totp_code' => $code];
+    }
+
+    /**
+     * @return array<mixed>|null
+     */
+    private function body(Request $request): ?array
     {
         $body = $request->getContent();
         if (strlen($body) > self::MAX_BODY) {
@@ -146,11 +281,7 @@ final class AuthController
             return null;
         }
 
-        if (!is_array($data) || !isset($data['username'], $data['password']) || !is_string($data['username']) || !is_string($data['password'])) {
-            return null;
-        }
-
-        return ['username' => $data['username'], 'password' => $data['password']];
+        return is_array($data) ? $data : null;
     }
 
     private function cookieName(): string

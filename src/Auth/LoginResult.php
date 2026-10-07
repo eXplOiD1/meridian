@@ -24,6 +24,11 @@ final readonly class LoginResult
         return new self(LoginStatus::Invalid, null, 0, null);
     }
 
+    public static function totpRequired(): self
+    {
+        return new self(LoginStatus::TotpRequired, null, 0, null);
+    }
+
     public static function locked(int $retryAfter): self
     {
         return new self(LoginStatus::Locked, null, $retryAfter, null);

@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Meridian\Config;
 use Meridian\Database\Connection;
 use Meridian\Http\AppFactory;
+use Meridian\Security\KeyLoader;
+use Meridian\Security\SecretBox;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -23,7 +25,7 @@ try {
         );
     }
 
-    $kernel = AppFactory::create($config, Connection::open($config->databasePath()));
+    $kernel = AppFactory::create($config, Connection::open($config->databasePath()), new SecretBox(KeyLoader::load($env)));
     $kernel->handle(Request::createFromGlobals())->send();
 } catch (\Throwable $e) {
     // Fehler vor dem Kernel (Konfiguration, Datenbank): im Betrieb nie Details nach außen.

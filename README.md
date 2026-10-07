@@ -38,6 +38,12 @@ Geheimnisse verloren.
 | `POST /api/auth/login` | `{"username": "...", "password": "..."}`, setzt das Sitzungs-Cookie, liefert Benutzer, Rollen und CSRF-Token |
 | `GET /api/auth/me` | Benutzer, Rollen mit Rechten und CSRF-Token der laufenden Sitzung |
 | `POST /api/auth/logout` | beendet die Sitzung (Header `X-CSRF-Token` nötig) |
+| `POST /api/auth/2fa/setup` | startet die Einrichtung der Zwei-Faktor-Anmeldung, liefert das Secret und die `otpauth://`-Adresse (einmalig) |
+| `POST /api/auth/2fa/enable` | `{"code": "123456"}` bestätigt die Einrichtung und liefert 8 Wiederherstellungscodes (einmalig) |
+| `POST /api/auth/2fa/disable` | `{"password": "...", "code": "..."}` schaltet 2FA ab |
+
+Ist 2FA aktiv, antwortet die Anmeldung nach richtigem Passwort mit `401` und `"totp_required": true`; dann
+`totp_code` (App-Code oder Wiederherstellungscode) mitschicken.
 
 Die Sitzung liegt in einem `HttpOnly`-, `Secure`-, `SameSite=Strict`-Cookie (`__Host-meridian_session`). Deshalb
 funktioniert die Anmeldung **nur über HTTPS**, etwa hinter einem Reverse-Proxy. Zum Ausprobieren über HTTP gibt es
