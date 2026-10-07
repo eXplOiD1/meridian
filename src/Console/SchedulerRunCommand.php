@@ -6,7 +6,6 @@ namespace Meridian\Console;
 
 use Meridian\Schedule\RunEvent;
 use Meridian\Schedule\Scheduler;
-use Meridian\Security\SecretMasker;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -27,10 +26,8 @@ final class SchedulerRunCommand extends Command
 
     private bool $stop = false;
 
-    public function __construct(
-        private readonly Scheduler $scheduler,
-        private readonly SecretMasker $masker,
-    ) {
+    public function __construct(private readonly Scheduler $scheduler)
+    {
         parent::__construct();
     }
 
@@ -66,8 +63,9 @@ final class SchedulerRunCommand extends Command
                 try {
                     $events = $this->scheduler->tick($stopRequested);
                 } catch (\Throwable $e) {
-                    // Ein Takt darf den Dienst nicht beenden (z. B. Datenbank kurz gesperrt). Meldung maskiert.
-                    $output->writeln('<error>Takt fehlgeschlagen: ' . $this->masker->mask($e->getMessage()) . '</error>');
+                    // Ein Takt darf den Dienst nicht beenden (z. B. Datenbank kurz gesperrt). Die Meldung der
+                    // Ausnahme kann Geheimnisse enthalten: nur die Klasse ausgeben, nie die Meldung.
+                    $output->writeln('<error>Takt fehlgeschlagen (' . self::shortClass($e) . '). Der nächste Takt versucht es erneut.</error>');
                     $events = [];
                 }
 
@@ -95,6 +93,13 @@ final class SchedulerRunCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    private static function shortClass(\Throwable $e): string
+    {
+        $parts = explode('\\', $e::class);
+
+        return end($parts);
     }
 
     private static function describe(RunEvent $event): string

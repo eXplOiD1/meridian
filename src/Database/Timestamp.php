@@ -28,7 +28,9 @@ final class Timestamp
     public static function parse(string $value): \DateTimeImmutable
     {
         $time = \DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:sP', $value);
-        if ($time === false) {
+        // Nur das exakte Format: was nicht unverändert zurückformatiert wird (anderer Versatz, „Z“,
+        // übergelaufene Werte wie 25:00), wird abgelehnt.
+        if ($time === false || self::format($time) !== $value) {
             throw new \InvalidArgumentException('Zeitstempel hat nicht das Datenbankformat (UTC, ISO 8601).');
         }
 

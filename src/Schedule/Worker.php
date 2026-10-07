@@ -7,6 +7,7 @@ namespace Meridian\Schedule;
 use Meridian\Auth\Clock;
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
+use Meridian\Runner\Heartbeat;
 use Meridian\Runner\JobType;
 use Meridian\Runner\RunnerRegistry;
 use Meridian\Runner\RunRequest;
@@ -36,7 +37,11 @@ final class Worker
     public const NOTE_RUNNER_ERROR = 'Der Runner ist mit einem unerwarteten Fehler abgebrochen.';
     public const NOTE_JOB_DISABLED = 'Übersprungen: Der Job ist deaktiviert.';
     public const NOTE_JOB_INVALID = 'Abgebrochen: Der Job ist gelöscht oder hat einen unbekannten Typ.';
-    public const NOTE_STALE = 'Abgebrochen: Der ausführende Prozess lief nicht mehr (z. B. Neustart). Der Lauf wird nicht automatisch wiederholt.';
+    public const NOTE_STALE = 'Abgebrochen: Kein Lebenszeichen des ausführenden Prozesses mehr (z. B. Neustart oder Absturz). Der Lauf wird nicht automatisch wiederholt.';
+    public const NOTE_FINISH_FAILED = 'Fehlgeschlagen: Das Ergebnis konnte nicht gespeichert werden.';
+
+    /** Versuche, das Ergebnis zu speichern (z. B. bei kurz gesperrter Datenbank), bevor der Ersatzeintrag greift. */
+    public const FINISH_ATTEMPTS = 3;
     public const NOTE_RETRY = 'Wiederholung nach Fehler.';
 
     private const TRUNCATED = "\n[gekürzt]";
@@ -128,7 +133,7 @@ final class Worker
             }
 
             $claimed = $this->db->execute(
-                "UPDATE runs SET status = 'running', started_at = :now, worker = :me WHERE id = :id AND status = 'queued'",
+                "UPDATE runs SET status = 'running', started_at = :now, heartbeat_at = :now, worker = :me WHERE id = :id AND status = 'queued'",
                 ['now' => $now, 'me' => $this->lease->owner(), 'id' => $runId],
             );
             if ($claimed !== 1) {
@@ -140,11 +145,13 @@ final class Worker
     }
 
     /**
-     * Führt einen übernommenen Lauf aus und speichert das Ergebnis.
+     * Führt einen übernommenen Lauf aus und speichert das Ergebnis. Der Runner hält den Lauf über den
+     * Herzschlag am Leben (und verlängert damit die Sperre).
      */
     public function execute(RunRequest $request): RunEvent
     {
         $started = $this->clock->now();
+        $heartbeat = new RunHeartbeat($this->db, $this->clock, $this->lease, $request->runId);
         $runner = $this->runners->for($request->type);
         $retryAllowed = true;
         if ($runner === null) {
@@ -153,7 +160,7 @@ final class Worker
             $retryAllowed = false;
         } else {
             try {
-                $result = $runner->run($request);
+                $result = $runner->run($request, $heartbeat);
             } catch (\Throwable) {
                 // Die Meldung der Ausnahme kann Payload enthalten: nicht speichern.
                 $result = RunResult::failed('', self::NOTE_RUNNER_ERROR);
@@ -164,9 +171,9 @@ final class Worker
     }
 
     /**
-     * Markiert Läufe, die noch als „running“ gelten, aber keinem lebenden Prozess gehören, als abgebrochen.
-     * Aufruf, sobald dieser Prozess die Sperre neu übernommen hat: Nur der Sperrinhaber führt aus, also
-     * gehört jeder fremde „running“-Lauf einem beendeten oder abgelösten Prozess.
+     * Markiert Läufe als abgebrochen, die noch als „running“ gelten, deren Herzschlag aber älter als die
+     * Sperrdauer ist — egal welcher Prozess sie gestartet hat (auch eigene, deren Abschluss nicht gespeichert
+     * werden konnte). Ein Lauf mit frischem Herzschlag lebt und bleibt unangetastet. Aufruf in jedem Takt.
      *
      * @return list<RunEvent>
      */
@@ -177,8 +184,8 @@ final class Worker
                 return [];
             }
             $stale = $this->db->fetchAll(
-                "SELECT id, job_id FROM runs WHERE status = 'running' AND (worker IS NULL OR worker <> :me) ORDER BY id",
-                ['me' => $this->lease->owner()],
+                "SELECT id, job_id FROM runs WHERE status = 'running' AND COALESCE(heartbeat_at, started_at, '') <= :cutoff ORDER BY id",
+                ['cutoff' => Timestamp::format($this->clock->now()->modify('-' . SchedulerLease::TTL_SECONDS . ' seconds'))],
             );
             $events = [];
             foreach ($stale as $row) {
@@ -186,8 +193,8 @@ final class Worker
                     continue;
                 }
                 $changed = $this->db->execute(
-                    "UPDATE runs SET status = 'aborted', finished_at = :now, note = :note WHERE id = :id AND status = 'running'",
-                    ['now' => Timestamp::format($this->clock->now()), 'note' => self::NOTE_STALE, 'id' => $row['id']],
+                    "UPDATE runs SET status = 'aborted', finished_at = :now, note = :note WHERE id = :id AND status = 'running' AND COALESCE(heartbeat_at, started_at, '') <= :cutoff",
+                    ['now' => Timestamp::format($this->clock->now()), 'note' => self::NOTE_STALE, 'id' => $row['id'], 'cutoff' => Timestamp::format($this->clock->now()->modify('-' . SchedulerLease::TTL_SECONDS . ' seconds'))],
                 );
                 if ($changed === 1) {
                     $events[] = new RunEvent($row['job_id'], $row['id'], RunStatus::Aborted);
@@ -198,7 +205,33 @@ final class Worker
         });
     }
 
+    /**
+     * Speichert das Ergebnis, bei Fehlern (z. B. SQLITE_BUSY) mit begrenzten Wiederholungen. Gelingt es nicht,
+     * wird der Lauf mit fester Notiz als „failed“ beendet; scheitert auch das, bleibt er „running“, sein
+     * Herzschlag veraltet und {@see abortStale()} beendet ihn nach Ablauf der Sperrdauer.
+     */
     private function finish(RunRequest $request, RunResult $result, \DateTimeImmutable $started, bool $retryAllowed): RunEvent
+    {
+        for ($attempt = 1; ; ++$attempt) {
+            try {
+                return $this->storeResult($request, $result, $started, $retryAllowed);
+            } catch (\Throwable) {
+                if ($attempt >= self::FINISH_ATTEMPTS) {
+                    break;
+                }
+                usleep(50_000 * $attempt);
+            }
+        }
+
+        $changed = $this->db->execute(
+            "UPDATE runs SET status = 'failed', finished_at = :now, note = :note WHERE id = :id AND status = 'running' AND worker = :me",
+            ['now' => Timestamp::format($this->clock->now()), 'note' => self::NOTE_FINISH_FAILED, 'id' => $request->runId, 'me' => $this->lease->owner()],
+        );
+
+        return new RunEvent($request->jobId, $request->runId, $changed === 1 ? RunStatus::Failed : RunStatus::Aborted);
+    }
+
+    private function storeResult(RunRequest $request, RunResult $result, \DateTimeImmutable $started, bool $retryAllowed): RunEvent
     {
         $output = $this->maskAndTruncate($result->output, self::MAX_OUTPUT_BYTES);
         $note = $result->note === null ? null : $this->maskAndTruncate($result->note, self::MAX_NOTE_BYTES);

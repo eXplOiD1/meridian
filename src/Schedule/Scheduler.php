@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Meridian\Schedule;
 
 /**
- * Ein Takt des Scheduler-Prozesses: Sperre übernehmen/verlängern, nach einer Neuübernahme hängende Läufe
- * abbrechen, planen, fällige Läufe abarbeiten. Ohne Sperre passiert nichts.
+ * Ein Takt des Scheduler-Prozesses: Sperre übernehmen/verlängern, Läufe ohne Herzschlag abbrechen, planen,
+ * fällige Läufe abarbeiten. Ohne Sperre passiert nichts.
  */
 final class Scheduler
 {
@@ -35,11 +35,9 @@ final class Scheduler
             return [];
         }
 
-        $events = [];
-        if (!$this->holdsLease) {
-            $events = $this->worker->abortStale();
-            $this->holdsLease = true;
-        }
+        $this->holdsLease = true;
+        // Jeder Takt: Läufe ohne frischen Herzschlag beenden (fremde nach Absturz, eigene nach Speicherfehler).
+        $events = $this->worker->abortStale();
 
         return [...$events, ...$this->planner->plan($stopRequested), ...$this->worker->work($stopRequested)];
     }
