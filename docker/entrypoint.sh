@@ -12,4 +12,9 @@ if [ "${MERIDIAN_AUTO_SETUP:-0}" = "1" ]; then
   php /app/bin/meridian admin:bootstrap
 fi
 
+if [ "$#" -eq 0 ]; then
+  echo "meridian-entrypoint: kein Befehl übergeben." >&2
+  exit 64
+fi
+
 exec "$@"

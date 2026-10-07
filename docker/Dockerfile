@@ -50,7 +50,8 @@ EXPOSE 8080
 VOLUME ["/var/lib/meridian", "/etc/meridian"]
 
 ENTRYPOINT ["meridian-entrypoint", "docker-php-entrypoint"]
-# CMD kommt unverändert aus dem FrankenPHP-Image.
+# Ein eigener ENTRYPOINT verwirft das CMD des Basis-Images, deshalb hier wieder setzen.
+CMD ["--config", "/etc/frankenphp/Caddyfile", "--adapter", "caddyfile"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/api/health || exit 1
