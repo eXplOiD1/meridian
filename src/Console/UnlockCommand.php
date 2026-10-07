@@ -26,11 +26,13 @@ final class UnlockCommand extends Command
         parent::__construct();
     }
 
+    #[\Override]
     protected function configure(): void
     {
         $this->addArgument('target', InputArgument::REQUIRED, 'Benutzername oder IP-Adresse');
     }
 
+    #[\Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $target = $input->getArgument('target');

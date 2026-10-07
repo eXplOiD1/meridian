@@ -121,7 +121,8 @@ final class LoginThrottle
             return false;
         }
 
-        $seconds = min(self::MAX_LOCK_SECONDS, self::BASE_LOCK_SECONDS * (2 ** min($failures - $threshold, 10)));
+        // Bit-Verschiebung statt Potenz: bleibt ein int (30, 60, 120 ...), gedeckelt auf MAX_LOCK_SECONDS.
+        $seconds = min(self::MAX_LOCK_SECONDS, self::BASE_LOCK_SECONDS << min($failures - $threshold, 10));
         // Nie eine kürzere Sperre über eine längere schreiben, die eine parallele Anfrage gerade gesetzt hat.
         $this->db->execute(
             'UPDATE login_failures
