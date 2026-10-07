@@ -45,6 +45,32 @@ final class UserRepository
         });
     }
 
+    public function findByUsername(string $username): ?UserAccount
+    {
+        return $this->account($this->db->fetchOne(
+            'SELECT id, username, display_name, password_hash, is_active FROM users WHERE username = :u',
+            ['u' => $username],
+        ));
+    }
+
+    public function findById(int $id): ?UserAccount
+    {
+        return $this->account($this->db->fetchOne(
+            'SELECT id, username, display_name, password_hash, is_active FROM users WHERE id = :id',
+            ['id' => $id],
+        ));
+    }
+
+    public function updatePasswordHash(int $userId, #[\SensitiveParameter] string $hash): void
+    {
+        $this->db->execute('UPDATE users SET password_hash = :h WHERE id = :id', ['h' => $hash, 'id' => $userId]);
+    }
+
+    public function markLogin(int $userId, \DateTimeImmutable $at): void
+    {
+        $this->db->execute('UPDATE users SET last_login_at = :at WHERE id = :id', ['at' => $at->format('c'), 'id' => $userId]);
+    }
+
     public function hasUsers(): bool
     {
         return $this->db->fetchOne('SELECT id FROM users LIMIT 1') !== null;
@@ -96,5 +122,19 @@ final class UserRepository
         }
 
         return $grants;
+    }
+
+    /**
+     * @param array<string, mixed>|null $row
+     */
+    private function account(?array $row): ?UserAccount
+    {
+        if ($row === null || !isset($row['id'], $row['username'], $row['display_name'], $row['password_hash'], $row['is_active'])
+            || !is_int($row['id']) || !is_string($row['username']) || !is_string($row['display_name'])
+            || !is_string($row['password_hash']) || !is_int($row['is_active'])) {
+            return null;
+        }
+
+        return new UserAccount($row['id'], $row['username'], $row['display_name'], $row['password_hash'], $row['is_active'] === 1);
     }
 }

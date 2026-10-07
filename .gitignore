@@ -20,3 +20,6 @@
 /.pre-commit-config.yaml
 /.github/
 /Meridian.zip
+/composer.dev.json
+/composer.dev.lock
+.phpunit.result.cache

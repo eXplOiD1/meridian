@@ -44,6 +44,15 @@ final class Kernel
         $this->handlers[$name] = $handler;
     }
 
+    /**
+     * @param callable(Request): Response $handler
+     */
+    public function post(string $name, string $path, callable $handler): void
+    {
+        $this->routes->add($name, new Route($path, methods: ['POST']));
+        $this->handlers[$name] = $handler;
+    }
+
     public function handle(Request $request): Response
     {
         try {

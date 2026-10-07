@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 use Meridian\Config;
-use Meridian\Http\Kernel;
-use Meridian\Security\SecretMasker;
+use Meridian\Database\Connection;
+use Meridian\Http\AppFactory;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -12,5 +13,20 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 /** @var array<string, string> $env */
 $env = getenv();
 
-$kernel = new Kernel(Config::fromEnvironment($env), new SecretMasker());
-$kernel->handle(Request::createFromGlobals())->send();
+try {
+    $config = Config::fromEnvironment($env);
+    if ($config->trustedProxies !== []) {
+        // Client-IP und Host nur von konfigurierten Reverse-Proxys glauben.
+        Request::setTrustedProxies(
+            $config->trustedProxies,
+            Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_HOST,
+        );
+    }
+
+    $kernel = AppFactory::create($config, Connection::open($config->databasePath()));
+    $kernel->handle(Request::createFromGlobals())->send();
+} catch (\Throwable $e) {
+    // Fehler vor dem Kernel (Konfiguration, Datenbank): im Betrieb nie Details nach außen.
+    error_log($e::class . ': ' . $e->getMessage());
+    (new JsonResponse(['error' => 'Interner Fehler.'], 500))->send();
+}

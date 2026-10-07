@@ -17,6 +17,8 @@ final readonly class Config
         public string $environment,
         public string $timezone,
         public string $version,
+        /** @var list<string> IPs oder Netze (CIDR) von Reverse-Proxys, deren X-Forwarded-For geglaubt wird. */
+        public array $trustedProxies = [],
     ) {
     }
 
@@ -35,11 +37,24 @@ final readonly class Config
             throw new \InvalidArgumentException('MERIDIAN_TIMEZONE ist keine gültige Zeitzone.');
         }
 
+        $proxies = [];
+        foreach (explode(',', $env['MERIDIAN_TRUSTED_PROXIES'] ?? '') as $entry) {
+            $entry = trim($entry);
+            if ($entry === '') {
+                continue;
+            }
+            if (preg_match('/^[0-9a-fA-F:.]+(\/[0-9]{1,3})?$/', $entry) !== 1) {
+                throw new \InvalidArgumentException('MERIDIAN_TRUSTED_PROXIES: kommagetrennte IP-Adressen oder Netze wie 172.19.0.0/16.');
+            }
+            $proxies[] = $entry;
+        }
+
         return new self(
             dataDir: rtrim($env['MERIDIAN_DATA_DIR'] ?? '/var/lib/meridian', '/'),
             environment: $environment,
             timezone: $timezone,
             version: '0.1.0-dev',
+            trustedProxies: $proxies,
         );
     }
 
