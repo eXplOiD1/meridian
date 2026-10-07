@@ -1,0 +1,7 @@
+.git
+**/vendor
+/data
+/secrets
+.env
+*.key
+*.sqlite*
