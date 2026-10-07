@@ -48,7 +48,7 @@ Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). O1�
 | [ ] | S4 `HttpJobConfig`, Validierung §3.2, `JobRepository`/`RunRepository` mit gemeinsamem Scope-Prädikat, `Settings` (Standardwerte, Validierung), Roundtrip-Test | backend |
 | [ ] | S5 Lesende Job-API (Liste, Detail mit `display_url`, Verlauf, Lauf, Kategorien, Vorschau, `/api/jobs/limits`) mit Rollen-Matrix, IDOR-Tests, H2 | backend |
 | [ ] | S6 Schreibende Job-API (Anfrage nur als Ganzes ersetzen, Zeitlimit ≤ globales Maximum), löschen, aktivieren/deaktivieren, CSRF, Audit, H6, Leak-Tests | backend |
-| [ ] | S7 Worker: Masker pro Lauf (H4, neue `Runner`-Signatur), H1 im `claim()` über `RunAuthorizer`, Wiederholung übernimmt `started_by`, Testlauf auch für deaktivierte Jobs, `RunResult::retryable` | sicherheit |
+| [x] | S7 Worker: Masker pro Lauf (H4, neue `Runner`-Signatur), H1 im `claim()` über `RunAuthorizer` (`DbRunAuthorizer`), Wiederholung übernimmt `started_by`, Testlauf auch für deaktivierte Jobs, `RunResult::retryable` | sicherheit |
 | [ ] | S8 Manueller Lauf und Testlauf (202 über die Warteschlange, H1 beim Einreihen + Audit, 409/429-Grenzen); erledigt auch den offenen Punkt aus Phase 2 | backend |
 | [ ] | S9 `HttpRunner` + `CurlTransport` (§5): gepinnte IP, Freigaben je Hop, Weiterleitungen manuell, TLS an, Proxy ignoriert, Zeitlimit `min(Job, Maximum)`, Antwort speichern global/Job (`never` gewinnt), Rohausgabe beim Lesen begrenzt (H3), `Heartbeat::beat()` in der `curl_multi`-Schleife; Verdrahtung in `bin/meridian` | backend |
 | [ ] | S10 Freigaben interner Ziele (Host/CIDR + Port, global oder je Kategorie): API + CLI `http:internal-targets`, Audit, nie freigebbare Netze | sicherheit |

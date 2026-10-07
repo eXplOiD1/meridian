@@ -19,9 +19,12 @@ use Meridian\Security\SecretMasker;
  * Ergebnis maskiert. Legt Wiederholungen mit wachsendem Abstand an.
  *
  *  - Übernehmen nur per `UPDATE … WHERE status = 'queued'` mit rowCount() === 1, unter der Sperre.
- *  - Läufe deaktivierter Jobs werden nicht ausgeführt („skipped“ mit Notiz).
+ *  - Läufe deaktivierter Jobs werden nicht ausgeführt („skipped“ mit Notiz) — außer Testläufen (E4).
+ *  - Manuelle Läufe, Testläufe und Wiederholungen mit auslösendem Benutzer prüfen beim Übernehmen erneut, ob
+ *    dieser Benutzer den Job noch starten darf (H1, {@see RunAuthorizer}); sonst „skipped“.
  *  - Hängende Läufe eines früheren Prozesses werden „aborted“, nie neu gestartet.
- *  - Ausgabe und Notiz: erst maskieren, dann kürzen, dann speichern.
+ *  - Jeder Lauf bekommt einen eigenen SecretMasker (H4); Ausgabe und Notiz: erst damit maskieren, dann kürzen,
+ *    dann speichern. Der Masker wird danach verworfen.
  */
 final class Worker
 {
@@ -36,6 +39,7 @@ final class Worker
     public const NOTE_NO_RUNNER = 'Für diesen Job-Typ ist noch kein Runner eingerichtet.';
     public const NOTE_RUNNER_ERROR = 'Der Runner ist mit einem unerwarteten Fehler abgebrochen.';
     public const NOTE_JOB_DISABLED = 'Übersprungen: Der Job ist deaktiviert.';
+    public const NOTE_STARTER_FORBIDDEN = 'Übersprungen: Der auslösende Benutzer darf diesen Job nicht mehr starten.';
     public const NOTE_JOB_INVALID = 'Abgebrochen: Der Job ist gelöscht oder hat einen unbekannten Typ.';
     public const NOTE_STALE = 'Abgebrochen: Kein Lebenszeichen des ausführenden Prozesses mehr (z. B. Neustart oder Absturz). Der Lauf wird nicht automatisch wiederholt.';
     public const NOTE_FINISH_FAILED = 'Fehlgeschlagen: Das Ergebnis konnte nicht gespeichert werden.';
@@ -51,7 +55,7 @@ final class Worker
         private readonly Clock $clock,
         private readonly SchedulerLease $lease,
         private readonly RunnerRegistry $runners,
-        private readonly SecretMasker $masker,
+        private readonly RunAuthorizer $authorizer,
     ) {
     }
 
@@ -105,7 +109,7 @@ final class Worker
             }
             $now = Timestamp::format($this->clock->now());
             $row = $this->db->fetchOne(
-                "SELECT r.id, r.job_id, r.trigger, r.attempt, j.id AS job_exists, j.type, j.is_enabled, j.overlap_policy FROM runs r LEFT JOIN jobs j ON j.id = r.job_id WHERE r.id = :id AND r.status = 'queued'",
+                "SELECT r.id, r.job_id, r.trigger, r.attempt, r.started_by, j.id AS job_exists, j.type, j.is_enabled, j.overlap_policy FROM runs r LEFT JOIN jobs j ON j.id = r.job_id WHERE r.id = :id AND r.status = 'queued'",
                 ['id' => $runId],
             );
             if ($row === null || !is_int($row['job_id']) || !is_int($row['attempt'])) {
@@ -114,12 +118,17 @@ final class Worker
             $jobId = $row['job_id'];
             $type = is_string($row['type']) ? JobType::tryFrom($row['type']) : null;
             $trigger = is_string($row['trigger']) ? RunTrigger::tryFrom($row['trigger']) : null;
+            $startedBy = is_int($row['started_by']) ? $row['started_by'] : null;
 
             if ($row['job_exists'] === null || $type === null || $trigger === null) {
                 return $this->closeQueued($runId, $jobId, RunStatus::Aborted, self::NOTE_JOB_INVALID, $now);
             }
-            if ($row['is_enabled'] !== 1) {
+            // Testläufe auch für deaktivierte Jobs („Speichern und testen“, E4); alles andere nur für aktive.
+            if ($row['is_enabled'] !== 1 && $trigger !== RunTrigger::Test) {
                 return $this->closeQueued($runId, $jobId, RunStatus::Skipped, self::NOTE_JOB_DISABLED, $now);
+            }
+            if (!$this->starterMayStart($trigger, $startedBy, $jobId)) {
+                return $this->closeQueued($runId, $jobId, RunStatus::Skipped, self::NOTE_STARTER_FORBIDDEN, $now);
             }
             if ($row['overlap_policy'] !== OverlapPolicy::Parallel->value) {
                 $busy = $this->db->fetchOne(
@@ -140,8 +149,27 @@ final class Worker
                 return null;
             }
 
-            return new RunRequest($runId, $jobId, $type, $trigger, $row['attempt']);
+            return new RunRequest($runId, $jobId, $type, $trigger, $row['attempt'], $startedBy);
         });
+    }
+
+    /**
+     * H1: Ein von einem Benutzer ausgelöster Lauf startet nur, wenn dieser Benutzer ihn jetzt noch starten darf.
+     * Manuell/Test ohne Benutzer (gelöscht: `ON DELETE SET NULL`) startet nie. Geplante Läufe und Wiederholungen
+     * geplanter Läufe haben keinen auslösenden Benutzer.
+     */
+    private function starterMayStart(RunTrigger $trigger, ?int $startedBy, int $jobId): bool
+    {
+        if ($startedBy === null) {
+            return $trigger !== RunTrigger::Manual && $trigger !== RunTrigger::Test;
+        }
+
+        // Jeder Lauf mit auslösendem Benutzer (manuell, Test und deren Wiederholungen) wird erneut geprüft.
+        try {
+            return $this->authorizer->mayStart($startedBy, $jobId);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -152,22 +180,22 @@ final class Worker
     {
         $started = $this->clock->now();
         $heartbeat = new RunHeartbeat($this->db, $this->clock, $this->lease, $request->runId);
+        // H4: ein Masker nur für diesen Lauf. Geheimnisse eines Laufs bleiben nie für den nächsten registriert.
+        $masker = new SecretMasker();
         $runner = $this->runners->for($request->type);
-        $retryAllowed = true;
         if ($runner === null) {
-            $result = RunResult::failed('', self::NOTE_NO_RUNNER);
             // Ein fehlender Runner ist ein Einrichtungsfehler: Wiederholen hilft nicht.
-            $retryAllowed = false;
+            $result = RunResult::failed('', self::NOTE_NO_RUNNER, retryable: false);
         } else {
             try {
-                $result = $runner->run($request, $heartbeat);
+                $result = $runner->run($request, $heartbeat, $masker);
             } catch (\Throwable) {
                 // Die Meldung der Ausnahme kann Payload enthalten: nicht speichern.
                 $result = RunResult::failed('', self::NOTE_RUNNER_ERROR);
             }
         }
 
-        return $this->finish($request, $result, $started, $retryAllowed);
+        return $this->finish($request, $result, $started, $masker);
     }
 
     /**
@@ -210,11 +238,11 @@ final class Worker
      * wird der Lauf mit fester Notiz als „failed“ beendet; scheitert auch das, bleibt er „running“, sein
      * Herzschlag veraltet und {@see abortStale()} beendet ihn nach Ablauf der Sperrdauer.
      */
-    private function finish(RunRequest $request, RunResult $result, \DateTimeImmutable $started, bool $retryAllowed): RunEvent
+    private function finish(RunRequest $request, RunResult $result, \DateTimeImmutable $started, SecretMasker $masker): RunEvent
     {
         for ($attempt = 1; ; ++$attempt) {
             try {
-                return $this->storeResult($request, $result, $started, $retryAllowed);
+                return $this->storeResult($request, $result, $started, $masker);
             } catch (\Throwable) {
                 if ($attempt >= self::FINISH_ATTEMPTS) {
                     break;
@@ -231,12 +259,12 @@ final class Worker
         return new RunEvent($request->jobId, $request->runId, $changed === 1 ? RunStatus::Failed : RunStatus::Aborted);
     }
 
-    private function storeResult(RunRequest $request, RunResult $result, \DateTimeImmutable $started, bool $retryAllowed): RunEvent
+    private function storeResult(RunRequest $request, RunResult $result, \DateTimeImmutable $started, SecretMasker $masker): RunEvent
     {
-        $output = $this->maskAndTruncate($result->output, self::MAX_OUTPUT_BYTES);
-        $note = $result->note === null ? null : $this->maskAndTruncate($result->note, self::MAX_NOTE_BYTES);
+        $output = self::maskAndTruncate($masker, $result->output, self::MAX_OUTPUT_BYTES);
+        $note = $result->note === null ? null : self::maskAndTruncate($masker, $result->note, self::MAX_NOTE_BYTES);
 
-        return $this->db->immediate(function () use ($request, $result, $started, $retryAllowed, $output, $note): RunEvent {
+        return $this->db->immediate(function () use ($request, $result, $started, $output, $note): RunEvent {
             $now = $this->clock->now();
             $durationMs = max(0, (int) round(((float) $now->format('U.u') - (float) $started->format('U.u')) * 1000.0));
             $updated = $this->db->execute(
@@ -259,7 +287,7 @@ final class Worker
                 return new RunEvent($request->jobId, $request->runId, RunStatus::Aborted);
             }
 
-            if ($retryAllowed && $result->status->isRetryable() && $request->trigger !== RunTrigger::Test) {
+            if ($result->retryable && $result->status->isRetryable() && $request->trigger !== RunTrigger::Test) {
                 $this->scheduleRetry($request, $now);
             }
 
@@ -282,7 +310,8 @@ final class Worker
 
         $delay = RetryPolicy::delaySeconds($job['retry_delay_seconds'], $request->attempt);
         $this->db->execute(
-            'INSERT INTO runs (job_id, trigger, status, scheduled_for, attempt, note) VALUES (:job, :trigger, :status, :scheduled, :attempt, :note)',
+            // Die Wiederholung übernimmt den auslösenden Benutzer: H1 prüft ihn beim Übernehmen erneut.
+            'INSERT INTO runs (job_id, trigger, status, scheduled_for, attempt, note, started_by) VALUES (:job, :trigger, :status, :scheduled, :attempt, :note, :started_by)',
             [
                 'job' => $request->jobId,
                 'trigger' => RunTrigger::Retry->value,
@@ -290,6 +319,7 @@ final class Worker
                 'scheduled' => Timestamp::format($now->modify('+' . $delay . ' seconds')),
                 'attempt' => $request->attempt + 1,
                 'note' => self::NOTE_RETRY,
+                'started_by' => $request->startedBy,
             ],
         );
     }
@@ -308,9 +338,9 @@ final class Worker
      * Erst maskieren, dann kürzen: sonst könnte der Schnitt ein Geheimnis so teilen, dass der Masker es
      * nicht mehr erkennt. Der Schnitt trennt keine UTF-8-Zeichen.
      */
-    private function maskAndTruncate(string $text, int $maxBytes): string
+    private static function maskAndTruncate(SecretMasker $masker, string $text, int $maxBytes): string
     {
-        $masked = $this->masker->mask($text);
+        $masked = $masker->mask($text);
         if (strlen($masked) <= $maxBytes) {
             return $masked;
         }
