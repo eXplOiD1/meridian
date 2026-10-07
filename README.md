@@ -57,6 +57,7 @@ sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/m
 | `list` | Zeigt alle Befehle. `<befehl> --help` erklärt Argumente und Optionen. |
 | `user:create <name> [--name="Anzeigename"] [--role=Admin\|Operator\|Beobachter]` | Legt einen Benutzer an. Das Passwort (mind. 8 Zeichen) wird verdeckt abgefragt. Standardrolle ist `Beobachter`. |
 | `user:password <name>` | Setzt das Passwort neu, z. B. wenn es vergessen wurde. Beendet alle Sitzungen des Benutzers und hebt eine Sperre auf. Eine eingerichtete 2FA bleibt bestehen. |
+| `category:create <name>` | Legt eine Kategorie für Jobs an (1–64 Zeichen: Buchstaben, Ziffern, Leerzeichen, `_` `.` `-`; beginnt mit Buchstabe oder Ziffer). Doppelte Namen (auch in anderer Groß-/Kleinschreibung) werden abgelehnt. Wer auf Kategorien beschränkt ist, sieht die neue Kategorie nicht, bis sie ihm zugewiesen wird. |
 | `auth:unlock <benutzername-oder-ip>` | Hebt die Sperre nach zu vielen Fehlversuchen auf, auch wenn sich niemand mehr anmelden kann. |
 | `admin:bootstrap` | Legt den ersten Admin aus `MERIDIAN_ADMIN_USER` / `MERIDIAN_ADMIN_PASSWORD` an. Nur wenn es noch keinen Benutzer gibt; der Docker-Start ruft das selbst auf. |
 | `migrate` | Spielt ausstehende Datenbank-Änderungen ein. Docker-Start und Installer machen das selbst. |
@@ -71,6 +72,9 @@ docker exec -it meridian-web php bin/meridian user:password admin
 
 # Weiteren Benutzer anlegen
 docker exec -it meridian-web php bin/meridian user:create jana --name "Jana" --role Operator
+
+# Kategorie für Jobs anlegen
+docker exec -it meridian-web php bin/meridian category:create "Deuba24"
 
 # Gesperrten Benutzer oder gesperrte IP freigeben
 docker exec -it meridian-web php bin/meridian auth:unlock jana
