@@ -36,7 +36,7 @@ final class AppFactory
 
         $throttle = new LoginThrottle($db, $clock);
         $audit = new AuditLog($db, $clock, $masker);
-        $sessionAuth = new SessionAuth($config, $sessions);
+        $sessionAuth = new SessionAuth($sessions);
         $csrf = new CsrfGuard();
 
         $auth = new AuthService($users, $hasher, $sessions, $throttle, $audit, $clock, $twoFactor);

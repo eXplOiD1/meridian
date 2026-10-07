@@ -84,7 +84,7 @@ final class AuthController
         }
 
         $response = $this->profile($result->session) ?? self::error(401, AuthService::MESSAGE_INVALID);
-        $response->headers->setCookie($this->cookie($result->session->token));
+        $response->headers->setCookie($this->cookie($request, $result->session->token));
 
         return $response;
     }
@@ -101,7 +101,7 @@ final class AuthController
 
         $this->auth->logout($session);
         $response = self::json(['status' => 'ok']);
-        $response->headers->setCookie($this->expiredCookie());
+        $response->headers->setCookie($this->expiredCookie($request));
 
         return $response;
     }
@@ -270,21 +270,16 @@ final class AuthController
         return JsonBody::object($request->getContent(), self::MAX_BODY);
     }
 
-    private function cookieName(): string
-    {
-        return $this->sessionAuth->cookieName();
-    }
-
-    private function cookie(#[\SensitiveParameter] string $token): Cookie
+    private function cookie(Request $request, #[\SensitiveParameter] string $token): Cookie
     {
         $expires = $this->clock->now()->modify('+' . SessionManager::ABSOLUTE_SECONDS . ' seconds');
 
-        return Cookie::create($this->cookieName(), $token, $expires, '/', null, !$this->config->isDev(), true, false, Cookie::SAMESITE_STRICT);
+        return Cookie::create($this->sessionAuth->cookieName($request), $token, $expires, '/', null, $request->isSecure(), true, false, Cookie::SAMESITE_STRICT);
     }
 
-    private function expiredCookie(): Cookie
+    private function expiredCookie(Request $request): Cookie
     {
-        return Cookie::create($this->cookieName(), '', 1, '/', null, !$this->config->isDev(), true, false, Cookie::SAMESITE_STRICT);
+        return Cookie::create($this->sessionAuth->cookieName($request), '', 1, '/', null, $request->isSecure(), true, false, Cookie::SAMESITE_STRICT);
     }
 
     /**

@@ -96,9 +96,11 @@ sondern immer verdeckt abgefragt. Jeder dieser Befehle, der Benutzer oder Sperre
 Ist 2FA aktiv, antwortet die Anmeldung nach richtigem Passwort mit `401` und `"totp_required": true`; dann
 `totp_code` (App-Code oder Wiederherstellungscode) mitschicken.
 
-Die Sitzung liegt in einem `HttpOnly`-, `Secure`-, `SameSite=Strict`-Cookie (`__Host-meridian_session`). Deshalb
-funktioniert die Anmeldung **nur über HTTPS**, etwa hinter einem Reverse-Proxy. Zum Ausprobieren über HTTP gibt es
-`MERIDIAN_ENV=dev`. Nach 5 Fehlversuchen pro Benutzername (20 pro IP) wird gesperrt, die Sperre wächst bis 15 Minuten.
+Die Sitzung liegt in einem `HttpOnly`-, `SameSite=Strict`-Cookie. Über HTTPS zusätzlich `Secure` und mit dem Namen
+`__Host-meridian_session`. Die Anmeldung funktioniert auch über reines HTTP (z. B. `http://nas:8090` im Heimnetz); dann
+verzichtet Meridian auf `Secure`, und die Oberfläche zeigt eine Warnung: Passwort und Sitzung sind im Netz mitlesbar.
+Außerhalb eines vertrauenswürdigen Heimnetzes Meridian hinter einem HTTPS-Proxy betreiben.
+Nach 5 Fehlversuchen pro Benutzername (20 pro IP) wird gesperrt, die Sperre wächst bis 15 Minuten.
 Läuft Meridian hinter einem Proxy, dessen IP oder Netz in `MERIDIAN_TRUSTED_PROXIES` eintragen; sonst zählt die
 Sperre alle Clients als eine IP (im Log steht dann eine Warnung). Wer sich selbst ausgesperrt hat, hebt die Sperre an der
 Befehlszeile auf: `docker compose exec web php bin/meridian auth:unlock <benutzername-oder-ip>`.
