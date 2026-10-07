@@ -12,10 +12,14 @@ use Meridian\Job\JobRepository;
 use Meridian\Job\JobService;
 use Meridian\Job\JobValidator;
 use Meridian\Job\JobSort;
+use Meridian\Job\RunNotQueued;
+use Meridian\Job\RunRefusal;
 use Meridian\Job\RunRepository;
+use Meridian\Job\RunService;
 use Meridian\Runner\JobType;
 use Meridian\Schedule\CronSchedule;
 use Meridian\Schedule\RunStatus;
+use Meridian\Schedule\RunTrigger;
 use Meridian\Security\AccessControl;
 use Meridian\Security\AccessDenied;
 use Meridian\Security\Permission;
@@ -52,6 +56,7 @@ final class JobController
         private readonly Clock $clock,
         private readonly JobPresenter $presenter,
         private readonly JobService $service,
+        private readonly RunService $runService,
     ) {
     }
 
@@ -70,6 +75,8 @@ final class JobController
         $kernel->delete('jobs_delete', '/api/jobs/{id}', $this->delete(...), $id);
         $kernel->post('jobs_enable', '/api/jobs/{id}/enable', fn (Request $r): Response => $this->setEnabled($r, true), $id);
         $kernel->post('jobs_disable', '/api/jobs/{id}/disable', fn (Request $r): Response => $this->setEnabled($r, false), $id);
+        $kernel->post('jobs_run', '/api/jobs/{id}/run', fn (Request $r): Response => $this->enqueueRun($r, RunTrigger::Manual), $id);
+        $kernel->post('jobs_test', '/api/jobs/{id}/test', fn (Request $r): Response => $this->enqueueRun($r, RunTrigger::Test), $id);
     }
 
     public function create(Request $request): Response
@@ -113,6 +120,30 @@ final class JobController
         return $this->service->delete($session->userId, $grants, self::id($request))
             ? JsonReply::noContent()
             : JsonReply::error(404, 'Job nicht gefunden.');
+    }
+
+    /**
+     * Manueller Lauf und Testlauf: 202 mit der Nummer des eingereihten Laufs; das Ergebnis liest der Aufrufer über
+     * `GET /api/runs/{id}`. 404 = Job nicht sichtbar, 403 = kein `jobs.run`, 409 = deaktiviert (nur manuell) oder
+     * schon ein offener Lauf, 429 = Stundenkontingent.
+     */
+    private function enqueueRun(Request $request, RunTrigger $trigger): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        try {
+            $runId = $this->runService->enqueue($session->userId, $grants, self::id($request), $trigger);
+        } catch (RunNotQueued $e) {
+            return JsonReply::error($e->refusal === RunRefusal::RateLimited ? 429 : 409, $e->getMessage());
+        }
+
+        return $runId === null
+            ? JsonReply::error(404, 'Job nicht gefunden.')
+            : JsonReply::json(['run_id' => $runId], 202);
     }
 
     private function setEnabled(Request $request, bool $enabled): Response
