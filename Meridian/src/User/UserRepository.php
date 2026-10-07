@@ -24,7 +24,7 @@ final class UserRepository
         }
 
         $roleRow = $this->db->fetchOne('SELECT id FROM roles WHERE name = :name', ['name' => $role]);
-        if ($roleRow === null || !is_int($roleRow['id'] ?? null)) {
+        if ($roleRow === null || !isset($roleRow['id']) || !is_int($roleRow['id'])) {
             throw new \InvalidArgumentException('Unbekannte Rolle.');
         }
         $roleId = $roleRow['id'];
@@ -72,7 +72,7 @@ final class UserRepository
         foreach ($rows as $row) {
             $grantId = $row['user_role_id'] ?? null;
             $roleName = $row['role'] ?? null;
-            $permission = is_string($row['permission'] ?? null) ? Permission::tryFrom($row['permission']) : null;
+            $permission = isset($row['permission']) && is_string($row['permission']) ? Permission::tryFrom($row['permission']) : null;
             if (!is_int($grantId) || !is_string($roleName) || $permission === null) {
                 continue;
             }
@@ -88,7 +88,7 @@ final class UserRepository
             );
             $categories = [];
             foreach ($categoryRows as $categoryRow) {
-                if (is_string($categoryRow['name'] ?? null)) {
+                if (isset($categoryRow['name']) && is_string($categoryRow['name'])) {
                     $categories[] = $categoryRow['name'];
                 }
             }

@@ -36,7 +36,7 @@ final class UserCreateCommand extends Command
         $username = $input->getArgument('username');
         $name = $input->getOption('name');
         $role = $input->getOption('role');
-        if (!is_string($username) || !is_string($role)) {
+        if (!is_string($username) || !is_string($role) || ($name !== null && !is_string($name))) {
             return self::INVALID;
         }
 
@@ -53,7 +53,7 @@ final class UserCreateCommand extends Command
             return self::INVALID;
         }
 
-        $id = $this->users->create($username, is_string($name) ? $name : $username, $password, $role);
+        $id = $this->users->create($username, $name ?? $username, $password, $role);
         $output->writeln('Benutzer angelegt (ID ' . $id . ', Rolle ' . $role . ').');
 
         return self::SUCCESS;
