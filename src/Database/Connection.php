@@ -58,7 +58,8 @@ final class Connection
     public function execute(string $sql, array $params = []): int
     {
         $statement = $this->prepare($sql);
-        $statement->execute($params);
+        self::bind($statement, $params);
+        $statement->execute();
 
         return $statement->rowCount();
     }
@@ -72,7 +73,8 @@ final class Connection
     public function fetchAll(string $sql, array $params = []): array
     {
         $statement = $this->prepare($sql);
-        $statement->execute($params);
+        self::bind($statement, $params);
+        $statement->execute();
 
         /** @var list<array<string, mixed>> */
         return $statement->fetchAll();
@@ -89,6 +91,24 @@ final class Connection
         $rows = $this->fetchAll($sql, $params);
 
         return $rows[0] ?? null;
+    }
+
+    /**
+     * Bindet jeden Wert mit seinem Typ. PDOStatement::execute($params) würde alles als Text binden; dann wäre
+     * z. B. `:flag = 1` in SQLite nie wahr (Text ist ungleich Zahl, wenn keine Spalte die Affinität vorgibt).
+     *
+     * @param array<string, string|int|float|bool|null> $params
+     */
+    private static function bind(\PDOStatement $statement, array $params): void
+    {
+        foreach ($params as $name => $value) {
+            $statement->bindValue(':' . ltrim($name, ':'), $value, match (true) {
+                is_int($value) => \PDO::PARAM_INT,
+                is_bool($value) => \PDO::PARAM_BOOL,
+                $value === null => \PDO::PARAM_NULL,
+                default => \PDO::PARAM_STR,
+            });
+        }
     }
 
     /**
