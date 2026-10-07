@@ -10,13 +10,16 @@ export class ApiError extends Error {
   readonly status: number;
   readonly retryAfter: number | null;
   readonly totpRequired: boolean;
+  /** Feldfehler einer 422-Antwort: Feldpfad => feste Meldung des Servers (enthält nie Eingabewerte). */
+  readonly fields: Record<string, string>;
 
-  constructor(message: string, status: number, retryAfter: number | null, totpRequired: boolean) {
+  constructor(message: string, status: number, retryAfter: number | null, totpRequired: boolean, fields: Record<string, string> = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.retryAfter = retryAfter;
     this.totpRequired = totpRequired;
+    this.fields = fields;
   }
 }
 
@@ -24,7 +27,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export async function request<T>(method: 'GET' | 'POST', path: string, options: { body?: unknown; csrf?: string } = {}): Promise<T> {
+function fieldErrors(data: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (isRecord(data) && isRecord(data.fields)) {
+    for (const [key, value] of Object.entries(data.fields)) {
+      if (typeof value === 'string') {
+        out[key] = value;
+      }
+    }
+  }
+  return out;
+}
+
+export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, options: { body?: unknown; csrf?: string } = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -64,6 +79,7 @@ export async function request<T>(method: 'GET' | 'POST', path: string, options: 
       response.status,
       Number.isFinite(retry) ? retry : null,
       isRecord(data) && data.totp_required === true,
+      fieldErrors(data),
     );
   }
 

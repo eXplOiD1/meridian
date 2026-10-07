@@ -1,8 +1,8 @@
 import { InsecureWarning } from './InsecureWarning';
 import type { ReactNode } from 'react';
-import { canManageUsers, roleNames } from '../lib/permissions';
+import { canManageUsers, canViewJobs, roleNames } from '../lib/permissions';
 import type { Route } from '../lib/useHashRoute';
-import { navigate } from '../lib/useHashRoute';
+import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { Profile } from '../types';
 import { Brand } from './Brand';
 
@@ -16,24 +16,32 @@ interface LayoutProps {
 }
 
 interface NavEntry {
-  route: Route | null;
+  /** Ziel als Pfad ('' = Übersicht); null = noch kein Bildschirm. */
+  path: string | null;
   label: string;
   hint?: string;
+  current?: (route: Route) => boolean;
 }
 
 /** Menü wie im Klickdummy. Punkte ohne Bildschirm sind sichtbar, aber noch nicht anwählbar. */
 function entries(profile: Profile): NavEntry[] {
   const list: NavEntry[] = [
-    { route: '', label: 'Übersicht' },
-    { route: null, label: 'Jobs', hint: 'bald' },
-    { route: null, label: 'Verlauf', hint: 'bald' },
-    { route: null, label: 'Statusseiten', hint: 'bald' },
-    { route: null, label: 'Benutzer & Rollen', hint: 'bald' },
+    { path: '', label: 'Übersicht', current: (r) => r.name === 'home' },
   ];
-  if (canManageUsers(profile)) {
-    list.push({ route: 'audit', label: 'Audit-Log' });
+  if (canViewJobs(profile)) {
+    list.push({ path: 'jobs', label: 'Jobs', current: (r) => r.name === 'jobs' || r.name === 'job-new' || r.name === 'job' || r.name === 'job-edit' });
+  } else {
+    list.push({ path: null, label: 'Jobs', hint: 'bald' });
   }
-  list.push({ route: 'konto', label: 'Mein Konto' });
+  list.push(
+    { path: null, label: 'Verlauf', hint: 'bald' },
+    { path: null, label: 'Statusseiten', hint: 'bald' },
+    { path: null, label: 'Benutzer & Rollen', hint: 'bald' },
+  );
+  if (canManageUsers(profile)) {
+    list.push({ path: 'audit', label: 'Audit-Log', current: (r) => r.name === 'audit' });
+  }
+  list.push({ path: 'konto', label: 'Mein Konto', current: (r) => r.name === 'konto' });
   return list;
 }
 
@@ -45,7 +53,7 @@ export function Layout({ profile, route, kicker, title, onLogout, children }: La
         <Brand />
         <div className="nav">
           {entries(profile).map((entry) =>
-            entry.route === null ? (
+            entry.path === null ? (
               <span key={entry.label} className="nav__item" aria-disabled="true">
                 <span>{entry.label}</span>
                 <span className="nav__hint">{entry.hint}</span>
@@ -54,11 +62,11 @@ export function Layout({ profile, route, kicker, title, onLogout, children }: La
               <a
                 key={entry.label}
                 className="nav__item"
-                href={entry.route === '' ? '#/' : '#/' + entry.route}
-                aria-current={entry.route === route ? 'page' : undefined}
+                href={hrefOf(entry.path)}
+                aria-current={entry.current?.(route) === true ? 'page' : undefined}
                 onClick={(event) => {
                   event.preventDefault();
-                  navigate(entry.route as Route);
+                  navigate(entry.path ?? '');
                 }}
               >
                 <span>{entry.label}</span>
