@@ -2,6 +2,8 @@
 
 Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem Review durch `sicherheit`.
 
+> **Weitermachen:** siehe `docs/WEITERMACHEN.md` (Stand 07.10.2026, offene Schritte S14, S11, U5, Review Phase 3).
+
 ## Phase 1 – Fundament (MVP 6 PT)
 
 | Status | Aufgabe | Agent |
