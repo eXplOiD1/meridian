@@ -28,12 +28,21 @@ export function Login({ onLoggedIn }: LoginProps) {
     setBusy(true);
     setError(null);
     try {
-      const profile = await request<Profile>('POST', '/api/auth/login', {
+      await request<Profile>('POST', '/api/auth/login', {
         body: needsCode ? { username, password, totp_code: code.trim() } : { username, password },
       });
       setPassword('');
       setCode('');
-      onLoggedIn(profile);
+      // Gegenprobe: Hat der Browser das Sitzungs-Cookie behalten? Es ist „Secure“ und wird über reines HTTP verworfen.
+      try {
+        onLoggedIn(await request<Profile>('GET', '/api/auth/me'));
+      } catch (probe) {
+        if (probe instanceof ApiError && probe.status === 401) {
+          setError('Der Browser hat die Sitzung nicht gespeichert. Meridian im Betriebsmodus „prod“ braucht HTTPS. Im reinen LAN-Test MERIDIAN_ENV=dev setzen (siehe README), sonst eine HTTPS-Adresse verwenden.');
+          return;
+        }
+        throw probe;
+      }
     } catch (caught) {
       if (caught instanceof ApiError && caught.totpRequired) {
         setNeedsCode(true);
