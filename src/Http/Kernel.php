@@ -41,16 +41,43 @@ final class Kernel
      */
     public function get(string $name, string $path, callable $handler, array $requirements = []): void
     {
-        $this->routes->add($name, new Route($path, requirements: $requirements, methods: ['GET']));
-        $this->handlers[$name] = $handler;
+        $this->add('GET', $name, $path, $handler, $requirements);
     }
 
     /**
      * @param callable(Request): Response $handler
+     * @param array<string, string>       $requirements
      */
-    public function post(string $name, string $path, callable $handler): void
+    public function post(string $name, string $path, callable $handler, array $requirements = []): void
     {
-        $this->routes->add($name, new Route($path, methods: ['POST']));
+        $this->add('POST', $name, $path, $handler, $requirements);
+    }
+
+    /**
+     * @param callable(Request): Response $handler
+     * @param array<string, string>       $requirements
+     */
+    public function put(string $name, string $path, callable $handler, array $requirements = []): void
+    {
+        $this->add('PUT', $name, $path, $handler, $requirements);
+    }
+
+    /**
+     * @param callable(Request): Response $handler
+     * @param array<string, string>       $requirements
+     */
+    public function delete(string $name, string $path, callable $handler, array $requirements = []): void
+    {
+        $this->add('DELETE', $name, $path, $handler, $requirements);
+    }
+
+    /**
+     * @param callable(Request): Response $handler
+     * @param array<string, string>       $requirements
+     */
+    private function add(string $method, string $name, string $path, callable $handler, array $requirements): void
+    {
+        $this->routes->add($name, new Route($path, requirements: $requirements, methods: [$method]));
         $this->handlers[$name] = $handler;
     }
 
@@ -69,8 +96,11 @@ final class Kernel
             $response = $handler !== null ? $handler($request) : $this->error(404, 'Nicht gefunden.');
         } catch (ResourceNotFoundException) {
             $response = $this->error(404, 'Nicht gefunden.');
-        } catch (MethodNotAllowedException) {
+        } catch (MethodNotAllowedException $e) {
             $response = $this->error(405, 'Methode nicht erlaubt.');
+            $response->headers->set('Allow', implode(', ', $e->getAllowedMethods()));
+        } catch (ValidationFailed $e) {
+            $response = JsonReply::validation($e);
         } catch (AccessDenied $e) {
             $response = $this->error(403, $e->getMessage());
         } catch (\Throwable $e) {
@@ -87,6 +117,6 @@ final class Kernel
 
     private function error(int $status, string $message): JsonResponse
     {
-        return new JsonResponse(['error' => $message], $status);
+        return JsonReply::error($status, $message);
     }
 }
