@@ -121,7 +121,9 @@ final class UserRepository
             }
             // „Alle Kategorien“ nur mit dem ausdrücklichen Flag. Eine leere Liste (auch nach dem Löschen der
             // letzten Kategorie) erlaubt nichts.
-            $grants[] = new RoleGrant($grant['role'], $grant['permissions'], $grant['all'] ? null : $categories);
+            // Gibt es Kategoriezeilen, gilt die Zuweisung als beschränkt, auch wenn das Flag gesetzt ist: im Zweifel
+            // die engere Lesart. Nur Flag UND keine Zeilen heißt „alle“.
+            $grants[] = new RoleGrant($grant['role'], $grant['permissions'], $grant['all'] && $categories === [] ? null : $categories);
         }
 
         return $grants;

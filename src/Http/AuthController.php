@@ -10,6 +10,7 @@ use Meridian\Auth\CsrfGuard;
 use Meridian\Auth\LoginStatus;
 use Meridian\Auth\Session;
 use Meridian\Auth\SessionManager;
+use Meridian\Auth\TooManyAttempts;
 use Meridian\Auth\TwoFactor;
 use Meridian\Config;
 use Meridian\Security\Permission;
@@ -142,17 +143,16 @@ final class AuthController
         }
 
         $ip = $request->getClientIp() ?? 'unbekannt';
-        $locked = $this->lockedResponse($user, $ip);
-        if ($locked !== null) {
-            return $locked;
-        }
-
         $data = $this->body($request);
         if ($data === null || !isset($data['code'], $data['password']) || !is_string($data['code']) || !is_string($data['password']) || strlen($data['code']) > self::MAX_CODE) {
             return self::error(400, 'Ungültige Anfrage: JSON mit password und code erwartet.');
         }
 
-        $recovery = $this->auth->enableTwoFactor($user, $data['password'], $data['code'], $ip);
+        try {
+            $recovery = $this->auth->enableTwoFactor($user, $data['password'], $data['code'], $ip);
+        } catch (TooManyAttempts $e) {
+            return self::tooMany($e);
+        }
         if ($recovery === null) {
             return self::error(400, 'Passwort oder Code falsch. Erst /api/auth/2fa/setup aufrufen und den aktuellen Code der App eingeben.');
         }
@@ -168,17 +168,17 @@ final class AuthController
         }
 
         $ip = $request->getClientIp() ?? 'unbekannt';
-        $locked = $this->lockedResponse($user, $ip);
-        if ($locked !== null) {
-            return $locked;
-        }
-
         $data = $this->body($request);
         if ($data === null || !isset($data['password'], $data['code']) || !is_string($data['password']) || !is_string($data['code']) || strlen($data['code']) > self::MAX_CODE) {
             return self::error(400, 'Ungültige Anfrage: JSON mit password und code erwartet.');
         }
 
-        if (!$this->auth->disableTwoFactor($user, $data['password'], $data['code'], $ip)) {
+        try {
+            $disabled = $this->auth->disableTwoFactor($user, $data['password'], $data['code'], $ip);
+        } catch (TooManyAttempts $e) {
+            return self::tooMany($e);
+        }
+        if (!$disabled) {
             return self::error(400, 'Passwort oder Code falsch.');
         }
 
@@ -203,15 +203,10 @@ final class AuthController
         return $user !== null && $user->isActive ? $user : self::error(401, 'Nicht angemeldet.');
     }
 
-    private function lockedResponse(UserAccount $user, string $ip): ?Response
+    private static function tooMany(TooManyAttempts $e): Response
     {
-        $locked = $this->auth->lockedFor($user, $ip);
-        if ($locked <= 0) {
-            return null;
-        }
-
-        $response = self::error(429, 'Zu viele Fehlversuche. Bitte später erneut versuchen.');
-        $response->headers->set('Retry-After', (string) $locked);
+        $response = self::error(429, $e->getMessage());
+        $response->headers->set('Retry-After', (string) $e->retryAfter);
 
         return $response;
     }

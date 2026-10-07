@@ -33,9 +33,11 @@ final class AuthService
 
     public function login(string $username, #[\SensitiveParameter] string $password, string $ip, #[\SensitiveParameter] ?string $totpCode = null): LoginResult
     {
-        $locked = $this->throttle->lockedFor($username, $ip);
-        if ($locked > 0) {
-            return LoginResult::locked($locked);
+        // Den Versuch zuerst reservieren (atomar), erst danach das langsame Passwort prüfen: Parallele Anfragen
+        // bringen so keine zusätzlichen Versuche, und die Antwort hängt nie davon ab, ob das Passwort stimmt.
+        $reservation = $this->throttle->reserve($username, $ip);
+        if (!$reservation->allowed) {
+            return LoginResult::locked($reservation->retryAfter);
         }
 
         $user = strlen($username) <= self::MAX_USERNAME ? $this->users->findByUsername($username) : null;
@@ -45,21 +47,23 @@ final class AuthService
         $verified = $acceptable && $this->hasher->verify($password, $hash);
 
         if ($user === null || !$user->isActive || !$verified) {
-            $this->fail($user, $username, $ip);
+            $this->fail($user, $reservation);
 
             return LoginResult::invalid();
         }
 
         if ($this->twoFactor->isEnabled($user->id)) {
             // Passwort stimmt, aber ohne Code startet keine Sitzung. Das zählt nicht als Fehlversuch,
-            // sonst würde jede normale Anmeldung mit 2FA die Sperre vorbereiten.
+            // sonst würde jede normale Anmeldung mit 2FA die Sperre vorbereiten: der Platz wird freigegeben.
             if ($totpCode === null || trim($totpCode) === '') {
+                $this->throttle->release($username, $ip);
+
                 return LoginResult::totpRequired();
             }
 
             $method = $this->twoFactor->verify($user->id, $totpCode);
             if ($method === null) {
-                $this->fail($user, $username, $ip, 'auth.2fa_failed');
+                $this->fail($user, $reservation, 'auth.2fa_failed');
 
                 return LoginResult::invalid();
             }
@@ -68,31 +72,16 @@ final class AuthService
             }
         }
 
-        // Parallele Anfragen haben die Sperre vor ihrer (langsamen) Passwortprüfung gelesen. Wurde inzwischen
-        // gesperrt, gilt auch ein richtiges Passwort nicht mehr: so bringt Parallelität keine Extra-Versuche.
-        $lockedNow = $this->throttle->lockedFor($username, $ip);
-        if ($lockedNow > 0) {
-            return LoginResult::locked($lockedNow);
-        }
-
         if ($this->hasher->needsRehash($user->passwordHash)) {
             $this->users->updatePasswordHash($user->id, $this->hasher->hash($password));
         }
 
-        $this->throttle->clearUser($username);
+        $this->throttle->release($username, $ip);
         $this->users->markLogin($user->id, $this->clock->now());
         $session = $this->sessions->start($user->id);
         $this->audit->record($user->id, 'auth.login', $user->username);
 
         return LoginResult::success($session);
-    }
-
-    /**
-     * Verbleibende Sperrzeit für Änderungen am zweiten Faktor (gleiche Zähler wie die Anmeldung).
-     */
-    public function lockedFor(UserAccount $user, string $ip): int
-    {
-        return $this->throttle->lockedFor($user->username, $ip);
     }
 
     /**
@@ -116,13 +105,15 @@ final class AuthService
      */
     public function enableTwoFactor(UserAccount $user, #[\SensitiveParameter] string $password, string $code, string $ip): ?array
     {
+        $reservation = $this->reserveOrFail($user, $ip);
         $passwordOk = strlen($password) <= self::MAX_PASSWORD && $this->hasher->verify($password, $user->passwordHash);
         $codes = $passwordOk ? $this->twoFactor->confirm($user->id, $code) : null;
         if ($codes === null) {
-            $this->fail($user, $user->username, $ip, 'auth.2fa_enable_failed');
+            $this->fail($user, $reservation, 'auth.2fa_enable_failed');
 
             return null;
         }
+        $this->throttle->release($user->username, $ip);
         $this->audit->record($user->id, 'auth.2fa_enabled', $user->username);
 
         return $codes;
@@ -133,15 +124,17 @@ final class AuthService
      */
     public function disableTwoFactor(UserAccount $user, #[\SensitiveParameter] string $password, #[\SensitiveParameter] string $code, string $ip): bool
     {
+        $reservation = $this->reserveOrFail($user, $ip);
         $passwordOk = strlen($password) <= self::MAX_PASSWORD && $this->hasher->verify($password, $user->passwordHash);
         // Der Code wird nur bei richtigem Passwort geprüft: ein falsches Passwort darf keinen gültigen Code verbrauchen.
         $method = $passwordOk ? $this->twoFactor->verify($user->id, $code) : null;
         if (!$passwordOk || $method === null) {
-            $this->fail($user, $user->username, $ip, 'auth.2fa_disable_failed');
+            $this->fail($user, $reservation, 'auth.2fa_disable_failed');
 
             return false;
         }
 
+        $this->throttle->release($user->username, $ip);
         $this->twoFactor->disable($user->id);
         $this->audit->record($user->id, 'auth.2fa_disabled', $user->username);
 
@@ -154,15 +147,29 @@ final class AuthService
         $this->audit->record($session->userId, 'auth.logout');
     }
 
-    private function fail(?UserAccount $user, string $username, string $ip, string $action = 'auth.login_failed'): void
+    /**
+     * Der Versuch bleibt gezählt (reserviert). Das Audit-Log bekommt nur den Namen eines bestehenden Kontos:
+     * was bei unbekannten Namen im Feld steht, kann ein versehentlich getipptes Passwort sein.
+     */
+    private function fail(?UserAccount $user, Reservation $reservation, string $action = 'auth.login_failed'): void
     {
-        $newlyLocked = $this->throttle->recordFailure($username, $ip);
-        // Ins Audit-Log nur der Name eines bestehenden Kontos. Was bei unbekannten Namen im Feld
-        // steht, kann ein versehentlich getipptes Passwort sein und wird nie gespeichert.
         $target = $user?->username;
         $this->audit->record($user?->id, $action, $target);
-        if ($newlyLocked) {
+        if ($reservation->reachedLock) {
             $this->audit->record($user?->id, 'auth.login_locked', $target);
         }
+    }
+
+    /**
+     * @throws TooManyAttempts wenn das Konto oder die IP gesperrt ist; dann wird nichts geprüft
+     */
+    private function reserveOrFail(UserAccount $user, string $ip): Reservation
+    {
+        $reservation = $this->throttle->reserve($user->username, $ip);
+        if (!$reservation->allowed) {
+            throw new TooManyAttempts($reservation->retryAfter);
+        }
+
+        return $reservation;
     }
 }

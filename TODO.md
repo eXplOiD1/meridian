@@ -18,8 +18,8 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 | [x] | Anmeldung: Login, Sitzung, CSRF, Abmelden, Sperre nach Fehlversuchen | sicherheit |
 | [x] | 2FA mit TOTP (Secret verschlüsselt in `totp_secret_enc`) | sicherheit |
 | [x] | Audit-Log für Anmeldungen und Rechteänderungen: Anmeldung, Fehlschlag, Sperre, Entsperren, 2FA und das Anlegen von Benutzern per Befehlszeile werden protokolliert und sind über `GET /api/audit` lesbar. Rechteänderungen per API folgen mit der Benutzerverwaltung | backend |
-| [ ] | Review Phase 1: durchgeführt (1 HOCH, 4 MITTEL, 6 NIEDRIG, 3 HINWEISE), alle Funde behoben. Zur Erledigung fehlt noch ein Lauf von Psalm und Taint-Analyse (lokal) und eine Nachprüfung durch `sicherheit` | sicherheit |
-| [ ] | 2FA-Reset durch einen Administrator (mit Audit-Eintrag) und Zähler für Versuche vorab reservieren, bevor das Passwort geprüft wird (Rest aus dem Review: heute begrenzt die erneute Sperrprüfung nach der Passwortprüfung die Wirkung paralleler Anfragen) | sicherheit |
+| [ ] | Review Phase 1: durchgeführt und nachgeprüft. Alle Funde behoben (zuletzt: Versuche werden vor der Passwortprüfung atomar reserviert). Offen ist nur eine Entscheidung von Alex zum Restrisiko „Proxy ohne MERIDIAN_TRUSTED_PROXIES“ (Sperre trifft dann alle Benutzer hinter dem Proxy) | sicherheit |
+| [ ] | 2FA-Reset durch einen Administrator (mit Audit-Eintrag), gehört zur Benutzerverwaltung | sicherheit |
 
 ## Phase 2 – Scheduler (MVP 6 PT)
 

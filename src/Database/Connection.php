@@ -24,6 +24,8 @@ final class Connection
             \PDO::ATTR_EMULATE_PREPARES => false,
             \PDO::ATTR_STRINGIFY_FETCHES => false,
         ]);
+        $version = $pdo->query('SELECT sqlite_version()');
+        self::requireSqliteVersion($version === false ? '' : (string) $version->fetchColumn());
         $pdo->exec('PRAGMA foreign_keys = ON');
         $pdo->exec('PRAGMA busy_timeout = 5000');
         if ($path !== ':memory:') {
@@ -31,6 +33,17 @@ final class Connection
         }
 
         return new self($pdo);
+    }
+
+    /**
+     * Die atomare Fehlversuch-Zählung braucht RETURNING (SQLite ab 3.35). Mit einer älteren Version würde jeder
+     * Fehlversuch einen Fehler werfen und nie gezählt: deshalb lieber sofort mit klarer Meldung abbrechen.
+     */
+    public static function requireSqliteVersion(string $found): void
+    {
+        if ($found === '' || version_compare($found, '3.35.0', '<')) {
+            throw new \RuntimeException('Meridian braucht SQLite 3.35 oder neuer, gefunden: ' . ($found === '' ? 'unbekannt' : $found) . '. PHP bzw. das Betriebssystem aktualisieren (das Docker-Image bringt eine passende Version mit).');
+        }
     }
 
     public static function inMemory(): self
@@ -105,6 +118,31 @@ final class Connection
     public function executeMigrationScript(string $sql): void
     {
         $this->pdo->exec($sql);
+    }
+
+    /**
+     * Wie {@see transaction()}, aber mit sofortigem Schreibzugriff (BEGIN IMMEDIATE): Lesen, Entscheiden und
+     * Schreiben sind gegenüber allen anderen Schreibern atomar. Gebraucht, wo aus dem gelesenen Wert abgeleitet
+     * wird, was geschrieben wird (z. B. Zähler mit Sperre). Andere Schreiber warten bis zum busy_timeout.
+     *
+     * @template T
+     *
+     * @param callable(self): T $work
+     *
+     * @return T
+     */
+    public function immediate(callable $work): mixed
+    {
+        $this->pdo->exec('BEGIN IMMEDIATE');
+        try {
+            $result = $work($this);
+            $this->pdo->exec('COMMIT');
+
+            return $result;
+        } catch (\Throwable $e) {
+            $this->pdo->exec('ROLLBACK');
+            throw $e;
+        }
     }
 
     /**

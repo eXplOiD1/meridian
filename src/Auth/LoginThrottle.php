@@ -11,6 +11,10 @@ use Meridian\Database\Connection;
  *
  * Unbekannte Benutzernamen werden genauso gezählt wie bekannte, damit die Sperre nichts verrät.
  * Gespeichert wird nur ein Hash des Namens bzw. der IP.
+ *
+ * Ein Versuch wird VOR der Passwortprüfung reserviert ({@see reserve()}): Prüfen der Sperre und Zählen
+ * geschehen in einer einzigen sofort schreibenden Transaktion. So werden pro Fenster nie mehr Passwörter
+ * geprüft, als die Schwelle erlaubt, egal wie viele Anfragen gleichzeitig kommen.
  */
 final class LoginThrottle
 {
@@ -34,38 +38,70 @@ final class LoginThrottle
     public function lockedFor(string $username, string $ip): int
     {
         $now = $this->clock->now();
-        $remaining = 0;
-        foreach ([['user', self::subject($username)], ['ip', self::subject($ip)]] as [$scope, $subject]) {
-            $row = $this->db->fetchOne(
-                'SELECT locked_until FROM login_failures WHERE scope = :scope AND subject = :subject',
-                ['scope' => $scope, 'subject' => $subject],
-            );
-            if ($row === null || !isset($row['locked_until']) || !is_string($row['locked_until'])) {
-                continue;
-            }
-            $until = new \DateTimeImmutable($row['locked_until']);
-            if ($until > $now) {
-                $remaining = max($remaining, $until->getTimestamp() - $now->getTimestamp());
-            }
-        }
 
-        return $remaining;
+        return max($this->remainingLock('user', self::subject($username), $now), $this->remainingLock('ip', self::subject($ip), $now));
     }
 
     /**
-     * @return bool true, wenn dieser Fehlversuch eine neue Sperre ausgelöst hat
+     * Reserviert einen Versuch. Ist Konto oder IP gerade gesperrt, wird er abgewiesen und nichts gezählt.
+     * Sonst wird er gezählt und darf geprüft werden; erreicht er die Schwelle, beginnt (oder verlängert sich) die
+     * Sperre, der Versuch selbst wird aber noch geprüft. Nach Ablauf der Sperre gibt es so genau einen weiteren
+     * Versuch, bei Misserfolg mit längerer Sperre.
+     *
+     * Wer sich erfolgreich anmeldet (oder nur den zweiten Faktor noch schuldet), gibt den Platz mit
+     * {@see release()} wieder frei. Ein Fehlversuch behält ihn.
+     */
+    public function reserve(string $username, string $ip): Reservation
+    {
+        return $this->db->immediate(function () use ($username, $ip): Reservation {
+            $now = $this->clock->now();
+            $user = self::subject($username);
+            $ipHash = self::subject($ip);
+
+            $remaining = max($this->remainingLock('user', $user, $now), $this->remainingLock('ip', $ipHash, $now));
+            if ($remaining > 0) {
+                return Reservation::refused($remaining);
+            }
+
+            $userReached = $this->increment('user', $user, self::USER_THRESHOLD, $now);
+            $ipReached = $this->increment('ip', $ipHash, self::IP_THRESHOLD, $now);
+
+            return Reservation::allowed($userReached || $ipReached);
+        });
+    }
+
+    /**
+     * Gibt einen reservierten Versuch zurück (Anmeldung gelungen). Der Benutzername zählt wieder bei null,
+     * die IP nur um einen Versuch weniger: sonst könnte ein Angreifer mit einem eigenen Konto seinen
+     * IP-Zähler zurücksetzen.
+     */
+    public function release(string $username, string $ip): void
+    {
+        $this->clearUser($username);
+        $this->db->execute(
+            "UPDATE login_failures SET failures = CASE WHEN failures > 0 THEN failures - 1 ELSE 0 END WHERE scope = 'ip' AND subject = :subject",
+            ['subject' => self::subject($ip)],
+        );
+    }
+
+    /**
+     * Zählt einen Fehlversuch ohne Prüfung der Sperre (für Tests und Sonderfälle).
+     *
+     * @return bool true, wenn dieser Versuch die Schwelle erreicht oder überschritten hat
      */
     public function recordFailure(string $username, string $ip): bool
     {
-        $userLocked = $this->bump('user', self::subject($username), self::USER_THRESHOLD);
-        $ipLocked = $this->bump('ip', self::subject($ip), self::IP_THRESHOLD);
+        return $this->db->immediate(function () use ($username, $ip): bool {
+            $now = $this->clock->now();
+            $userReached = $this->increment('user', self::subject($username), self::USER_THRESHOLD, $now);
+            $ipReached = $this->increment('ip', self::subject($ip), self::IP_THRESHOLD, $now);
 
-        return $userLocked || $ipLocked;
+            return $userReached || $ipReached;
+        });
     }
 
     /**
-     * Nach erfolgreicher Anmeldung zählt der Benutzername wieder bei null. Die IP nicht:
-     * sonst könnte ein Angreifer mit einem eigenen Konto seine Zähler zurücksetzen.
+     * Nach erfolgreicher Anmeldung zählt der Benutzername wieder bei null.
      */
     public function clearUser(string $username): void
     {
@@ -95,43 +131,62 @@ final class LoginThrottle
         );
     }
 
-    /**
-     * Zählt atomar in einer einzigen Anweisung: parallele Anfragen überschreiben sich nicht gegenseitig,
-     * jede bekommt ihren eigenen Zählerstand zurück.
-     */
-    private function bump(string $scope, string $subject, int $threshold): bool
+    private function remainingLock(string $scope, string $subject, \DateTimeImmutable $now): int
     {
-        $now = $this->clock->now();
         $row = $this->db->fetchOne(
-            'INSERT INTO login_failures (scope, subject, failures, last_failure_at, locked_until)
-             VALUES (:scope, :subject, 1, :now, NULL)
-             ON CONFLICT (scope, subject) DO UPDATE SET
-                 failures = CASE WHEN login_failures.last_failure_at < :window THEN 1 ELSE login_failures.failures + 1 END,
-                 last_failure_at = :now
-             RETURNING failures',
-            [
-                'scope' => $scope,
-                'subject' => $subject,
-                'now' => $now->format('c'),
-                'window' => $now->modify('-' . self::WINDOW_SECONDS . ' seconds')->format('c'),
-            ],
+            'SELECT locked_until FROM login_failures WHERE scope = :scope AND subject = :subject',
+            ['scope' => $scope, 'subject' => $subject],
         );
-        $failures = isset($row['failures']) && is_int($row['failures']) ? $row['failures'] : 1;
-        if ($failures < $threshold) {
-            return false;
+        if ($row === null || !isset($row['locked_until']) || !is_string($row['locked_until'])) {
+            return 0;
         }
 
-        // Bit-Verschiebung statt Potenz: bleibt ein int (30, 60, 120 ...), gedeckelt auf MAX_LOCK_SECONDS.
-        $seconds = min(self::MAX_LOCK_SECONDS, self::BASE_LOCK_SECONDS << min($failures - $threshold, 10));
-        // Nie eine kürzere Sperre über eine längere schreiben, die eine parallele Anfrage gerade gesetzt hat.
-        $this->db->execute(
-            'UPDATE login_failures
-                SET locked_until = CASE WHEN locked_until IS NULL OR locked_until < :until THEN :until ELSE locked_until END
-              WHERE scope = :scope AND subject = :subject',
-            ['scope' => $scope, 'subject' => $subject, 'until' => $now->modify('+' . $seconds . ' seconds')->format('c')],
+        $until = new \DateTimeImmutable($row['locked_until']);
+
+        return $until > $now ? $until->getTimestamp() - $now->getTimestamp() : 0;
+    }
+
+    /**
+     * Zählt einen Versuch hoch und setzt bei Erreichen der Schwelle die (wachsende) Sperre.
+     * Nur innerhalb einer sofort schreibenden Transaktion aufrufen.
+     *
+     * @return bool true, wenn dieser Versuch die Schwelle erreicht oder überschritten hat
+     */
+    private function increment(string $scope, string $subject, int $threshold, \DateTimeImmutable $now): bool
+    {
+        $row = $this->db->fetchOne(
+            'SELECT failures, last_failure_at, locked_until FROM login_failures WHERE scope = :scope AND subject = :subject',
+            ['scope' => $scope, 'subject' => $subject],
         );
 
-        return true;
+        $failures = 1;
+        if ($row !== null && isset($row['failures'], $row['last_failure_at']) && is_int($row['failures']) && is_string($row['last_failure_at'])) {
+            $age = $now->getTimestamp() - (new \DateTimeImmutable($row['last_failure_at']))->getTimestamp();
+            $failures = $age > self::WINDOW_SECONDS ? 1 : $row['failures'] + 1;
+        }
+
+        $lockedUntil = null;
+        if ($failures >= $threshold) {
+            // Bit-Verschiebung statt Potenz: bleibt ein int (30, 60, 120 ...), gedeckelt auf MAX_LOCK_SECONDS.
+            $seconds = min(self::MAX_LOCK_SECONDS, self::BASE_LOCK_SECONDS << min($failures - $threshold, 10));
+            $lockedUntil = $now->modify('+' . $seconds . ' seconds')->format('c');
+            // Eine bestehende, längere Sperre wird nie durch eine kürzere ersetzt.
+            if ($row !== null && isset($row['locked_until']) && is_string($row['locked_until']) && $row['locked_until'] > $lockedUntil) {
+                $lockedUntil = $row['locked_until'];
+            }
+        }
+
+        $this->db->execute(
+            'INSERT INTO login_failures (scope, subject, failures, last_failure_at, locked_until)
+             VALUES (:scope, :subject, :failures, :last, :until)
+             ON CONFLICT (scope, subject) DO UPDATE SET
+                 failures = excluded.failures,
+                 last_failure_at = excluded.last_failure_at,
+                 locked_until = excluded.locked_until',
+            ['scope' => $scope, 'subject' => $subject, 'failures' => $failures, 'last' => $now->format('c'), 'until' => $lockedUntil],
+        );
+
+        return $lockedUntil !== null;
     }
 
     private static function subject(string $value): string
