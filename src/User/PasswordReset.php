@@ -1,0 +1,49 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Meridian\User;
+
+use Meridian\Auth\AuditLog;
+use Meridian\Auth\LoginThrottle;
+use Meridian\Auth\SessionManager;
+use Meridian\Security\PasswordHasher;
+
+/**
+ * Setzt das Passwort eines bestehenden Benutzers neu (Notausgang an der Befehlszeile, z. B. bei vergessenem
+ * Passwort). Alle Sitzungen des Benutzers enden, die Sperre nach Fehlversuchen wird aufgehoben, der Vorgang landet
+ * im Audit-Log. Das zweite Passwort-Faktor (2FA) bleibt unangetastet.
+ */
+final class PasswordReset
+{
+    public function __construct(
+        private readonly UserRepository $users,
+        private readonly PasswordHasher $hasher,
+        private readonly SessionManager $sessions,
+        private readonly LoginThrottle $throttle,
+        private readonly AuditLog $audit,
+    ) {
+    }
+
+    /**
+     * @return bool false, wenn es den Benutzer nicht gibt
+     *
+     * @throws \InvalidArgumentException bei zu kurzem Passwort
+     */
+    public function reset(string $username, #[\SensitiveParameter] string $password): bool
+    {
+        $user = $this->users->findByUsername($username);
+        if ($user === null) {
+            return false;
+        }
+
+        // Wirft bei zu kurzem Passwort, bevor irgendetwas geändert wird.
+        $hash = $this->hasher->hash($password);
+        $this->users->updatePasswordHash($user->id, $hash);
+        $this->sessions->endAllForUser($user->id);
+        $this->throttle->unlockUser($user->username);
+        $this->audit->record(null, 'user.password_reset', $user->username);
+
+        return true;
+    }
+}

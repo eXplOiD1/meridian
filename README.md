@@ -28,6 +28,15 @@ Aktualisieren auf die neueste Version:
 docker compose build --pull --no-cache && docker compose up -d
 ```
 
+Passwort vergessen oder neuen Benutzer anlegen (Befehle im laufenden Container, das Passwort wird verdeckt abgefragt):
+
+```bash
+docker exec -it meridian-web php bin/meridian user:password <benutzername>
+docker exec -it meridian-web php bin/meridian user:create <benutzername> --name "Anzeigename" --role Admin
+```
+
+`MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD` gelten nur beim allerersten Start, solange es noch keinen Benutzer gibt.
+
 Das Volume `meridian-secrets` sicher aufbewahren (Sicherung mitnehmen): ohne den Schlüssel sind gespeicherte
 Geheimnisse verloren.
 
