@@ -6,9 +6,9 @@ namespace Meridian\Runner;
 
 /**
  * Führt einen Lauf aus (HTTP ab Phase 3, Shell ab Phase 4). Ein Runner schreibt nichts in die Datenbank;
- * den Laufzustand speichert der Worker.
+ * den Laufzustand speichert der Worker. Während des Laufs ruft er regelmäßig {@see Heartbeat::beat()} auf.
  */
 interface Runner
 {
-    public function run(RunRequest $request): RunResult;
+    public function run(RunRequest $request, Heartbeat $heartbeat): RunResult;
 }

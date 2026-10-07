@@ -33,7 +33,7 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 | [x] | Verpasste Läufe nach Neustart (nachholen oder überspringen, höchstens ein Nachholen), hängende Läufe → `aborted` | scheduler |
 | [x] | Tests Sommerzeit März und Oktober, Neustart, Überlappung, Sperre, atomare Übernahme (auch mit parallelen Prozessen), SIGTERM | tester |
 | [ ] | Manuellen Lauf und Testlauf auslösen (mit `jobs.run`-Prüfung) – kommt mit der Job-API | backend |
-| [ ] | Review Phase 2 | sicherheit |
+| [ ] | Review Phase 2: durchgeführt; Befunde behoben (Herzschlag pro Lauf statt Abbruch lebender Läufe, Ersatzeintrag bei Speicherfehler, Fehlerausgabe ohne Meldung, strenges `Timestamp::parse`); Punkte H1–H4, H6 stehen unter Phase 3. Offen: Nachprüfung der Behebung | sicherheit |
 
 ## Phase 3 – HTTP-Jobs (MVP 3 PT)
 
@@ -45,6 +45,12 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 | [ ] | Testlauf ohne Statistik | backend |
 | [ ] | Schutz vor Anfragen ins interne Netz konfigurierbar (SSRF) | sicherheit |
 | [ ] | Leak-Tests: Geheimnis in URL, Header und Body taucht in keiner Ausgabe auf | tester |
+| [ ] | H1 Manueller Lauf/Testlauf: Recht beim Einreihen mit `AccessControl::require()` (Kategorie aus der DB) plus Audit-Eintrag; in `Worker::claim()` bei Trigger `manual`/`test` prüfen, ob `started_by` noch aktiv und berechtigt ist, sonst `skipped`; Wiederholungen übernehmen `started_by` | sicherheit |
+| [ ] | H2 `runs.worker` (Rechnername/PID) nie in API oder Oberfläche ausgeben | backend |
+| [ ] | H3 Runner begrenzen die Rohausgabe schon beim Lesen (Speicher); die API nutzt `JSON_INVALID_UTF8_SUBSTITUTE` | backend |
+| [ ] | H4 Masker pro Lauf statt ewig wachsender globaler Liste erwägen | sicherheit |
+| [ ] | H6 Job-API ruft beim Anlegen, bei Zeitplanänderung und beim Aktivieren `Planner::reschedule()` auf, nach der Rechteprüfung | backend |
+| [ ] | HTTP-Runner ruft `Heartbeat::beat()` während des Wartens auf die Antwort (mindestens alle 20 s) | backend |
 | [ ] | Review Phase 3 | sicherheit |
 
 ## Phase 4 – Shell-Jobs (MVP 6 PT)

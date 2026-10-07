@@ -57,7 +57,7 @@ if (is_dir($config->dataDir)) {
         new Planner($db, $clock, $lease),
         new Worker($db, $clock, $lease, new RunnerRegistry(), $masker),
     );
-    $app->add(new SchedulerRunCommand($scheduler, $masker));
+    $app->add(new SchedulerRunCommand($scheduler));
 }
 
 exit($app->run());
