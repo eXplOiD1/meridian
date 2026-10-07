@@ -27,7 +27,9 @@ final class SecretBox
 
     public function __destruct()
     {
-        sodium_memzero($this->key);
+        // sodium_memzero löscht den Puffer an Ort und Stelle; die Kopie teilt sich ihn mit der Property.
+        $key = $this->key;
+        sodium_memzero($key);
     }
 
     /**

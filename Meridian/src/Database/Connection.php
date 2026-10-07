@@ -44,7 +44,7 @@ final class Connection
      */
     public function execute(string $sql, array $params = []): int
     {
-        $statement = $this->pdo->prepare($sql);
+        $statement = $this->prepare($sql);
         $statement->execute($params);
 
         return $statement->rowCount();
@@ -58,7 +58,7 @@ final class Connection
      */
     public function fetchAll(string $sql, array $params = []): array
     {
-        $statement = $this->pdo->prepare($sql);
+        $statement = $this->prepare($sql);
         $statement->execute($params);
 
         /** @var list<array<string, mixed>> */
@@ -76,6 +76,15 @@ final class Connection
         $rows = $this->fetchAll($sql, $params);
 
         return $rows[0] ?? null;
+    }
+
+    /**
+     * @param literal-string $sql
+     */
+    private function prepare(string $sql): \PDOStatement
+    {
+        // Mit ERRMODE_EXCEPTION wirft PDO selbst; false wäre ein unerwarteter Zustand.
+        return $this->pdo->prepare($sql) ?: throw new \RuntimeException('SQL-Anweisung konnte nicht vorbereitet werden.');
     }
 
     public function lastInsertId(): int
