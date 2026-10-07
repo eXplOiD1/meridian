@@ -11,7 +11,8 @@ use Meridian\Runner\Heartbeat;
 
 /**
  * Herzschlag eines Laufs: schreibt runs.heartbeat_at und verlängert die Scheduler-Sperre. Häufige Aufrufe
- * werden gedrosselt (höchstens ein Schreibzugriff je {@see self::MIN_WRITE_SECONDS}).
+ * werden gedrosselt (höchstens ein Schreibzugriff je {@see self::MIN_WRITE_SECONDS}). Wirft nie: ein Datenbankfehler
+ * gilt nicht als Abbruch.
  */
 final class RunHeartbeat implements Heartbeat
 {
@@ -40,11 +41,19 @@ final class RunHeartbeat implements Heartbeat
             return true;
         }
 
-        $this->lease->acquire();
-        $this->alive = $this->db->execute(
-            "UPDATE runs SET heartbeat_at = :now WHERE id = :id AND status = 'running' AND worker = :me",
-            ['now' => Timestamp::format($now), 'id' => $this->runId, 'me' => $this->lease->owner()],
-        ) === 1;
+        try {
+            $this->lease->acquire();
+            $changed = $this->db->execute(
+                "UPDATE runs SET heartbeat_at = :now WHERE id = :id AND status = 'running' AND worker = :me",
+                ['now' => Timestamp::format($now), 'id' => $this->runId, 'me' => $this->lease->owner()],
+            );
+        } catch (\Throwable) {
+            // Datenbank kurz gesperrt oder E/A-Fehler: kein Beweis, dass der Lauf abgebrochen wurde. Weiterlaufen
+            // lassen (sonst liefe die Arbeit doppelt), nichts weitergeben; der nächste Aufruf schreibt erneut.
+            return true;
+        }
+        // Nur ein bestätigtes „keine Zeile“ heißt: der Lauf gehört nicht mehr diesem Prozess.
+        $this->alive = $changed === 1;
         $this->lastWrite = $now;
 
         return $this->alive;

@@ -50,7 +50,7 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 | [ ] | H3 Runner begrenzen die Rohausgabe schon beim Lesen (Speicher); die API nutzt `JSON_INVALID_UTF8_SUBSTITUTE` | backend |
 | [ ] | H4 Masker pro Lauf statt ewig wachsender globaler Liste erwägen | sicherheit |
 | [ ] | H6 Job-API ruft beim Anlegen, bei Zeitplanänderung und beim Aktivieren `Planner::reschedule()` auf, nach der Rechteprüfung | backend |
-| [ ] | HTTP-Runner ruft `Heartbeat::beat()` während des Wartens auf die Antwort (mindestens alle 20 s) | backend |
+| [ ] | HTTP-Runner ruft `Heartbeat::beat()` mindestens alle 20 s, auch während des Wartens auf die Antwort (curl-Fortschritt bzw. `curl_multi`); bei `false` die Übertragung sofort abbrechen | backend |
 | [ ] | Review Phase 3 | sicherheit |
 
 ## Phase 4 – Shell-Jobs (MVP 6 PT)
@@ -59,6 +59,7 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 |---|---|---|
 | [ ] | Entwurf: Shell-Runner, Docker-Proxy-Anbindung, Container-Auswahl | architekt |
 | [ ] | Shell-Runner mit `proc_open` und Argument-Array, Zeitlimit, Abbruch | sicherheit |
+| [ ] | Shell-Runner ruft `Heartbeat::beat()` mindestens alle 20 s, auch während des Wartens auf den Kindprozess (`stream_select` mit Zeitlimit); bei `false` sofort SIGTERM/SIGKILL an die Prozessgruppe | sicherheit |
 | [ ] | Ausführung in Containern über docker-socket-proxy | backend |
 | [ ] | Live-Log per Server-Sent Events | backend |
 | [ ] | docker-socket-proxy in compose.yaml aktivieren | infra |

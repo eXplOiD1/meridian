@@ -11,10 +11,16 @@ namespace Meridian\Runner;
  *
  * false heißt: der Lauf gehört nicht mehr diesem Prozess (als hängend abgebrochen). Der Runner soll dann
  * so schnell wie möglich aufhören; sein Ergebnis wird nicht mehr gespeichert.
+ *
+ * beat() wirft nie. Ein Datenbankfehler beim Schreiben ist kein Abbruch: dann liefert beat() true und der
+ * nächste Aufruf schreibt erneut. Nur ein bestätigter Abbruch liefert false.
  */
 interface Heartbeat
 {
     public const int MAX_INTERVAL_SECONDS = 20;
 
+    /**
+     * Wirft nie (siehe oben).
+     */
     public function beat(): bool;
 }
