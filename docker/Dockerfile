@@ -15,6 +15,14 @@ COPY src/ src/
 RUN composer dump-autoload --no-dev --classmap-authoritative \
     --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium
 
+# --- Oberfläche (React + Vite) --------------------------------------------
+FROM node:22-alpine AS ui
+WORKDIR /ui
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
 # --- Laufzeit -------------------------------------------------------------
 FROM dunglas/frankenphp:1-php8.4-alpine
 
@@ -36,6 +44,8 @@ COPY bin/ bin/
 COPY migrations/ migrations/
 COPY public/ public/
 COPY src/ src/
+# Die gebaute Oberfläche liegt außerhalb von public/: der Kernel liefert sie aus (mit allen Sicherheits-Headern).
+COPY --from=ui /ui/dist /app/ui
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/meridian-entrypoint
 
 ENV MERIDIAN_DATA_DIR=/var/lib/meridian \

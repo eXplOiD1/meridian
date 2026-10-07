@@ -1,0 +1,85 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Layout } from './components/Layout';
+import { ApiError, request } from './lib/api';
+import { canManageUsers } from './lib/permissions';
+import type { Route } from './lib/useHashRoute';
+import { navigate, useHashRoute } from './lib/useHashRoute';
+import { Account } from './screens/Account';
+import { Audit } from './screens/Audit';
+import { Login } from './screens/Login';
+import { Overview } from './screens/Overview';
+import type { Profile } from './types';
+
+type Session = { status: 'loading' } | { status: 'anonymous' } | { status: 'failed'; message: string } | { status: 'in'; profile: Profile };
+
+const HEADINGS: Record<Route, { kicker: string; title: string }> = {
+  '': { kicker: 'Alles auf einen Blick', title: 'Übersicht' },
+  audit: { kicker: 'Wer hat wann was getan', title: 'Audit-Log' },
+  konto: { kicker: 'Anmeldung und Sicherheit', title: 'Mein Konto' },
+};
+
+export function App() {
+  const [session, setSession] = useState<Session>({ status: 'loading' });
+  const route = useHashRoute();
+
+  // Die Sitzung liegt im HttpOnly-Cookie: ob jemand angemeldet ist, erfährt die Seite nur vom Server.
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      setSession({ status: 'in', profile: await request<Profile>('GET', '/api/auth/me') });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setSession({ status: 'anonymous' });
+      } else {
+        setSession({ status: 'failed', message: error instanceof ApiError ? error.message : 'Unerwarteter Fehler.' });
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const logout = useCallback(async (profile: Profile): Promise<void> => {
+    try {
+      await request('POST', '/api/auth/logout', { csrf: profile.csrf_token });
+    } finally {
+      // Auch wenn der Server nicht antwortet: lokal vergessen, dann neu fragen.
+      navigate('');
+      setSession({ status: 'anonymous' });
+    }
+  }, []);
+
+  if (session.status === 'loading') {
+    return <div className="center">Lädt …</div>;
+  }
+  if (session.status === 'failed') {
+    return (
+      <div className="center">
+        <div className="login__card form">
+          <p className="alert alert--err" role="alert">
+            {session.message}
+          </p>
+          <button type="button" className="btn btn--solid" onClick={() => void refresh()}>
+            Erneut versuchen
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (session.status === 'anonymous') {
+    return <Login onLoggedIn={(profile) => setSession({ status: 'in', profile })} />;
+  }
+
+  const { profile } = session;
+  // Nur Bedienkomfort: Die Seite „Audit-Log“ prüft der Server selbst; ohne Recht antwortet er mit 403.
+  const effective: Route = route === 'audit' && !canManageUsers(profile) ? '' : route;
+  const heading = HEADINGS[effective];
+
+  return (
+    <Layout profile={profile} route={effective} kicker={heading.kicker} title={heading.title} onLogout={() => void logout(profile)}>
+      {effective === '' && <Overview profile={profile} />}
+      {effective === 'konto' && <Account profile={profile} onChanged={refresh} />}
+      {effective === 'audit' && <Audit profile={profile} />}
+    </Layout>
+  );
+}

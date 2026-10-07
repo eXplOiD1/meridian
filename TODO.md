@@ -61,7 +61,8 @@ Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem 
 
 | Status | Aufgabe | Agent |
 |---|---|---|
-| [ ] | Vite + React unter `frontend/`, Build nach `public/app/`, Schriften selbst gehostet | frontend |
+| [x] | Vite + React unter `frontend/`, Build nach `frontend/dist` (im Image `/app/ui`, vom Kernel unter `/app/` ausgeliefert), Schriften selbst gehostet | frontend |
+| [x] | Scheibe 1 (vorgezogen): Rahmen mit Seitenleiste, Anmeldung mit 2FA, Mein Konto mit 2FA-Einrichtung und QR-Code, Audit-Log, Sperre aufheben, Übersicht mit leerer Abfahrtstafel | frontend |
 | [ ] | Übersicht mit Abfahrtstafel und Taktband | frontend |
 | [ ] | Jobliste mit Filtern, Job-Editor mit Zeitplan-Vorschau | frontend |
 | [ ] | Verlauf mit Live-Log | frontend |

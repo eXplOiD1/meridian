@@ -19,6 +19,8 @@ final readonly class Config
         public string $version,
         /** @var list<string> IPs oder Netze (CIDR) von Reverse-Proxys, deren X-Forwarded-For geglaubt wird. */
         public array $trustedProxies = [],
+        /** Ordner der gebauten Oberfläche (frontend/dist). Leer = nicht vorhanden. */
+        public string $uiDir = '',
     ) {
     }
 
@@ -55,6 +57,8 @@ final readonly class Config
             timezone: $timezone,
             version: '0.1.0-dev',
             trustedProxies: $proxies,
+            // Im Docker-Image liegt die Oberfläche unter /app/ui; lokal wahlweise MERIDIAN_UI_DIR=frontend/dist.
+            uiDir: rtrim($env['MERIDIAN_UI_DIR'] ?? dirname(__DIR__) . '/ui', '/'),
         );
     }
 

@@ -37,10 +37,11 @@ final class Kernel
 
     /**
      * @param callable(Request): Response $handler
+     * @param array<string, string>       $requirements Muster für Pfadparameter, z. B. ['path' => '.+']
      */
-    public function get(string $name, string $path, callable $handler): void
+    public function get(string $name, string $path, callable $handler, array $requirements = []): void
     {
-        $this->routes->add($name, new Route($path, methods: ['GET']));
+        $this->routes->add($name, new Route($path, requirements: $requirements, methods: ['GET']));
         $this->handlers[$name] = $handler;
     }
 
@@ -58,6 +59,12 @@ final class Kernel
         try {
             $matcher = new UrlMatcher($this->routes, (new RequestContext())->fromRequest($request));
             $match = $matcher->matchRequest($request);
+            // Pfadparameter (z. B. {path}) stehen dem Handler als Attribute der Anfrage zur Verfügung.
+            foreach (array_keys($match) as $key) {
+                if (is_string($key) && !str_starts_with($key, '_')) {
+                    $request->attributes->set($key, $match[$key]);
+                }
+            }
             $handler = isset($match['_route']) && is_string($match['_route']) ? ($this->handlers[$match['_route']] ?? null) : null;
             $response = $handler !== null ? $handler($request) : $this->error(404, 'Nicht gefunden.');
         } catch (ResourceNotFoundException) {

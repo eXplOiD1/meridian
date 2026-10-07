@@ -1,5 +1,8 @@
 .git
 **/vendor
+frontend/node_modules
+frontend/dist
+/ui
 /data
 /secrets
 .env
