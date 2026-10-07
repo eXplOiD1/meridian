@@ -58,7 +58,7 @@ final class UiController
     private function serve(Request $request, string $path): Response
     {
         if ($this->root === '') {
-            return new JsonResponse(['error' => 'Die Oberfläche ist nicht gebaut. Im Ordner frontend/ „npm ci && npm run build“ ausführen (das Docker-Image macht das selbst).'], 404);
+            return new JsonResponse(['error' => 'Die Oberfläche ist nicht gebaut. Docker: die compose.yaml auf den aktuellen Stand bringen (das Dockerfile steht darin) und neu bauen. Lokal: im Ordner frontend/ „npm ci && npm run build“ ausführen und MERIDIAN_UI_DIR=frontend/dist setzen.'], 404);
         }
 
         $file = $this->resolve($path);
