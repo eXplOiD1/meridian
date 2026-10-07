@@ -25,7 +25,7 @@ final readonly class Config
     /**
      * @param array<string, string> $env
      */
-    public static function fromEnvironment(array $env): self
+    public static function fromEnvironment(#[\SensitiveParameter] array $env): self
     {
         $environment = $env['MERIDIAN_ENV'] ?? 'prod';
         if ($environment !== 'prod' && $environment !== 'dev') {

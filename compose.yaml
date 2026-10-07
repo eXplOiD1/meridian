@@ -102,6 +102,8 @@ services:
       MERIDIAN_AUTO_SETUP: "1"
       MERIDIAN_ADMIN_USER: ${MERIDIAN_ADMIN_USER:-}
       MERIDIAN_ADMIN_PASSWORD: ${MERIDIAN_ADMIN_PASSWORD:-}
+      # Sicherer als das Passwort in der Umgebung (sichtbar in docker inspect): eine Datei, z. B. ein Docker-Secret,
+      # und hier MERIDIAN_ADMIN_PASSWORD_FILE auf deren Pfad setzen. Nach dem ersten Start beides entfernen.
       # Die Sitzung liegt in einem Secure-Cookie: Anmelden geht nur über HTTPS (z. B. hinter dem
       # Nginx Proxy Manager). Nur zum Ausprobieren über HTTP: MERIDIAN_ENV=dev (zeigt Fehler im Klartext).
       MERIDIAN_ENV: ${MERIDIAN_ENV:-prod}

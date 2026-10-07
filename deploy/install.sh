@@ -19,7 +19,13 @@ install -d -o root -g root -m 0755 "$APP"
 install -d -o meridian -g meridian -m 0750 "$DATA"
 install -d -o root -g meridian -m 0750 "$ETC"
 
-rsync -a --delete --exclude vendor --exclude .git "$SRC/" "$APP/"
+# Besitzer root und feste Rechte, egal wie die Quelle aussieht (sonst könnte ein lokaler Benutzer den Code ersetzen,
+# der später mit Zugriff auf Schlüssel und Datenbank läuft). Nur Produktcode, nie Schlüssel, Daten oder Werkzeuge.
+rsync -a --delete --chown=root:root --chmod=D0755,F0644 \
+  --exclude vendor --exclude .git --exclude .github --exclude .claude --exclude tests \
+  --exclude .env --exclude '*.key' --exclude '*.sqlite*' --exclude data --exclude secrets \
+  "$SRC/" "$APP/"
+chmod 0755 "$APP/bin/meridian" "$APP/deploy/install.sh"
 (cd "$APP" && composer install --no-dev --no-interaction --classmap-authoritative)
 
 if [[ ! -f "$ETC/meridian.env" ]]; then

@@ -15,7 +15,8 @@ use Meridian\Database\Connection;
 final class LoginThrottle
 {
     private const USER_THRESHOLD = 5;
-    private const IP_THRESHOLD = 20;
+    /** Hinter einem Reverse-Proxy ohne MERIDIAN_TRUSTED_PROXIES teilen sich alle dieselbe IP: bewusst großzügig. */
+    private const IP_THRESHOLD = 50;
     private const BASE_LOCK_SECONDS = 30;
     private const MAX_LOCK_SECONDS = 900;
     /** Fehlversuche verfallen, wenn eine Stunde lang keiner mehr dazukam. */
@@ -83,37 +84,53 @@ final class LoginThrottle
         $this->clearUser($username);
     }
 
+    /**
+     * Hebt die Sperre einer Client-IP auf (Administrator oder Betreiber an der Befehlszeile).
+     */
+    public function unlockIp(string $ip): void
+    {
+        $this->db->execute(
+            "DELETE FROM login_failures WHERE scope = 'ip' AND subject = :subject",
+            ['subject' => self::subject($ip)],
+        );
+    }
+
+    /**
+     * Zählt atomar in einer einzigen Anweisung: parallele Anfragen überschreiben sich nicht gegenseitig,
+     * jede bekommt ihren eigenen Zählerstand zurück.
+     */
     private function bump(string $scope, string $subject, int $threshold): bool
     {
         $now = $this->clock->now();
         $row = $this->db->fetchOne(
-            'SELECT failures, last_failure_at FROM login_failures WHERE scope = :scope AND subject = :subject',
-            ['scope' => $scope, 'subject' => $subject],
-        );
-
-        $failures = 1;
-        if ($row !== null && isset($row['failures']) && is_int($row['failures']) && isset($row['last_failure_at']) && is_string($row['last_failure_at'])) {
-            $age = $now->getTimestamp() - (new \DateTimeImmutable($row['last_failure_at']))->getTimestamp();
-            $failures = $age > self::WINDOW_SECONDS ? 1 : $row['failures'] + 1;
-        }
-
-        $lockedUntil = null;
-        if ($failures >= $threshold) {
-            $seconds = min(self::MAX_LOCK_SECONDS, self::BASE_LOCK_SECONDS * (2 ** ($failures - $threshold)));
-            $lockedUntil = $now->modify('+' . $seconds . ' seconds')->format('c');
-        }
-
-        $this->db->execute(
             'INSERT INTO login_failures (scope, subject, failures, last_failure_at, locked_until)
-             VALUES (:scope, :subject, :failures, :last, :until)
+             VALUES (:scope, :subject, 1, :now, NULL)
              ON CONFLICT (scope, subject) DO UPDATE SET
-                 failures = excluded.failures,
-                 last_failure_at = excluded.last_failure_at,
-                 locked_until = excluded.locked_until',
-            ['scope' => $scope, 'subject' => $subject, 'failures' => $failures, 'last' => $now->format('c'), 'until' => $lockedUntil],
+                 failures = CASE WHEN login_failures.last_failure_at < :window THEN 1 ELSE login_failures.failures + 1 END,
+                 last_failure_at = :now
+             RETURNING failures',
+            [
+                'scope' => $scope,
+                'subject' => $subject,
+                'now' => $now->format('c'),
+                'window' => $now->modify('-' . self::WINDOW_SECONDS . ' seconds')->format('c'),
+            ],
+        );
+        $failures = isset($row['failures']) && is_int($row['failures']) ? $row['failures'] : 1;
+        if ($failures < $threshold) {
+            return false;
+        }
+
+        $seconds = min(self::MAX_LOCK_SECONDS, self::BASE_LOCK_SECONDS * (2 ** min($failures - $threshold, 10)));
+        // Nie eine kürzere Sperre über eine längere schreiben, die eine parallele Anfrage gerade gesetzt hat.
+        $this->db->execute(
+            'UPDATE login_failures
+                SET locked_until = CASE WHEN locked_until IS NULL OR locked_until < :until THEN :until ELSE locked_until END
+              WHERE scope = :scope AND subject = :subject',
+            ['scope' => $scope, 'subject' => $subject, 'until' => $now->modify('+' . $seconds . ' seconds')->format('c')],
         );
 
-        return $lockedUntil !== null;
+        return true;
     }
 
     private static function subject(string $value): string

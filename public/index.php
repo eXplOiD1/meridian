@@ -10,6 +10,10 @@ use Meridian\Security\SecretBox;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
+// Auch ohne php.ini (z. B. systemd): Fehler und Warnungen nie in die Antwort schreiben.
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 /** @var array<string, string> $env */

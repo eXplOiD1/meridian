@@ -20,8 +20,6 @@ final class AuthService
     /** Obergrenze gegen Rechenlast-Missbrauch (Argon2id). */
     private const MAX_PASSWORD = 1024;
 
-    private ?string $dummyHash = null;
-
     public function __construct(
         private readonly UserRepository $users,
         private readonly PasswordHasher $hasher,
@@ -41,7 +39,7 @@ final class AuthService
         }
 
         $user = strlen($username) <= self::MAX_USERNAME ? $this->users->findByUsername($username) : null;
-        $hash = $user !== null ? $user->passwordHash : $this->dummyHash();
+        $hash = $user !== null ? $user->passwordHash : PasswordHasher::DUMMY_HASH;
 
         $acceptable = strlen($password) <= self::MAX_PASSWORD;
         $verified = $acceptable && $this->hasher->verify($password, $hash);
@@ -68,6 +66,13 @@ final class AuthService
             if ($method === TwoFactorMethod::Recovery) {
                 $this->audit->record($user->id, 'auth.recovery_code_used', $user->username);
             }
+        }
+
+        // Parallele Anfragen haben die Sperre vor ihrer (langsamen) Passwortprüfung gelesen. Wurde inzwischen
+        // gesperrt, gilt auch ein richtiges Passwort nicht mehr: so bringt Parallelität keine Extra-Versuche.
+        $lockedNow = $this->throttle->lockedFor($username, $ip);
+        if ($lockedNow > 0) {
+            return LoginResult::locked($lockedNow);
         }
 
         if ($this->hasher->needsRehash($user->passwordHash)) {
@@ -104,11 +109,15 @@ final class AuthService
     }
 
     /**
-     * @return list<string>|null die Wiederherstellungscodes (einmalig), null bei falschem Code
+     * Aktivieren verlangt wie das Abschalten das Passwort: mit einer gestohlenen Sitzung allein lässt sich
+     * 2FA nicht mit dem eigenen Gerät einschalten und der Inhaber aussperren.
+     *
+     * @return list<string>|null die Wiederherstellungscodes (einmalig), null bei falschem Passwort oder Code
      */
-    public function enableTwoFactor(UserAccount $user, string $code, string $ip): ?array
+    public function enableTwoFactor(UserAccount $user, #[\SensitiveParameter] string $password, string $code, string $ip): ?array
     {
-        $codes = $this->twoFactor->confirm($user->id, $code);
+        $passwordOk = strlen($password) <= self::MAX_PASSWORD && $this->hasher->verify($password, $user->passwordHash);
+        $codes = $passwordOk ? $this->twoFactor->confirm($user->id, $code) : null;
         if ($codes === null) {
             $this->fail($user, $user->username, $ip, 'auth.2fa_enable_failed');
 
@@ -155,10 +164,5 @@ final class AuthService
         if ($newlyLocked) {
             $this->audit->record($user?->id, 'auth.login_locked', $target);
         }
-    }
-
-    private function dummyHash(): string
-    {
-        return $this->dummyHash ??= $this->hasher->hash(bin2hex(random_bytes(16)));
     }
 }

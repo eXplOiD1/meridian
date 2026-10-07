@@ -33,6 +33,7 @@ final class AdminBootstrapCommand extends Command
      */
     public function __construct(
         private readonly UserRepository $users,
+        #[\SensitiveParameter]
         private readonly array $env,
         private readonly AuditLog $audit,
     ) {
