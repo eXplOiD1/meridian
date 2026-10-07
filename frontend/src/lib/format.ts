@@ -43,3 +43,27 @@ export function retryHint(seconds: number | null): string {
   }
   return seconds >= 60 ? ' Nächster Versuch in etwa ' + String(Math.ceil(seconds / 60)) + ' Minuten.' : ' Nächster Versuch in ' + String(seconds) + ' Sekunden.';
 }
+
+const shortFormat = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const timeFormat = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
+
+/** Zeitpunkt ohne Sekunden in der Zeitzone des Browsers. */
+export function formatShort(iso: string | null): string {
+  if (iso === null) {
+    return '–';
+  }
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : shortFormat.format(date);
+}
+
+/** Uhrzeit für die Übersicht; ein anderer Tag bekommt das Datum dazu. */
+export function formatNext(iso: string | null): string {
+  if (iso === null) {
+    return '–';
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return date.toDateString() === new Date().toDateString() ? timeFormat.format(date) : shortFormat.format(date);
+}
