@@ -20,7 +20,10 @@ interface Heartbeat
     public const int MAX_INTERVAL_SECONDS = 20;
 
     /**
-     * Wirft nie (siehe oben).
+     * Wirft nie (siehe oben). Hat Wirkung (schreibt, verlängert die Sperre) und kann bei jedem Aufruf anders
+     * ausfallen.
+     *
+     * @phpstan-impure
      */
     public function beat(): bool;
 }
