@@ -1,0 +1,11 @@
+.git
+.github
+.claude
+**/vendor
+**/data
+**/secrets
+**/.env
+*.key
+*.sqlite*
+tests
+Meridian/frontend/node_modules

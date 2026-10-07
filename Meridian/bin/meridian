@@ -1,0 +1,37 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Meridian\Config;
+use Meridian\Console\AdminBootstrapCommand;
+use Meridian\Console\KeyGenerateCommand;
+use Meridian\Console\MigrateCommand;
+use Meridian\Console\SchedulerRunCommand;
+use Meridian\Console\UserCreateCommand;
+use Meridian\Database\Connection;
+use Meridian\Database\Migrator;
+use Meridian\Security\PasswordHasher;
+use Meridian\User\UserRepository;
+use Symfony\Component\Console\Application;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+/** @var array<string, string> $env */
+$env = getenv();
+$config = Config::fromEnvironment($env);
+
+$app = new Application('Meridian', $config->version);
+$app->add(new KeyGenerateCommand());
+
+// Befehle mit Datenbank nur, wenn das Datenverzeichnis existiert.
+if (is_dir($config->dataDir)) {
+    $db = Connection::open($config->databasePath());
+    $app->add(new MigrateCommand(new Migrator($db, dirname(__DIR__) . '/migrations')));
+    $users = new UserRepository($db, new PasswordHasher());
+    $app->add(new UserCreateCommand($users));
+    $app->add(new AdminBootstrapCommand($users, $env));
+    $app->add(new SchedulerRunCommand($db));
+}
+
+exit($app->run());
