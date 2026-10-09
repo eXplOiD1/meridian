@@ -8,7 +8,7 @@ use Meridian\Database\Connection;
 use Meridian\Security\CategoryScope;
 
 /**
- * Kategorien lesen und anlegen (Löschen folgt mit der Kategorie-Verwaltung; bis dahin legt sie die CLI `category:create` an).
+ * Kategorien lesen. Anlegen, Umbenennen und Löschen läuft über {@see \Meridian\Category\CategoryService}.
  */
 final class CategoryRepository
 {
@@ -34,30 +34,6 @@ final class CategoryRepository
         }
 
         return $list;
-    }
-
-    /**
-     * Legt eine Kategorie an. Der Name muss vorher über {@see CategoryName::isValid()} geprüft sein; Namen, die sich
-     * nur in Groß- und Kleinschreibung unterscheiden, gelten als doppelt (sonst sähen zwei Kategorien gleich aus).
-     * Legt nichts an und gibt null zurück, wenn der Name schon vergeben ist.
-     *
-     * Eine neue Kategorie gehört niemandem: sie erweitert keine bestehende Beschränkung auf Kategorielisten
-     * (`user_role_categories` bleibt unberührt), nur Rollen mit „alle Kategorien“ sehen sie.
-     */
-    public function create(string $name): ?int
-    {
-        if (!CategoryName::isValid($name)) {
-            throw new \InvalidArgumentException('Ungültiger Kategoriename.');
-        }
-
-        return $this->db->immediate(function () use ($name): ?int {
-            if ($this->db->fetchOne('SELECT 1 AS taken FROM categories WHERE name = :name COLLATE NOCASE', ['name' => $name]) !== null) {
-                return null;
-            }
-            $this->db->execute('INSERT INTO categories (name) VALUES (:name)', ['name' => $name]);
-
-            return $this->db->lastInsertId();
-        });
     }
 
     /** Name einer bestehenden Kategorie, sonst null. */

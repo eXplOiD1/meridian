@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Meridian\Console;
 
-use Meridian\Auth\AuditLog;
+use Meridian\Category\CategoryException;
+use Meridian\Category\CategoryService;
 use Meridian\Job\CategoryName;
-use Meridian\Job\CategoryRepository;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -25,7 +25,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'category:create', description: 'Legt eine Kategorie für Jobs an')]
 final class CategoryCreateCommand extends Command
 {
-    public function __construct(private readonly CategoryRepository $categories, private readonly AuditLog $audit)
+    public function __construct(private readonly CategoryService $categories)
     {
         parent::__construct();
     }
@@ -47,13 +47,14 @@ final class CategoryCreateCommand extends Command
             return self::INVALID;
         }
 
-        $id = $this->categories->create($name);
-        if ($id === null) {
-            $output->writeln('<error>Eine Kategorie mit diesem Namen gibt es schon (Groß- und Kleinschreibung zählt nicht). Anderen Namen wählen.</error>');
+        try {
+            // Anlegen und Audit (ohne Benutzer) in einer Transaktion.
+            $id = $this->categories->create($name, null);
+        } catch (CategoryException $e) {
+            $output->writeln('<error>' . $e->getMessage() . '</error>');
 
             return self::FAILURE;
         }
-        $this->audit->record(null, 'category.created', 'category:' . $id . ' ' . $name);
         $output->writeln('Kategorie angelegt (ID ' . $id . ').');
 
         return self::SUCCESS;
