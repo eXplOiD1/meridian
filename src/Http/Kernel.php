@@ -7,6 +7,7 @@ namespace Meridian\Http;
 use Meridian\Config;
 use Meridian\Security\AccessDenied;
 use Meridian\Security\SecretMasker;
+use Meridian\User\LastAdminRemoved;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -103,6 +104,9 @@ final class Kernel
             $response = JsonReply::validation($e);
         } catch (AccessDenied $e) {
             $response = $this->error(403, $e->getMessage());
+        } catch (LastAdminRemoved) {
+            // Die Transaktion ist schon zurückgerollt (AdminInvariant prüft nach dem Schreiben, ADR 0005 E3).
+            $response = $this->error(409, LastAdminRemoved::MESSAGE);
         } catch (\Throwable $e) {
             // Nie die Meldung, weder im Log noch in der Antwort (auch nicht in dev: der Masker hier kennt die
             // Geheimnisse der Jobs nicht). In dev höchstens Klasse und Datei:Zeile wie im Log.

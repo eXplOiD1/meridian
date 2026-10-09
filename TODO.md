@@ -73,7 +73,7 @@ Entwurf: `docs/decisions/0005-benutzer-und-rollen.md` (Abschnitte in Klammern). 
 | Status | Aufgabe | Agent |
 |---|---|---|
 | [x] | Entwurf Phase 4a: Datenmodell, Rechte-Katalog, API mit Rechte-Matrix, Oberfläche, Reihenfolge | architekt |
-| [ ] | S1 Migration `0009_users_roles.sql` (nächste freie Nummer, §3.1), Recht `categories.manage` (gefährlich, nur Admin), `GrantPolicy` (`mayAssign`/`mayManage`), `AdminInvariant`, `AssignmentValidator`, `grantsFor()` leer bei Pflicht-Passwortwechsel (E1–E4) | sicherheit |
+| [x] | S1 Migration `0009_users_roles.sql` (nächste freie Nummer, §3.1), Recht `categories.manage` (gefährlich, nur Admin), `GrantPolicy` (`mayAssign`/`mayManage`), `AdminInvariant`, `AssignmentValidator`, `grantsFor()` leer bei Pflicht-Passwortwechsel (E1–E4) | sicherheit |
 | [ ] | S2 `OneTimePassword` (Sealed), `AuthService::confirmPassword()`/`changeOwnPassword()`, Ablauf des Einmalpassworts, `/me` mit `password_change_required`, `SessionManager` mit Browser/IP und Einzel-Beenden (E6, E7, E10) | sicherheit |
 | [ ] | S3 Lesende Benutzer-API `GET /api/users`, `/api/users/{id}`, `/api/roles`, `UserPresenter`, `unlock` CSRF vor Recht (§4.2, §4.4) | backend |
 | [ ] | S4 Schreibende Benutzer-API: anlegen (Einmalpasswort), Anzeigename, Zuweisungen ersetzen, deaktivieren/aktivieren, Soft-Delete, Audit, Grenzen (E3–E5, §4.3–§4.6) | backend |

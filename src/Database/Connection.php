@@ -12,6 +12,9 @@ namespace Meridian\Database;
  */
 final class Connection
 {
+    /** Eigene Buchführung: PDO::inTransaction() erkennt ein per exec() begonnenes BEGIN IMMEDIATE nicht. */
+    private bool $inTransaction = false;
+
     private function __construct(private readonly \PDO $pdo)
     {
     }
@@ -125,6 +128,15 @@ final class Connection
         return $statement;
     }
 
+    /**
+     * Läuft gerade eine Transaktion ({@see transaction()} oder {@see immediate()})? Für Prüfungen, die nur
+     * innerhalb der schreibenden Transaktion Sinn ergeben (z. B. `AdminInvariant`).
+     */
+    public function inTransaction(): bool
+    {
+        return $this->inTransaction;
+    }
+
     public function lastInsertId(): int
     {
         return (int) $this->pdo->lastInsertId();
@@ -154,6 +166,7 @@ final class Connection
     public function immediate(#[\SensitiveParameter] callable $work): mixed
     {
         $this->pdo->exec('BEGIN IMMEDIATE');
+        $this->inTransaction = true;
         try {
             $result = $work($this);
             $this->pdo->exec('COMMIT');
@@ -162,6 +175,8 @@ final class Connection
         } catch (\Throwable $e) {
             $this->pdo->exec('ROLLBACK');
             throw $e;
+        } finally {
+            $this->inTransaction = false;
         }
     }
 
@@ -175,6 +190,7 @@ final class Connection
     public function transaction(#[\SensitiveParameter] callable $work): mixed
     {
         $this->pdo->beginTransaction();
+        $this->inTransaction = true;
         try {
             $result = $work($this);
             $this->pdo->commit();
@@ -183,6 +199,8 @@ final class Connection
         } catch (\Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
+        } finally {
+            $this->inTransaction = false;
         }
     }
 }
