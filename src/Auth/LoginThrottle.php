@@ -43,6 +43,15 @@ final class LoginThrottle
     }
 
     /**
+     * Ist dieser Benutzername gerade gesperrt? Nur die Sperre des Namens, nicht die einer IP (für die Verwaltung:
+     * „gesperrt“-Markierung in der Benutzerliste).
+     */
+    public function isUserLocked(string $username): bool
+    {
+        return $this->remainingLock('user', self::subject($username), $this->clock->now()) > 0;
+    }
+
+    /**
      * Reserviert einen Versuch. Ist Konto oder IP gerade gesperrt, wird er abgewiesen und nichts gezählt.
      * Sonst wird er gezählt und darf geprüft werden; erreicht er die Schwelle, beginnt (oder verlängert sich) die
      * Sperre, der Versuch selbst wird aber noch geprüft. Nach Ablauf der Sperre gibt es so genau einen weiteren

@@ -31,4 +31,13 @@ enum Permission: string
             self::ViewJobs, self::RunJobs, self::EditHttpJobs, self::EditStatusPages => false,
         };
     }
+
+    /**
+     * Hat das Recht einen Kategoriebezug (kann auf Kategorien beschränkt vergeben werden)? Genau die nicht
+     * gefährlichen: ein gefährliches Recht gibt `RoleGrant::allows()` einer beschränkten Rolle nie frei.
+     */
+    public function isCategoryScoped(): bool
+    {
+        return !$this->isDangerous();
+    }
 }
