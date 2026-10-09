@@ -16,6 +16,8 @@ enum Permission: string
     case ManageInternalTargets = 'network.internal_targets';
     /** Globale Einstellungen ändern (lockern Schutz: Antworten speichern, Anzeige-Pfad, Zeitlimits). */
     case ManageSettings = 'settings.manage';
+    /** Kategorien anlegen, umbenennen, löschen (ändert Sichtbarkeit und Freigaben aller betroffenen Benutzer). */
+    case ManageCategories = 'categories.manage';
 
     /**
      * Gefährliche Rechte: Shell-Jobs (über den Docker-Socket praktisch Root), Benutzerverwaltung und alles,
@@ -25,7 +27,7 @@ enum Permission: string
     public function isDangerous(): bool
     {
         return match ($this) {
-            self::EditShellJobs, self::ManageUsers, self::ManageInternalTargets, self::ManageSettings => true,
+            self::EditShellJobs, self::ManageUsers, self::ManageInternalTargets, self::ManageSettings, self::ManageCategories => true,
             self::ViewJobs, self::RunJobs, self::EditHttpJobs, self::EditStatusPages => false,
         };
     }

@@ -21,6 +21,9 @@ Normativ für Phase 3: `docs/decisions/0003-phase3-http-jobs.md`. Aufgabenliste:
 - Compose auf dem NAS neu einfügen (Dockerfile-Block hat sich geändert: curl-Prüfung im Build), Image neu bauen.
   Falls der Build an der curl-Prüfung scheitert: Meldung an Claude.
 - Migrationen 0005–0007 und das Verschärfen der Anzeige-URLs laufen bei `migrate` beim Start automatisch.
+- Migration 0009 (Phase 4a) bricht ab, wenn zwei Kategorien sich nur in der Groß-/Kleinschreibung unterscheiden
+  (neuer eindeutiger Index ohne Schreibung). Vorher prüfen: `SELECT lower(name), COUNT(*) FROM categories GROUP BY 1 HAVING COUNT(*) > 1;`
+  — Treffer umbenennen, dann starten. Die Migration rollt sonst vollständig zurück.
 - Für Jobs im internen Netz: Einstellungen → „Freigaben interner Ziele“ oder
   `docker exec -it meridian-web php bin/meridian http:internal-targets add …`.
 - Kategorien anlegen: `docker exec -it meridian-web php bin/meridian category:create "Name"`.

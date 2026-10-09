@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Meridian\User;
 
 use Meridian\Database\Connection;
+use Meridian\Database\Timestamp;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\Permission;
 use Meridian\Security\RoleGrant;
@@ -46,25 +47,53 @@ final class UserRepository
         });
     }
 
+    /** Findet auch inaktive und gelöschte Benutzer; wer das Konto benutzt, prüft `isActive`. */
     public function findByUsername(string $username): ?UserAccount
     {
         return $this->account($this->db->fetchOne(
-            'SELECT id, username, display_name, password_hash, is_active FROM users WHERE username = :u',
+            'SELECT id, username, display_name, password_hash, is_active, password_must_change, password_expires_at, deleted_at FROM users WHERE username = :u',
             ['u' => $username],
         ));
     }
 
+    /** Findet auch inaktive und gelöschte Benutzer; wer das Konto benutzt, prüft `isActive`. */
     public function findById(int $id): ?UserAccount
     {
         return $this->account($this->db->fetchOne(
-            'SELECT id, username, display_name, password_hash, is_active FROM users WHERE id = :id',
+            'SELECT id, username, display_name, password_hash, is_active, password_must_change, password_expires_at, deleted_at FROM users WHERE id = :id',
             ['id' => $id],
         ));
     }
 
+    /**
+     * Ersetzt nur den Hash (Rehash nach der Anmeldung, CLI `user:password`). Pflichtwechsel und Ablauf bleiben.
+     */
     public function updatePasswordHash(int $userId, #[\SensitiveParameter] string $hash): void
     {
         $this->db->execute('UPDATE users SET password_hash = :h WHERE id = :id', ['h' => $hash, 'id' => $userId]);
+    }
+
+    /**
+     * Setzt den Hash eines Einmalpassworts (ADR 0005, E6): Pflichtwechsel an, Ablauf gesetzt. Bis zum Wechsel hat der
+     * Benutzer keine Rechte ({@see grantsFor()}). Der Klartext kommt hier nie an, nur der Argon2id-Hash.
+     */
+    public function setOneTimePasswordHash(int $userId, #[\SensitiveParameter] string $hash, \DateTimeImmutable $expiresAt): void
+    {
+        $this->db->execute(
+            'UPDATE users SET password_hash = :h, password_must_change = 1, password_expires_at = :e WHERE id = :id AND deleted_at IS NULL',
+            ['h' => $hash, 'e' => Timestamp::format($expiresAt), 'id' => $userId],
+        );
+    }
+
+    /**
+     * Eigenes Passwort gesetzt (E10): Pflichtwechsel aus, Ablauf weg, Zeitpunkt vermerkt.
+     */
+    public function setOwnPasswordHash(int $userId, #[\SensitiveParameter] string $hash, \DateTimeImmutable $changedAt): void
+    {
+        $this->db->execute(
+            'UPDATE users SET password_hash = :h, password_must_change = 0, password_expires_at = NULL, password_changed_at = :c WHERE id = :id AND deleted_at IS NULL',
+            ['h' => $hash, 'c' => Timestamp::format($changedAt), 'id' => $userId],
+        );
     }
 
     public function markLogin(int $userId, \DateTimeImmutable $at): void
@@ -78,7 +107,10 @@ final class UserRepository
     }
 
     /**
-     * Lädt die Rollen eines Benutzers inklusive Kategorie-Beschränkung.
+     * Lädt die Rollen eines Benutzers inklusive Kategorie-Beschränkung. Die einzige Quelle für Rechte.
+     *
+     * Fail-closed: inaktive, gelöschte Benutzer und Benutzer mit offenem Pflicht-Passwortwechsel haben keine Rechte
+     * (leere Liste). Eine Zuweisung ohne Flag und ohne Kategorien gewährt nichts; „alle“ nur über das Flag.
      *
      * @return list<RoleGrant>
      */
@@ -90,7 +122,7 @@ final class UserRepository
                JOIN roles r ON r.id = ur.role_id
                JOIN role_permissions rp ON rp.role_id = r.id
                JOIN users u ON u.id = ur.user_id
-              WHERE ur.user_id = :id AND u.is_active = 1',
+              WHERE ur.user_id = :id AND u.is_active = 1 AND u.deleted_at IS NULL AND u.password_must_change = 0',
             ['id' => $userId],
         );
 
@@ -134,12 +166,28 @@ final class UserRepository
      */
     private function account(?array $row): ?UserAccount
     {
-        if ($row === null || !isset($row['id'], $row['username'], $row['display_name'], $row['password_hash'], $row['is_active'])
+        if ($row === null || !isset($row['id'], $row['username'], $row['display_name'], $row['password_hash'], $row['is_active'], $row['password_must_change'])
             || !is_int($row['id']) || !is_string($row['username']) || !is_string($row['display_name'])
-            || !is_string($row['password_hash']) || !is_int($row['is_active'])) {
+            || !is_string($row['password_hash']) || !is_int($row['is_active']) || !is_int($row['password_must_change'])) {
+            return null;
+        }
+        $expires = $row['password_expires_at'] ?? null;
+        $deleted = $row['deleted_at'] ?? null;
+        if (($expires !== null && !is_string($expires)) || ($deleted !== null && !is_string($deleted))) {
             return null;
         }
 
-        return new UserAccount($row['id'], $row['username'], $row['display_name'], $row['password_hash'], $row['is_active'] === 1);
+        return new UserAccount(
+            $row['id'],
+            $row['username'],
+            $row['display_name'],
+            $row['password_hash'],
+            // Gelöscht heißt inaktiv, auch wenn die Zeile etwas anderes sagt (der Trigger verhindert das ohnehin).
+            $row['is_active'] === 1 && $deleted === null,
+            // Unbekannter Wert ≠ 0: im Zweifel Pflichtwechsel.
+            $row['password_must_change'] !== 0,
+            $expires,
+            $deleted,
+        );
     }
 }
