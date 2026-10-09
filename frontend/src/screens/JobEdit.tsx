@@ -431,11 +431,11 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
           <div className="stored">
             <div className="stored__label">Gespeicherte Anfrage</div>
             <code className="display-url" data-testid="display-url">
-              {job.http.display_url}
+              {job.http.display_url ?? ''}
             </code>
             <div className="stored__facts">
-              <span>{job.http.header_count > 0 ? 'Header: ' + String(job.http.header_count) + ' (Werte verborgen)' : 'Header: keine'}</span>
-              <span>{job.http.has_body ? 'Body: ja (verborgen)' : 'Body: nein'}</span>
+              {job.http.header_count !== undefined && <span>{job.http.header_count > 0 ? 'Header: ' + String(job.http.header_count) + ' (Werte verborgen)' : 'Header: keine'}</span>}
+              {job.http.has_body !== undefined && <span>{job.http.has_body ? 'Body: ja (verborgen)' : 'Body: nein'}</span>}
             </div>
             <p className="hint">
               Teile der URL, die wie Geheimnisse aussehen, werden ausgeblendet. Reine Kleinbuchstaben-Wörter bleiben sichtbar — Tokens gehören in einen Header oder in den Query-Wert. Die vollständige Adresse lässt sich nicht mehr anzeigen.

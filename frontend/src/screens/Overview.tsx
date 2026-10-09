@@ -3,7 +3,8 @@ import { Alert } from '../components/Alert';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatNext } from '../lib/format';
-import { hostOf, STATE_LABEL, stateOf } from '../lib/jobs';
+import { TargetText } from '../components/TargetText';
+import { STATE_LABEL, stateOf } from '../lib/jobs';
 import { canViewJobs } from '../lib/permissions';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { JobList, JobSummary, Profile } from '../types';
@@ -115,7 +116,7 @@ export function Overview({ profile }: { profile: Profile }) {
                         </a>
                       </td>
                       <td>{job.category?.name ?? '–'}</td>
-                      <td className="board__host">{job.http === null ? '–' : hostOf(job.http.target)}</td>
+                      <td className="board__host">{job.http === null ? '–' : <TargetText target={job.http.target} />}</td>
                       <td>
                         <span className={'board__state board__state--' + state + (state === 'running' ? ' pulse' : '')}>{STATE_LABEL[state]}</span>
                       </td>

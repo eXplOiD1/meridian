@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { RunBadge } from '../components/RunBadge';
+import { TargetText } from '../components/TargetText';
 import { request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatShort, formatTime } from '../lib/format';
-import { formatDuration, hostOf, isFinished, overlapLabel, presetName, STATE_LABEL, stateOf, TRIGGER_LABEL } from '../lib/jobs';
+import { formatDuration, isFinished, overlapLabel, presetName, STATE_LABEL, stateOf, TRIGGER_LABEL } from '../lib/jobs';
 import { takePendingRun } from '../lib/pending';
 import { triggerRun } from '../lib/runs';
 import { hrefOf, navigate } from '../lib/useHashRoute';
@@ -230,7 +231,7 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
           <div className="jobhead__main">
             <h2>{job.name}</h2>
             <div className="muted">
-              {http !== null ? hostOf(http.target) : '–'}
+              {http !== null ? <TargetText target={http.target} /> : '–'}
               {job.category !== null ? ' · ' + job.category.name : ' · ohne Kategorie'}
               {job.owner !== null ? ' · Besitzer: ' + job.owner.display_name : ''}
             </div>
@@ -276,7 +277,13 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
             <>
               <dt>Anfrage</dt>
               <dd>
-                {http.method} an {hostOf(http.target)} · Header: {http.header_count} · Body: {http.has_body ? 'ja' : 'nein'}
+                {http.method} an <TargetText target={http.target} />
+                {/* Header und Body nennt der Server nur mit Bearbeitungsrecht; ohne fehlen die Felder und werden nicht gedeutet. */}
+                {job.can.edit && http.header_count !== undefined && http.has_body !== undefined
+                  ? ' · Header: ' + String(http.header_count) + ' · Body: ' + (http.has_body ? 'ja' : 'nein')
+                  : http.has_request === true
+                    ? ' · Anfrage gesetzt'
+                    : ''}
               </dd>
               <dt>Zeitlimit</dt>
               <dd>{http.timeout_seconds} s · erwartet {http.expected_status} · Weiterleitungen: {http.max_redirects}</dd>

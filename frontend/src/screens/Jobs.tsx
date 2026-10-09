@@ -4,7 +4,8 @@ import { RunBadge } from '../components/RunBadge';
 import { request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatShort } from '../lib/format';
-import { hostOf, presetName, STATE_LABEL, stateOf } from '../lib/jobs';
+import { TargetText } from '../components/TargetText';
+import { hostOf, isHostHidden, presetName, STATE_LABEL, stateOf } from '../lib/jobs';
 import type { JobState } from '../lib/jobs';
 import { canEditHttp, isScoped } from '../lib/permissions';
 import { hrefOf, navigate } from '../lib/useHashRoute';
@@ -31,7 +32,7 @@ function matches(job: JobSummary, status: StatusFilter, category: string, search
   if (needle === '') {
     return true;
   }
-  const haystack = [job.name, job.category?.name ?? '', job.http === null ? '' : hostOf(job.http.target), job.owner?.display_name ?? ''].join('\n').toLowerCase();
+  const haystack = [job.name, job.category?.name ?? '', job.http === null || isHostHidden(job.http.target) ? '' : hostOf(job.http.target), job.owner?.display_name ?? ''].join('\n').toLowerCase();
   return haystack.includes(needle);
 }
 
@@ -166,7 +167,7 @@ export function Jobs({ profile }: { profile: Profile }) {
                           {job.name}
                         </a>
                         <span className="joblink__sub">
-                          {job.http !== null ? hostOf(job.http.target) : '–'}
+                          {job.http !== null ? <TargetText target={job.http.target} /> : '–'}
                           {job.category !== null ? ' · ' + job.category.name : ''}
                         </span>
                         {state !== 'scheduled' && <span className={'jobstate jobstate--' + state}>{STATE_LABEL[state]}</span>}
