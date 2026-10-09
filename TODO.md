@@ -91,16 +91,28 @@ Entwurf: `docs/decisions/0005-benutzer-und-rollen.md` (Abschnitte in Klammern). 
 
 ## Phase 4 – Shell-Jobs (MVP 6 PT)
 
+Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Beginnt nach Phase 4a. Offene Entscheidungen O1–O12 (§11): bis Alex entscheidet, gilt die Empfehlung. Regeländerungen für `CLAUDE.md`, Skills und Hook: §13. Ein Agent je Schritt; Abhängigkeiten §9 (S1 → S2 → S3 → S7 → S8; S1 → S6; S3 → S4 → S5; S2 → S9; S8 + S9 → S12; U1 nach S6, U2 nach S4/S5, U3 nach S6).
+
 | Status | Aufgabe | Agent |
 |---|---|---|
-| [ ] | Entwurf: Shell-Runner, Docker-Proxy-Anbindung, Container-Auswahl | architekt |
-| [ ] | Shell-Runner mit `proc_open` und Argument-Array, Zeitlimit, Abbruch | sicherheit |
-| [ ] | Shell-Runner ruft `Heartbeat::beat()` mindestens alle 20 s, auch während des Wartens auf den Kindprozess (`stream_select` mit Zeitlimit); bei `false` sofort SIGTERM/SIGKILL an die Prozessgruppe | sicherheit |
-| [ ] | Ausführung in Containern über docker-socket-proxy | backend |
-| [ ] | Live-Log per Server-Sent Events | backend |
-| [ ] | docker-socket-proxy in compose.yaml aktivieren | infra |
-| [ ] | Adressen des docker-socket-proxy in `AddressPolicy` fest sperren, nicht freigebbar (sonst wird ein HTTP-Job zum Shell-Job, siehe `docs/decisions/0003-phase3-http-jobs.md` E5) | sicherheit |
-| [ ] | Review Phase 4 | sicherheit |
+| [x] | Entwurf Phase 4: Ausführungsorte (Docker-Exec, Sandbox, Host-Agent), Worker-Prozesse, Live-Log, Proxy, Datenmodell, API, Reihenfolge | architekt |
+| [ ] | S1 Migrationen `NNNN_workers_and_live_log.sql` und `NNNN_shell_jobs.sql` (nächste freie Nummern nach 0009, §3), Recht `shell.targets` (gefährlich, nur Admin), Einstellung `shell.max_timeout_seconds`. Abnahme: zweimal einspielen ändert nichts; `settings` überlebt den Neuaufbau (Roundtrip); `SettingKey` ≡ CHECK; Kategorie gelöscht → Freigabe weg; CHECKs von `run_log_chunks`/`exec_ref`/`shell_targets` greifen | sicherheit |
+| [ ] | S2 Planer und Worker trennen (E5): `worker:run --type=http\|shell` mit Aufseher und Kindern (Umgebungs-Allowlist), `RunHeartbeat` mit Worker-ID (Abbruch je 1 s, keine Sperre), `claim()` ohne Sperre mit Typfilter, `workers`, `StaleRuns` im Planer, `scheduler:run --inline-worker` nur dev. Tests: zwei Worker → jeder Lauf genau einmal, Überlappung nie doppelt, Takt läuft während langer Läufe, Absturz/kein Worker → `aborted`, SIGTERM → `NOTE_WORKER_STOPPED`, Kind-Umgebung ohne Geheimnisse | scheduler |
+| [ ] | S3 `StreamMasker` (zeilenweise, Überhang), `OutputCollector` (Kopf 16 KiB + Ende 48 KiB), `LiveLog`/`DbLiveLog` (1 MiB je Lauf), neue `Runner`-Signatur, `RunResult::aborted()` (E8, §5.1). Tests: Geheimnis über jede Blockgrenze nie sichtbar, lange Zeilen, Nicht-UTF-8, Eigenschaftstest | sicherheit |
+| [ ] | S4 `POST /api/runs/{id}/cancel` (E7, Audit `run.cancel_requested`), `GET /api/runs/{id}/log?after=`, neue Lauf-Felder (`exit_code`, `cancelled_by`, `output_bytes`, `live`). Tests: Rollen-Matrix §4.1, IDOR → 404, CSRF, 202/200/409, H2 um `exec_ref` | backend |
+| [ ] | S5 Live-Log per SSE `GET /api/runs/{id}/live` (§6): Sitzung, `Sec-Fetch-Site`, Scope → 404, `require(jobs.view)` → 403, Belegung `live_streams` (4 global, 2 je Benutzer → 429), 60-s-Verbindungen mit `Last-Event-ID`, Rechte-Neuprüfung alle 15 s, JSON-kodierte Stücke erneut maskiert. Tests §10.6 | backend |
+| [ ] | S6 Shell-Domäne: `ShellPayload` (Sealed), `ShellJobConfig`, `ShellTargetPolicy`, Ausführungsorte API `/api/settings/shell-targets` + `GET /api/shell/targets` + CLI `shell:targets`, Job-API für `type = shell` mit `jobs.edit_shell` (Skript nur schreibend, nur als Ganzes ersetzen, E6). Tests: Rollen-Matrix, Validierung §4.3, Leak (Skript/Umgebung in keiner Antwort, keinem Audit, nicht in `config_json`), Roundtrip `payload_enc` | sicherheit |
+| [ ] | S7 `Executor`-Schnittstelle, `LocalProcessExecutor` (`proc_open` mit Argument-Array und `setsid`, explizite Umgebung, PGID-Prüfung, SIGTERM → 10 s → SIGKILL an die Gruppe, reapen), `ShellRunner` (Zeitlimit, Abbruch, `beat()` ≤ 1 s auch bei stiller Ausgabe, 64-MiB-Grenze). Tests §10.4 (Timeout, Gruppenkill, Zombie, Ausgabeflut, ignoriertes SIGTERM) | sicherheit |
+| [ ] | S8 Ausführung in Containern: `DockerProxyClient` (curl über Unix-Socket, hochgestufter Strom, Rahmen), `DockerExecExecutor` mit Wrapper (`head -c`, kein halbes Schließen, PGID-Kennung), Kill-Exec, `exec_ref`-Aufräumen (§5.5). Tests: Fake-Proxy §10.5, `@group docker` gegen echten Proxy mit alpine/debian | backend |
+| [ ] | S9 docker-socket-proxy in compose.yaml aktivieren (§7.1): wollomatic mit Digest (O1), Unix-Socket in eigenem Volume, Pfad-Allowlist mit `MERIDIAN_SHELL_CONTAINERS`, `network_mode: none` für Proxy/Shell-Worker/Planer, Planer ohne Schlüssel, Sandbox-Container (O4), `FRANKENPHP_CONFIG num_threads 16`, `posix`-Prüfung, systemd `meridian-worker@`, Installer, Deploy-Hinweise. Abnahme: `containers/create` über den Proxy → 403, Exec in Sandbox → 201, `worker-http` ohne Socket | infra |
+| [ ] | S10 Proxy für HTTP-Jobs unerreichbar (E11): Abgleich mit `InfrastructureTargets` (Ports 2375/2376 und Proxy-Namen nie freigebbar), `MERIDIAN_DOCKER_PROXY` nur `unix://`. Tests: Freigabe `10.0.0.0/8` öffnet `:2375` nicht, Freigabe mit Port 2375 → 422, `tcp://` → Start abgelehnt. Ersetzt den bisherigen Punkt „Adressen des docker-socket-proxy in `AddressPolicy` fest sperren“ | sicherheit |
+| [ ] | S11 Host-Ausführung für systemd (E3, §5.6): `bin/meridian-shell-agent`, `HostSocketExecutor`, `meridian-shell.socket`/`@.service` als `meridian-run`. Darf nach Phase 9 rutschen (O3). Tests: kein Zugriff auf Daten/Schlüssel, Protokoll-Fuzz, Verbindungsabbruch beendet die Gruppe | sicherheit |
+| [ ] | S12 Gesamt-Leak- und Prozess-Suite `tests/Integration/Phase4` (§10): Geheimnis in Skript, Umgebung und Ausgabe erscheint an keiner Ausgabestelle aus §12 | tester |
+| [ ] | U1 Job-Editor für Shell (§8): Ausführungsort, Interpreter, Benutzer (Warnung bei `root`), Arbeitsverzeichnis, Skript und Umgebung nur schreibend, „Skript ersetzen“ | frontend |
+| [ ] | U2 Live-Log-Ansicht mit EventSource und Rückfall auf Abfragen, Ausgabe als Text, „Lauf abbrechen“ mit `Confirm` (§8) | frontend |
+| [ ] | U3 Einstellungen: Karte „Shell-Jobs“ (Maximum Zeitlimit) und „Ausführungsorte“ (§8) | frontend |
+| [ ] | Regeländerungen aus §13 in `CLAUDE.md`, Skills und Hook eintragen | Koordinator |
+| [ ] | Review Phase 4 (Proxy-Allowlist, Kind-Umgebungen, Strom-Maskierung, SSE-Autorisierung) | sicherheit |
 
 ## Phase 5 – Oberfläche (MVP 8 PT)
 
