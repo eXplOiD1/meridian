@@ -21,7 +21,7 @@ final class TargetGuard
      *
      * @throws TargetUnresolvable|TargetBlocked
      */
-    public function pin(ParsedUrl $url, ?int $categoryId): PinnedTarget
+    public function pin(#[\SensitiveParameter] ParsedUrl $url, ?int $categoryId): PinnedTarget
     {
         $candidates = $url->isIpLiteral ? [$url->host] : $this->resolver->resolve($url->host);
 

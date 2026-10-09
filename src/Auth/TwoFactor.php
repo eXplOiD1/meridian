@@ -59,7 +59,7 @@ final class TwoFactor
      *
      * @return list<string>|null die Codes im Klartext (nur jetzt sichtbar), null bei falschem Code
      */
-    public function confirm(int $userId, string $code): ?array
+    public function confirm(int $userId, #[\SensitiveParameter] string $code): ?array
     {
         $state = $this->state($userId);
         if ($state['enabled'] || $state['secret'] === null) {
@@ -192,7 +192,7 @@ final class TwoFactor
         return substr(Totp::base32Encode(random_bytes(8)), 0, 12);
     }
 
-    private static function formatRecoveryCode(string $code): string
+    private static function formatRecoveryCode(#[\SensitiveParameter] string $code): string
     {
         return implode('-', str_split($code, 4));
     }

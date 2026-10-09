@@ -44,7 +44,7 @@ final class JobService
      *
      * @throws AccessDenied|\Meridian\Http\ValidationFailed
      */
-    public function create(int $userId, array $grants, array $input): ?JobRecord
+    public function create(int $userId, array $grants, #[\SensitiveParameter] array $input): ?JobRecord
     {
         $editScope = $this->access->scope($grants, Permission::EditHttpJobs);
         if ($editScope->isEmpty()) {
@@ -74,7 +74,7 @@ final class JobService
      *
      * @throws AccessDenied|\Meridian\Http\ValidationFailed
      */
-    public function update(int $userId, array $grants, int $id, array $input): ?JobRecord
+    public function update(int $userId, array $grants, int $id, #[\SensitiveParameter] array $input): ?JobRecord
     {
         $viewScope = $this->access->scope($grants, Permission::ViewJobs);
         $reset = $this->db->immediate(function () use ($userId, $grants, $id, $input, $viewScope): ?bool {
@@ -184,7 +184,7 @@ final class JobService
      *
      * @return list<string>
      */
-    private static function changedFields(JobRecord $old, JobDraft $new): array
+    private static function changedFields(JobRecord $old, #[\SensitiveParameter] JobDraft $new): array
     {
         $fields = [];
         $add = static function (bool $changed, string $label) use (&$fields): void {

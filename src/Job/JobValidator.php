@@ -57,7 +57,7 @@ final class JobValidator
      *
      * @throws ValidationFailed
      */
-    public function validate(array $input, CategoryScope $editScope, ?JobRecord $existing): JobDraft
+    public function validate(#[\SensitiveParameter] array $input, CategoryScope $editScope, ?JobRecord $existing): JobDraft
     {
         /** @var array<string, string> $errors */
         $errors = [];
@@ -134,7 +134,7 @@ final class JobValidator
      *
      * @throws ValidationFailed
      */
-    private function checkType(array $input, ?JobRecord $existing): void
+    private function checkType(#[\SensitiveParameter] array $input, ?JobRecord $existing): void
     {
         $type = array_key_exists('type', $input) ? $input['type'] : $existing?->type->value;
         if ($type === null) {
@@ -158,7 +158,7 @@ final class JobValidator
      *
      * @return array<mixed>|null
      */
-    private static function objectField(array $source, string $key): ?array
+    private static function objectField(#[\SensitiveParameter] array $source, string $key): ?array
     {
         return array_key_exists($key, $source) ? self::asObject($source[$key]) : [];
     }
@@ -166,7 +166,7 @@ final class JobValidator
     /**
      * @return array<mixed>|null
      */
-    private static function asObject(mixed $value): ?array
+    private static function asObject(#[\SensitiveParameter] mixed $value): ?array
     {
         return is_array($value) && ($value === [] || !array_is_list($value)) ? $value : null;
     }
@@ -175,7 +175,7 @@ final class JobValidator
      * @param array<mixed>          $input
      * @param array<string, string> $errors
      */
-    private function name(array $input, ?JobRecord $existing, array &$errors): ?string
+    private function name(#[\SensitiveParameter] array $input, ?JobRecord $existing, array &$errors): ?string
     {
         $name = array_key_exists('name', $input) ? $input['name'] : $existing?->name;
         if ($name === null) {
@@ -199,7 +199,7 @@ final class JobValidator
      *
      * @return array{0: int|null, 1: string|null|false} false als Name = ungültig
      */
-    private function category(array $input, ?JobRecord $existing, CategoryScope $editScope, array &$errors): array
+    private function category(#[\SensitiveParameter] array $input, ?JobRecord $existing, CategoryScope $editScope, array &$errors): array
     {
         $value = array_key_exists('category_id', $input) ? $input['category_id'] : $existing?->categoryId;
         if ($value === null) {
@@ -227,7 +227,7 @@ final class JobValidator
      * @param array<mixed>          $input
      * @param array<string, string> $errors
      */
-    private function timezone(array $input, ?JobRecord $existing, array &$errors): ?string
+    private function timezone(#[\SensitiveParameter] array $input, ?JobRecord $existing, array &$errors): ?string
     {
         $value = array_key_exists('timezone', $input) ? $input['timezone'] : ($existing->timezone ?? $this->defaultTimezone);
         if (!is_string($value) || !in_array($value, \DateTimeZone::listIdentifiers(), true)) {
@@ -243,7 +243,7 @@ final class JobValidator
      * @param array<mixed>          $input
      * @param array<string, string> $errors
      */
-    private function cron(array $input, ?JobRecord $existing, ?string $timezone, array &$errors): ?string
+    private function cron(#[\SensitiveParameter] array $input, ?JobRecord $existing, ?string $timezone, array &$errors): ?string
     {
         $value = array_key_exists('cron', $input) ? $input['cron'] : $existing?->cron;
         if ($value === null) {
@@ -274,7 +274,7 @@ final class JobValidator
      * @param array<mixed>          $source
      * @param array<string, string> $errors
      */
-    private function bool(array $source, string $key, bool $default, array &$errors): ?bool
+    private function bool(#[\SensitiveParameter] array $source, string $key, bool $default, array &$errors): ?bool
     {
         $value = array_key_exists($key, $source) ? $source[$key] : $default;
         if (!is_bool($value)) {
@@ -290,7 +290,7 @@ final class JobValidator
      * @param array<mixed>          $input
      * @param array<string, string> $errors
      */
-    private function overlap(array $input, ?JobRecord $existing, array &$errors): ?OverlapPolicy
+    private function overlap(#[\SensitiveParameter] array $input, ?JobRecord $existing, array &$errors): ?OverlapPolicy
     {
         if (!array_key_exists('overlap_policy', $input)) {
             return $existing === null ? OverlapPolicy::Skip : $existing->overlapPolicy;
@@ -307,7 +307,7 @@ final class JobValidator
      * @param array<mixed>          $source
      * @param array<string, string> $errors
      */
-    private function integer(array $source, string $key, int $default, int $min, int $max, string $message, array &$errors, ?string $field = null): ?int
+    private function integer(#[\SensitiveParameter] array $source, string $key, int $default, int $min, int $max, string $message, array &$errors, ?string $field = null): ?int
     {
         $value = array_key_exists($key, $source) ? $source[$key] : $default;
         if (!is_int($value) || $value < $min || $value > $max) {
@@ -323,7 +323,7 @@ final class JobValidator
      * @param array<mixed>          $http
      * @param array<string, string> $errors
      */
-    private function method(array $http, ?HttpJobConfig $old, array &$errors): ?HttpMethod
+    private function method(#[\SensitiveParameter] array $http, ?HttpJobConfig $old, array &$errors): ?HttpMethod
     {
         if (!array_key_exists('method', $http)) {
             return $old === null ? HttpMethod::Get : $old->method;
@@ -342,7 +342,7 @@ final class JobValidator
      *
      * @return list<array{0: int, 1: int}>|null
      */
-    private function expectedStatus(array $http, ?HttpJobConfig $old, array &$errors): ?array
+    private function expectedStatus(#[\SensitiveParameter] array $http, ?HttpJobConfig $old, array &$errors): ?array
     {
         if (!array_key_exists('expected_status', $http)) {
             return $old === null ? [[200, 299]] : $old->expectedStatus;
@@ -359,7 +359,7 @@ final class JobValidator
      * @param array<mixed>          $http
      * @param array<string, string> $errors
      */
-    private function storeResponse(array $http, ?HttpJobConfig $old, array &$errors): ?StoreResponse
+    private function storeResponse(#[\SensitiveParameter] array $http, ?HttpJobConfig $old, array &$errors): ?StoreResponse
     {
         if (!array_key_exists('store_response', $http)) {
             return $old === null ? StoreResponse::Inherit : $old->storeResponse;
@@ -378,7 +378,7 @@ final class JobValidator
      * @param array<mixed>          $input
      * @param array<string, string> $errors
      */
-    private function request(array $input, ?JobRecord $existing, ?HttpMethod $method, ?int $categoryId, array &$errors): ?HttpPayload
+    private function request(#[\SensitiveParameter] array $input, ?JobRecord $existing, ?HttpMethod $method, ?int $categoryId, array &$errors): ?HttpPayload
     {
         if (!array_key_exists('request', $input)) {
             $stored = $existing?->http;
@@ -450,7 +450,7 @@ final class JobValidator
      *
      * @return list<array{0: string, 1: string}>|null
      */
-    private function headers(mixed $value, array &$errors): ?array
+    private function headers(#[\SensitiveParameter] mixed $value, array &$errors): ?array
     {
         if (!is_array($value) || !array_is_list($value)) {
             $errors['request.headers'] = 'Header: Liste von Objekten mit name und value.';
@@ -477,7 +477,7 @@ final class JobValidator
      *
      * @param array<string, string> $errors
      */
-    private function checkTarget(HttpPayload $payload, ?int $categoryId, array &$errors): void
+    private function checkTarget(#[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, array &$errors): void
     {
         $url = $payload->url();
         if (!$url->isIpLiteral && UrlPolicy::isBlockedHostname($url->host)) {
@@ -498,7 +498,7 @@ final class JobValidator
     /**
      * @param list<array{0: int, 1: int}> $expected
      */
-    private function configFor(HttpPayload $payload, HttpMethod $method, int $timeout, array $expected, int $redirects, StoreResponse $store): HttpJobConfig
+    private function configFor(#[\SensitiveParameter] HttpPayload $payload, HttpMethod $method, int $timeout, array $expected, int $redirects, StoreResponse $store): HttpJobConfig
     {
         $url = $payload->url();
 

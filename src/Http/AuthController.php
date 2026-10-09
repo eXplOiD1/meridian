@@ -51,7 +51,7 @@ final class AuthController
         $kernel->post('auth_2fa_disable', '/api/auth/2fa/disable', $this->twoFactorDisable(...));
     }
 
-    public function login(Request $request): Response
+    public function login(#[\SensitiveParameter] Request $request): Response
     {
         // Ohne Sitzung gibt es kein Token; die Herkunftsprüfung schützt vor fremden Anmeldeformularen.
         if (!$this->csrf->originMatches($request)) {
@@ -89,7 +89,7 @@ final class AuthController
         return $response;
     }
 
-    public function logout(Request $request): Response
+    public function logout(#[\SensitiveParameter] Request $request): Response
     {
         $session = $this->authenticate($request);
         if ($session === null) {
@@ -106,7 +106,7 @@ final class AuthController
         return $response;
     }
 
-    public function me(Request $request): Response
+    public function me(#[\SensitiveParameter] Request $request): Response
     {
         $session = $this->authenticate($request);
         if ($session === null) {
@@ -120,7 +120,7 @@ final class AuthController
      * Einrichtung: liefert das Secret genau einmal im Klartext, damit es in die App übernommen werden kann.
      * Betrifft nur das eigene Konto, deshalb kein Recht aus AccessControl, aber Sitzung und CSRF.
      */
-    public function twoFactorSetup(Request $request): Response
+    public function twoFactorSetup(#[\SensitiveParameter] Request $request): Response
     {
         $user = $this->ownAccount($request);
         if ($user instanceof Response) {
@@ -135,7 +135,7 @@ final class AuthController
         return self::json(['secret' => $setup['secret'], 'otpauth_uri' => $setup['uri']]);
     }
 
-    public function twoFactorEnable(Request $request): Response
+    public function twoFactorEnable(#[\SensitiveParameter] Request $request): Response
     {
         $user = $this->ownAccount($request);
         if ($user instanceof Response) {
@@ -160,7 +160,7 @@ final class AuthController
         return self::json(['status' => 'ok', 'recovery_codes' => $recovery]);
     }
 
-    public function twoFactorDisable(Request $request): Response
+    public function twoFactorDisable(#[\SensitiveParameter] Request $request): Response
     {
         $user = $this->ownAccount($request);
         if ($user instanceof Response) {
@@ -188,7 +188,7 @@ final class AuthController
     /**
      * Sitzung, CSRF und aktives Konto für Aktionen am eigenen Konto.
      */
-    private function ownAccount(Request $request): UserAccount|Response
+    private function ownAccount(#[\SensitiveParameter] Request $request): UserAccount|Response
     {
         $session = $this->authenticate($request);
         if ($session === null) {
@@ -211,7 +211,7 @@ final class AuthController
         return $response;
     }
 
-    private function authenticate(Request $request): ?Session
+    private function authenticate(#[\SensitiveParameter] Request $request): ?Session
     {
         return $this->sessionAuth->authenticate($request);
     }
@@ -244,7 +244,7 @@ final class AuthController
     /**
      * @return array{username: string, password: string, totp_code: string|null}|null
      */
-    private function credentials(Request $request): ?array
+    private function credentials(#[\SensitiveParameter] Request $request): ?array
     {
         $data = $this->body($request);
         if ($data === null || !isset($data['username'], $data['password']) || !is_string($data['username']) || !is_string($data['password'])) {
@@ -265,19 +265,19 @@ final class AuthController
     /**
      * @return array<mixed>|null
      */
-    private function body(Request $request): ?array
+    private function body(#[\SensitiveParameter] Request $request): ?array
     {
         return JsonBody::object($request->getContent(), self::MAX_BODY);
     }
 
-    private function cookie(Request $request, #[\SensitiveParameter] string $token): Cookie
+    private function cookie(#[\SensitiveParameter] Request $request, #[\SensitiveParameter] string $token): Cookie
     {
         $expires = $this->clock->now()->modify('+' . SessionManager::ABSOLUTE_SECONDS . ' seconds');
 
         return Cookie::create($this->sessionAuth->cookieName($request), $token, $expires, '/', null, $request->isSecure(), true, false, Cookie::SAMESITE_STRICT);
     }
 
-    private function expiredCookie(Request $request): Cookie
+    private function expiredCookie(#[\SensitiveParameter] Request $request): Cookie
     {
         return Cookie::create($this->sessionAuth->cookieName($request), '', 1, '/', null, $request->isSecure(), true, false, Cookie::SAMESITE_STRICT);
     }

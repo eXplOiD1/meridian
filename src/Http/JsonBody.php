@@ -14,7 +14,7 @@ final class JsonBody
      *
      * @return array<mixed>|null null bei zu großem, ungültigem, zu tiefem oder nicht-objektförmigem Inhalt
      */
-    public static function object(string $body, int $maxBytes, int $depth = 4): ?array
+    public static function object(#[\SensitiveParameter] string $body, int $maxBytes, int $depth = 4): ?array
     {
         if (strlen($body) > $maxBytes) {
             return null;
@@ -30,7 +30,7 @@ final class JsonBody
     /**
      * @return array<mixed>|null
      */
-    private static function onlyArray(mixed $value): ?array
+    private static function onlyArray(#[\SensitiveParameter] mixed $value): ?array
     {
         return is_array($value) ? $value : null;
     }

@@ -124,7 +124,7 @@ final class HttpRunner implements Runner
     /**
      * @param list<string> $notes
      */
-    private function hops(HttpJobConfig $spec, HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat): RunResult
+    private function hops(HttpJobConfig $spec, #[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat): RunResult
     {
         $deadline = (int) hrtime(true) + $timeout * 1_000_000_000;
         $url = $payload->url();
@@ -161,7 +161,7 @@ final class HttpRunner implements Runner
                 return self::transportFailure($response, $lines, $notes, $timeout);
             }
 
-            $location = $response->location;
+            $location = $response->location();
             if (in_array($response->status, self::REDIRECTS, true) && $location !== null && $hop < $spec->maxRedirects) {
                 $next = $this->redirectTarget($url, $location);
                 if ($next === null) {
@@ -203,7 +203,7 @@ final class HttpRunner implements Runner
      * @param list<string> $lines
      * @param list<string> $notes
      */
-    private function evaluate(HttpJobConfig $spec, TransportResponse $response, string $method, array $lines, array $notes, bool $store): RunResult
+    private function evaluate(HttpJobConfig $spec, #[\SensitiveParameter] TransportResponse $response, string $method, #[\SensitiveParameter] array $lines, array $notes, bool $store): RunResult
     {
         $lines[] = sprintf(
             '← %d · %s · %s',
@@ -223,7 +223,7 @@ final class HttpRunner implements Runner
         }
 
         $note = 'Unerwarteter Statuscode ' . $response->status . ' (erwartet: ' . $spec->expectedStatusText() . ').';
-        $isRedirect = in_array($response->status, self::REDIRECTS, true) && $response->location !== null;
+        $isRedirect = in_array($response->status, self::REDIRECTS, true) && $response->location() !== null;
         if ($isRedirect) {
             // Weiterleitungen aufgebraucht: eine Wiederholung ändert nichts.
             $note .= ' Weiterleitungen: ' . $spec->maxRedirects . ' erlaubt.';
@@ -247,7 +247,7 @@ final class HttpRunner implements Runner
      * @param list<string> $lines
      * @param list<string> $notes
      */
-    private static function transportFailure(TransportResponse $response, array $lines, array $notes, int $timeout): RunResult
+    private static function transportFailure(#[\SensitiveParameter] TransportResponse $response, #[\SensitiveParameter] array $lines, array $notes, int $timeout): RunResult
     {
         $status = $response->status > 0 ? $response->status : null;
 
@@ -271,7 +271,7 @@ final class HttpRunner implements Runner
      * Ziel einer Weiterleitung als geprüfte URL; null, wenn es keine zulässige http(s)-Adresse ist. Ein Fragment
      * wird nie gesendet und fällt weg.
      */
-    private function redirectTarget(ParsedUrl $base, #[\SensitiveParameter] string $location): ?ParsedUrl
+    private function redirectTarget(#[\SensitiveParameter] ParsedUrl $base, #[\SensitiveParameter] string $location): ?ParsedUrl
     {
         $hash = strpos($location, '#');
         if ($hash !== false) {
@@ -306,12 +306,12 @@ final class HttpRunner implements Runner
      * Antwort für die Ausgabe: nur UTF-8-Text (ohne NUL), sonst ein Vermerk mit der Größe. Der Worker maskiert,
      * dann kürzt er.
      */
-    private static function responseText(TransportResponse $response): string
+    private static function responseText(#[\SensitiveParameter] TransportResponse $response): string
     {
         if ($response->bodyBytes === 0) {
             return 'Antwort: (leer)';
         }
-        $body = $response->body;
+        $body = $response->body();
         $cut = strlen($body) < $response->bodyBytes || $response->bodyLimitReached;
         if ($cut) {
             // Ein am Ende angeschnittenes Mehrbyte-Zeichen entfernen, bevor geprüft wird.
@@ -332,7 +332,7 @@ final class HttpRunner implements Runner
     /**
      * @param list<string> $lines
      */
-    private static function text(array $lines): string
+    private static function text(#[\SensitiveParameter] array $lines): string
     {
         return implode("\n", $lines);
     }

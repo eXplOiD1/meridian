@@ -53,7 +53,7 @@ final class InternalTargetController
         $kernel->delete('internal_targets_remove', '/api/settings/internal-targets/{id}', $this->remove(...), ['id' => '[1-9][0-9]{0,17}']);
     }
 
-    public function list(Request $request): Response
+    public function list(#[\SensitiveParameter] Request $request): Response
     {
         $session = $this->sessionAuth->authenticate($request);
         if ($session === null) {
@@ -64,7 +64,7 @@ final class InternalTargetController
         return JsonReply::json(['targets' => array_map($this->present(...), $this->store->all())]);
     }
 
-    public function add(Request $request): Response
+    public function add(#[\SensitiveParameter] Request $request): Response
     {
         $session = $this->sessionAuth->authenticate($request);
         if ($session === null) {
@@ -87,7 +87,7 @@ final class InternalTargetController
         return JsonReply::json(['target' => $this->present($record)], 201);
     }
 
-    public function remove(Request $request): Response
+    public function remove(#[\SensitiveParameter] Request $request): Response
     {
         $session = $this->sessionAuth->authenticate($request);
         if ($session === null) {
@@ -115,7 +115,7 @@ final class InternalTargetController
      *
      * @throws ValidationFailed
      */
-    private static function input(Request $request): array
+    private static function input(#[\SensitiveParameter] Request $request): array
     {
         $data = JsonBody::object($request->getContent(), self::MAX_BODY, 2);
         if ($data === null) {

@@ -84,7 +84,7 @@ final class UrlDisplay
         return preg_match(self::QUERY_NAME, $name) === 1;
     }
 
-    private static function path(string $path, DisplayPathMode $mode): string
+    private static function path(#[\SensitiveParameter] string $path, DisplayPathMode $mode): string
     {
         if ($path === '') {
             return '';
@@ -102,7 +102,7 @@ final class UrlDisplay
         return '/' . implode('/', $shown);
     }
 
-    private static function query(?string $query, DisplayPathMode $mode): string
+    private static function query(#[\SensitiveParameter] ?string $query, DisplayPathMode $mode): string
     {
         if ($query === null) {
             return '';

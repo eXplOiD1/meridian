@@ -15,5 +15,5 @@ use Meridian\Runner\Heartbeat;
  */
 interface HttpTransport
 {
-    public function send(TransportRequest $request, Heartbeat $heartbeat): TransportResponse;
+    public function send(#[\SensitiveParameter] TransportRequest $request, Heartbeat $heartbeat): TransportResponse;
 }

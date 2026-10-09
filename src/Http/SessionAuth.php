@@ -25,12 +25,12 @@ final class SessionAuth
      * Name ohne Präfix und ohne Secure. Ob HTTPS vorliegt, entscheidet Request::isSecure() (Proxy-Header nur von
      * vertrauenswürdigen Proxys).
      */
-    public function cookieName(Request $request): string
+    public function cookieName(#[\SensitiveParameter] Request $request): string
     {
         return $request->isSecure() ? '__Host-meridian_session' : 'meridian_session';
     }
 
-    public function authenticate(Request $request): ?Session
+    public function authenticate(#[\SensitiveParameter] Request $request): ?Session
     {
         $token = $request->cookies->get($this->cookieName($request));
 
