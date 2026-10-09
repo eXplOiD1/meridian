@@ -15,9 +15,13 @@ enum DisplayPathMode: string
     /** Pfad immer `/••••`, Query immer `?••••`. */
     case Hidden = 'hidden';
 
-    /** Standard ohne Zeile in `settings` (R1, Entscheidung Alex 07.10.2026: `auto`). */
+    /**
+     * Standard ohne Zeile in `settings` (Entscheidung Alex 09.10.2026: `hidden`, vorher `auto`). Gilt auch für
+     * bestehende Installationen ohne gespeicherte Einstellung: gespeicherte Anzeige-URLs werden beim Lesen und bei
+     * `migrate` verschärft ({@see \Meridian\Job\DisplayUrlUpgrade}).
+     */
     public static function default(): self
     {
-        return self::Auto;
+        return self::Hidden;
     }
 }

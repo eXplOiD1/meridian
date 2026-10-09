@@ -8,8 +8,12 @@ use Meridian\Auth\AuditLog;
 use Meridian\Auth\Clock;
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
+use Meridian\Runner\Http\AddressPolicy;
+use Meridian\Runner\Http\BlockReason;
+use Meridian\Runner\Http\InfrastructureTargets;
 use Meridian\Runner\Http\InternalTarget;
 use Meridian\Runner\Http\InvalidInternalTarget;
+use Meridian\Runner\Http\IpNetwork;
 
 /**
  * Pflege der Freigaben interner Ziele (Tabelle `http_internal_targets`, docs/decisions/0003 E5). Nur für die
@@ -26,6 +30,7 @@ final class InternalTargetStore
     public function __construct(
         private readonly Connection $db,
         private readonly Clock $clock,
+        private readonly InfrastructureTargets $infrastructure = new InfrastructureTargets(),
     ) {
     }
 
@@ -55,6 +60,14 @@ final class InternalTargetStore
             throw new InvalidTargetInput('value', $kind === InternalTarget::KIND_HOST
                 ? 'Hostnamen bitte in Kleinbuchstaben angeben.'
                 : 'Das Netz bitte in Normalform angeben (IPv6 klein geschrieben und gekürzt, z. B. fd12:3456::/48).');
+        }
+        // Infrastruktur nie freigeben (zur Laufzeit sperrt AddressPolicy sie ohnehin; hier mit klarer Meldung).
+        if ($target->kind === InternalTarget::KIND_HOST && $this->infrastructure->isDockerProxyHost($target->value)) {
+            throw new InvalidTargetInput('value', 'Der docker-socket-proxy ist nie freigebbar (sonst würde ein HTTP-Job zum Shell-Job).');
+        }
+        if ($target->kind === InternalTarget::KIND_CIDR && $target->port === $this->infrastructure->listenPort
+            && AddressPolicy::classify(IpNetwork::fromCidr($target->value)->address()) === BlockReason::Loopback) {
+            throw new InvalidTargetInput('port', 'Meridians eigener Port (MERIDIAN_LISTEN_PORT) ist auf Loopback nie freigebbar. Einen anderen Port wählen.');
         }
 
         return $target;

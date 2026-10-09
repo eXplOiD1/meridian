@@ -19,7 +19,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  * Setzt eine globale Einstellung (docs/decisions/0003, E10):
  *
  *   settings:set http.max_timeout_seconds 600
- *   settings:set http.display_path hidden          verschärft gespeicherte Anzeige-URLs aller HTTP-Jobs
+ *   settings:set http.display_path hidden          verschärft gespeicherte Anzeige-URLs aller HTTP-Jobs (Standard)
+ *   settings:set http.display_host hidden          verbirgt zusätzlich Host und Port (target, display_url)
  *   settings:set http.response_storage --reset      zurück auf den Standard
  *
  * Dieselbe Prüfung, Transaktion und derselbe Audit-Eintrag `settings.changed` wie `PUT /api/settings/{key}`
@@ -69,7 +70,7 @@ final class SettingsSetCommand extends Command
             'Einstellung ' . $key->value . ': ' . $change->old . ' → ' . $change->new . ($reset ? ' (Standard)' : '') . '.',
         ), OutputInterface::OUTPUT_RAW);
         if ($change->tightenedJobs > 0) {
-            $output->writeln('Anzeige-URL bei ' . $change->tightenedJobs . ' HTTP-Job(s) verschärft (Pfad und Query verborgen).');
+            $output->writeln('Anzeige-URL bei ' . $change->tightenedJobs . ' HTTP-Job(s) verschärft (nach http.display_path und http.display_host).');
         }
 
         return self::SUCCESS;

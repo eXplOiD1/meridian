@@ -24,6 +24,7 @@ use Meridian\Network\InternalTargetController;
 use Meridian\Network\InternalTargetStore;
 use Meridian\Runner\Http\AddressPolicy;
 use Meridian\Runner\Http\DbInternalTargetSource;
+use Meridian\Runner\Http\InfrastructureTargets;
 use Meridian\Schedule\Planner;
 use Meridian\Schedule\SchedulerLease;
 use Meridian\Security\AccessControl;
@@ -63,7 +64,8 @@ final class AppFactory
         // Das Web berechnet nur den ersten Termin eines Jobs (Planner::reschedule()); die Scheduler-Sperre gehört
         // dem Scheduler-Prozess und wird hier nie genommen.
         $planner = new Planner($db, $clock, new SchedulerLease($db, $clock, SchedulerLease::newOwnerId()));
-        $validator = new JobValidator($categories, $settings, $clock, new AddressPolicy(new DbInternalTargetSource($db)), $config->timezone);
+        $infrastructure = InfrastructureTargets::fromConfig($config);
+        $validator = new JobValidator($categories, $settings, $clock, new AddressPolicy(new DbInternalTargetSource($db), $infrastructure), $config->timezone);
 
         $kernel = new Kernel($config, $masker);
         (new AuthController($config, $auth, $sessionAuth, $csrf, $users, $clock, $twoFactor))->register($kernel);
@@ -84,7 +86,7 @@ final class AppFactory
             new RunService($db, $jobs, $access, $audit, $clock),
         ))->register($kernel);
         // Freigaben interner Ziele (network.internal_targets, nur Admin).
-        (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock), $masker))->register($kernel);
+        (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock, $infrastructure), $masker))->register($kernel);
         // Globale Einstellungen (settings.manage, nur Admin).
         (new SettingsController($sessionAuth, $csrf, $users, $access, new SettingsService($db, $audit, $clock), $masker))->register($kernel);
 

@@ -9,7 +9,9 @@ namespace Meridian\Runner\Http;
  *
  * Öffentliche Adressen: ja. Gesperrte Klassen „privat“ und „Loopback“: nur mit passender Freigabe (global oder
  * für die gespeicherte Kategorie des Jobs, Port passend, je Hop mit dessen Host und Port). Alle anderen Klassen
- * (Link-local inkl. Metadaten, reserviert, Multicast, Infrastruktur): nie.
+ * (Link-local inkl. Metadaten, reserviert, Multicast, Infrastruktur): nie. Infrastruktur ({@see InfrastructureTargets}):
+ * Docker-API-Ports 2375/2376 auf internen Adressen, die Namen des docker-socket-proxy und Meridians eigener
+ * Listen-Port auf Loopback und eigenen Adressen — vor jeder Freigabe geprüft.
  *
  * IPv6 nach Allowlist: öffentlich ist nur 2000::/3 ohne die reservierten Teilnetze; eingebettete IPv4
  * (::ffff:0:0/96, 64:ff9b::/96, 2002::/16) zählt wie die IPv4 und ist, wenn diese nicht öffentlich ist, nie
@@ -66,8 +68,10 @@ final class AddressPolicy
     /** @var list<array{0: IpNetwork, 1: BlockReason}>|null */
     private static ?array $ranges = null;
 
-    public function __construct(private readonly InternalTargetSource $targets)
-    {
+    public function __construct(
+        private readonly InternalTargetSource $targets,
+        private readonly InfrastructureTargets $infrastructure = new InfrastructureTargets(),
+    ) {
     }
 
     /**
@@ -85,8 +89,15 @@ final class AddressPolicy
             return BlockReason::Reserved;
         }
         $reason = self::classifyPacked($packed);
-        if ($reason === null || !$reason->isReleasable()) {
+        if ($reason !== null && !$reason->isReleasable()) {
             return $reason;
+        }
+        // Docker-Proxy und Meridian selbst: vor den Freigaben, auch eine breite Freigabe hilft nie.
+        if ($this->infrastructure->blocks($packed, $reason, $host, $port)) {
+            return BlockReason::Infrastructure;
+        }
+        if ($reason === null) {
+            return null;
         }
 
         foreach ($this->targets->targetsFor($categoryId) as $target) {

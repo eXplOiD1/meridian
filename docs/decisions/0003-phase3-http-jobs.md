@@ -291,7 +291,8 @@ verwirft ihn danach. Lesende API-Endpunkte maskieren zusätzlich mit einem frisc
 |---|---|---|---|
 | `http.max_timeout_seconds` | Ganzzahl 1–3600 | 300 | E9 |
 | `http.response_storage` | `off` · `on` · `never` | `off` | E11 |
-| `http.display_path` | `auto` · `hidden` | `auto` | E2 |
+| `http.display_path` | `auto` · `hidden` | `hidden` (seit 09.10.2026, vorher `auto`; E14) | E2 |
+| `http.display_host` | `auto` · `hidden` | `auto` (E16, Migration 0008) | E2 |
 
 Verworfen: *Einstellungen als Umgebungsvariablen* (Admin ohne Shell-Zugang kann nichts ändern, kein Audit);
 *eine Spalte je Einstellung in einer Ein-Zeilen-Tabelle* (jede neue Einstellung wäre eine Tabellen-Neuanlage).
@@ -478,6 +479,7 @@ Job (Liste ohne `http`-Details außer `target`; Detail vollständig):
   "http": {
     "method": "GET", "timeout_seconds": 30, "expected_status": "200-299", "max_redirects": 3,
     "store_response": "inherit", "target": "https://img.deuba24.com",
+    "has_request": true,
     "display_url": "https://img.deuba24.com/tools/framework/api/cron.php?key=••••",
     "has_url": true, "has_headers": true, "header_count": 1, "has_body": false
   },
@@ -489,7 +491,10 @@ Job (Liste ohne `http`-Details außer `target`; Detail vollständig):
 ```
 
 - `target` = Schema + Host (+ Port, wenn nicht Standard); die Liste und die Abfahrtstafel zeigen nur den Host (O2).
-- `display_url` nur im **Detail** (nicht in der Liste), gespeicherter Text aus E2.
+- `display_url` nur im **Detail** (nicht in der Liste), gespeicherter Text aus E2, beim Lesen auf die aktuellen
+  Einstellungen verschärft (E14, E16). `display_url`, `has_url`, `has_headers`, `header_count` und `has_body` nur für
+  Benutzer mit `can.edit` (E15); alle anderen bekommen `target` und `has_request: true`.
+- Bei `http.display_host = hidden` ist `target` überall `https://••••` bzw. `http://••••` (E16).
 - `can` ist Komfort für die Oberfläche; der Server prüft trotzdem.
 - `last_run`: letzter abgeschlossener Lauf (`ok/failed/timeout/aborted`) ohne Testläufe; `running`: irgendein
   Lauf `running`.
@@ -581,7 +586,7 @@ interface RunAuthorizer { public function mayStart(int $userId, int $jobId): boo
 
 namespace Meridian\Settings;
 
-enum SettingKey: string { case HttpMaxTimeout = 'http.max_timeout_seconds'; case HttpResponseStorage = 'http.response_storage'; case HttpDisplayPath = 'http.display_path'; }
+enum SettingKey: string { case HttpMaxTimeout = 'http.max_timeout_seconds'; case HttpResponseStorage = 'http.response_storage'; case HttpDisplayPath = 'http.display_path'; case HttpDisplayHost = 'http.display_host'; /* 0008, E16 */ }
 final class Settings        // liest/validiert; Standardwerte im Code; schreibt nur über set() aus der Admin-API
 {
     public function maxTimeoutSeconds(): int;          // 1..3600
@@ -821,7 +826,7 @@ auf fremden Ursprung. Umgebung: `HTTP_PROXY`/`HTTPS_PROXY` gesetzt → wird nich
 | R2 | Bekommen Admins die zwei neuen Rechte in bestehenden Installationen automatisch (per Migration)? | **Ja**, nur der Rolle Admin (Regel „neue Rechte nur an Admin“). |
 | R3 | Soll ein Operator sehen, **dass** sein Ziel an einer fehlenden Freigabe scheitert (Notiz nennt „Admin kann freigeben“)? | **Ja** (Notiz ohne IP, wie in 5.3). |
 
-Entschieden: R1 `auto` (Standard in `DisplayPathMode::default()`), R2 ja, nur Rolle Admin (Migration 0007), R3 ja,
+Entschieden: R1 `auto` (Standard in `DisplayPathMode::default()`; **am 09.10.2026 geändert auf `hidden`**, E14), R2 ja, nur Rolle Admin (Migration 0007), R3 ja,
 ohne IP; bei nie freigebbaren Netzen nennt die Notiz stattdessen, dass keine Freigabe möglich ist (`TargetBlocked`).
 
 ---
@@ -885,3 +890,71 @@ beim Start seeden), Hintergrundprozesse schreiben keine Einstellungen; `ON DELET
 
 **Hook (`rule-router.js`):** optional ein Muster, das `display_url` außerhalb von `UrlDisplay`/Repository-Mapper
 als Zuweisung meldet (NOTE).
+
+## Nachtrag 09.10.2026 – Entscheidungen Alex (E13–E17)
+
+### E13 – Proxy-Header ohne `MERIDIAN_TRUSTED_PROXIES`: ablehnen (Variante A)
+
+Kommt bei einem Endpunkt mit IP-Sperre (`POST /api/auth/login`, `/api/auth/2fa/enable`, `/api/auth/2fa/disable`)
+ein Header `X-Forwarded-For` oder `Forwarded` an und ist `MERIDIAN_TRUSTED_PROXIES` leer, antwortet Meridian mit
+**503** `{"error": "<Meldung>", "trusted_proxies_required": true}` (`Http\ClientIp::forThrottle()`), bevor ein
+Passwort geprüft oder ein Fehlversuch gezählt wird. Die Meldung sagt, was falsch ist und wie man es behebt
+(`MERIDIAN_TRUSTED_PROXIES` auf IP/Netz des Proxys setzen, neu starten); das Fehlerlog nennt keinen Eingabewert.
+Bei 2FA kommt die Prüfung nach Sitzung und CSRF (ohne Sitzung weiter 401).
+Mit gesetzten Proxys glaubt Symfony `X-Forwarded-For` nur, wenn die Verbindung von einem dieser Proxys kommt
+(`ClientIp::trust()`, `public/index.php`); `Forwarded` wird nie geglaubt. Ein gefälschter Header ändert die gezählte
+IP also nie (Tests `TrustedProxyTest`: gesperrte IP bleibt gesperrt bei wechselnden gefälschten Adressen, eine
+vorangestellte Fälschung hinter dem echten Proxy hilft nicht).
+Verworfen: *nur warnen* (bisheriger Stand: alle Clients teilen sich die IP des Proxys, die Sperre trifft alle oder
+keinen); *`X-Forwarded-For` ohne Konfiguration glauben* (jeder Client wählt seine IP und umgeht die IP-Sperre).
+
+### E14 – Standard `http.display_path = hidden`
+
+Ohne gespeicherte Einstellung gilt `hidden`, für neue **und** bestehende Installationen. Bestehende `display_url`
+werden ohne Entschlüsseln verschärft: beim Lesen (`JobPresenter` → `UrlDisplay::tightenStored()`) und dauerhaft bei
+jedem `migrate` (`Job\DisplayUrlUpgrade::run()` liest die Einstellungen und ruft `tightenAll()`; idempotent; legt
+keine Einstellung an). Ein gespeichertes `auto` bleibt `auto` (Migration 0008 übernimmt die Zeilen). Zurück auf
+`auto` lockert gespeicherte Anzeigen nie.
+
+### E15 – Anfrage-Details nur mit Bearbeitungsrecht
+
+`display_url`, `has_url`, `has_headers`, `header_count`, `has_body` stehen im Detail nur, wenn `can.edit` gilt
+(`JobPermissions::edit(type)` mit der **gespeicherten** Kategorie, dieselbe Prüfung wie das Flag). Alle anderen
+sehen `method`, `timeout_seconds`, `expected_status`, `max_redirects`, `store_response`, `target` und
+`has_request: true`. Nicht sichtbare Jobs bleiben 404 (Beobachter in A auf Job in B). Rollen-Matrix in
+`JobReadApiTest` (Admin, Operator, Operator mit Recht in A, Operator nur in B und Beobachter in A, Beobachter,
+Beobachter in A).
+
+### E16 – Neue Einstellung `http.display_host = auto|hidden` (Standard `auto`)
+
+Allowlist-Schlüssel per Migration 0008 (CHECK neu aufgebaut, Zeilen übernommen). Bei `hidden`:
+- `target` in Liste, Detail und Übersicht: `<schema>://••••` (Host **und** Port verborgen), für jede Rolle — auch
+  für Admins und Bearbeiter. Den Host sieht nur, wer die Anfrage neu eingibt.
+- `display_url`: Ursprung ersetzt (`https://••••/api?x=••••`), beim Speichern (`UrlDisplay::build()`), beim Lesen
+  und dauerhaft beim Ändern der Einstellung in derselben Transaktion wie Audit `settings.changed`
+  (`http.display_host: auto → hidden; Anzeige-URL bei N Job(s) verschärft`) sowie bei `migrate`.
+  `UrlDisplay::hideStored()` erkennt einen schon verborgenen Ursprung, damit späteres Pfad-Verbergen den Host nie
+  zurückbringt.
+- Laufausgabe: neue Läufe schreiben `→ GET https://••••` (`HttpRunSettings::hidesHost()`, je Lauf frisch); ältere
+  gespeicherte Zeilen `→ METHODE <ursprung>` verbirgt die API beim Lesen (`UrlDisplay::hideHostInRunOutput()`).
+- Zurück auf `auto`: gespeicherte Anzeigen bleiben verschärft; `target` folgt der aktuellen Einstellung (es wird
+  nicht gespeichert, sondern aus `config_json.http.target` gebildet).
+- Nicht betroffen: gespeicherte Antwortkörper (`store_response`) und `config_json.http.target` (Klartextspalte, nie
+  direkt ausgegeben).
+
+### E17 – Infrastruktur nie freigebbar (`BlockReason::Infrastructure`)
+
+`Runner\Http\InfrastructureTargets`, geprüft in `AddressPolicy::check()` nach den nie freigebbaren Klassen und
+**vor** jeder Freigabe (eine breite Freigabe hilft nie):
+- Docker-API-Ports **2375/2376** auf jeder Adresse der Klassen privat/Loopback (wie 0004 E11);
+  `InternalTarget::create()` lehnt Freigaben mit diesen Ports ab (auch beim Laden aus der DB).
+- Host-/Dienstnamen des docker-socket-proxy (`MERIDIAN_DOCKER_PROXY_HOSTS`, kommagetrennt; `docker-proxy` ist immer
+  dabei) auf jedem Port und jeder Adresse; Host-Freigaben dieser Namen → 422.
+- Meridians eigener Listen-Port (`MERIDIAN_LISTEN_PORT`, Standard 8080 wie FrankenPHP `:8080`) auf Loopback und auf
+  jeder Adresse der eigenen Netzwerkschnittstellen (`net_get_interfaces()`); Loopback-Freigabe mit diesem Port → 422.
+  Restliches Loopback bleibt nur einzeln mit ausdrücklichem Port freigebbar.
+- Meldung wie bei anderen nie freigebbaren Netzen (ohne Adresse, ohne Freigabe-Versprechen).
+Offen: Im Compose-Betrieb erreicht der Scheduler das Web unter dem Dienstnamen `web:8080` (andere Adresse, nicht
+die eigene Schnittstelle) und über den veröffentlichten Host-Port (`MERIDIAN_PORT`, Standard 8090); beides fängt
+die Regel nur, wenn der Admin es nicht per Freigabe öffnet.
+

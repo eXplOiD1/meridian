@@ -29,6 +29,7 @@ use Meridian\Runner\Http\CurlTransport;
 use Meridian\Runner\Http\DbHttpJobSource;
 use Meridian\Runner\Http\DbInternalTargetSource;
 use Meridian\Runner\Http\HttpRunner;
+use Meridian\Runner\Http\InfrastructureTargets;
 use Meridian\Runner\Http\StoredHttpRunSettings;
 use Meridian\Runner\Http\SystemHostResolver;
 use Meridian\Runner\Http\TargetGuard;
@@ -70,7 +71,7 @@ if (is_dir($config->dataDir)) {
     $throttle = new LoginThrottle($db, new SystemClock());
     $app->add(new UnlockCommand($throttle, $audit));
     $app->add(new UserPasswordCommand(new PasswordReset($users, new PasswordHasher(), new SessionManager($db, new SystemClock()), $throttle, $audit)));
-    $app->add(new InternalTargetsCommand(new InternalTargetStore($db, new SystemClock()), $audit));
+    $app->add(new InternalTargetsCommand(new InternalTargetStore($db, new SystemClock(), InfrastructureTargets::fromConfig($config)), $audit));
     $settingsService = new SettingsService($db, $audit, new SystemClock());
     $app->add(new SettingsGetCommand($settingsService));
     $app->add(new SettingsSetCommand($settingsService));
@@ -91,7 +92,7 @@ if (is_dir($config->dataDir)) {
             new DbHttpJobSource($db),
             new SecretBox(KeyLoader::load($env)),
             new StoredHttpRunSettings(new Settings($db, $clock)),
-            new TargetGuard(new SystemHostResolver(), new AddressPolicy(new DbInternalTargetSource($db))),
+            new TargetGuard(new SystemHostResolver(), new AddressPolicy(new DbInternalTargetSource($db), InfrastructureTargets::fromConfig($config))),
             new CurlTransport('Meridian/' . $config->version),
         ));
     }));

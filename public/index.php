@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Meridian\Config;
 use Meridian\Database\Connection;
 use Meridian\Http\AppFactory;
+use Meridian\Http\ClientIp;
 use Meridian\Http\ErrorLog;
 use Meridian\Security\KeyLoader;
 use Meridian\Security\SecretBox;
@@ -22,13 +23,8 @@ $env = getenv();
 
 try {
     $config = Config::fromEnvironment($env);
-    if ($config->trustedProxies !== []) {
-        // Client-IP und Host nur von konfigurierten Reverse-Proxys glauben.
-        Request::setTrustedProxies(
-            $config->trustedProxies,
-            Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_HOST,
-        );
-    }
+    // Client-IP und Host nur von konfigurierten Reverse-Proxys glauben (leer = niemandem).
+    ClientIp::trust($config);
 
     $kernel = AppFactory::create($config, Connection::open($config->databasePath()), new SecretBox(KeyLoader::load($env)));
     $kernel->handle(Request::createFromGlobals())->send();

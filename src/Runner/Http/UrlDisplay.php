@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Meridian\Runner\Http;
 
 use Meridian\Security\SecretMasker;
+use Meridian\Settings\DisplayHostMode;
 use Meridian\Settings\DisplayPathMode;
+use Meridian\Settings\HttpDisplay;
 
 /**
  * Die einzige Stelle, die die Anzeige-URL (`display_url`) eines HTTP-Jobs bildet (docs/decisions/0003, E2).
@@ -42,6 +44,96 @@ final class UrlDisplay
     }
 
     /**
+     * Anzeige-URL beim Ersetzen der Anfrage nach beiden Einstellungen: {@see self::fromParsed()} für Pfad und Query,
+     * bei `http.display_host = hidden` danach Host und Port verborgen ({@see self::hideHost()}).
+     */
+    public static function build(#[\SensitiveParameter] ParsedUrl $url, HttpDisplay $display): string
+    {
+        $shown = self::fromParsed($url, $display->path);
+
+        return $display->host === DisplayHostMode::Hidden ? self::hideHost($shown, $url->origin()) : $shown;
+    }
+
+    /**
+     * Verschärft eine gespeicherte (oder gerade gebildete) Anzeige-URL auf die aktuellen Einstellungen, ohne zu
+     * entschlüsseln: Pfad/Query nach `http.display_path`, Host nach `http.display_host`. Nur strenger, nie lockerer;
+     * ein zweiter Aufruf ändert nichts. Benutzt beim Lesen ({@see \Meridian\Http\JobPresenter}), bei `migrate`
+     * und beim Ändern der Einstellungen ({@see \Meridian\Job\DisplayUrlUpgrade}).
+     *
+     * @param string $origin Schema + Host (+ Port) aus `config_json.http.target`
+     */
+    public static function tightenStored(string $displayUrl, string $origin, HttpDisplay $display): string
+    {
+        if ($display->path === DisplayPathMode::Hidden) {
+            $displayUrl = self::hideStored($displayUrl, $origin);
+        }
+
+        return $display->host === DisplayHostMode::Hidden ? self::hideHost($displayUrl, $origin) : $displayUrl;
+    }
+
+    /**
+     * Ziel (`target`) für die API: der Ursprung, bei `http.display_host = hidden` nur Schema + `••••`.
+     */
+    public static function target(string $origin, HttpDisplay $display): string
+    {
+        return $display->host === DisplayHostMode::Hidden ? self::hiddenOrigin($origin) : $origin;
+    }
+
+    /**
+     * Ersetzt Host und Port einer Anzeige-URL durch `••••` (`https://••••/api`), ohne zu entschlüsseln. Schon
+     * verborgen → unverändert. Passt der Text weder zum Ursprung noch zum verborgenen Ursprung, werden zusätzlich
+     * Pfad und Query verborgen (nur strenger, nie lockerer).
+     *
+     * @param string $origin Schema + Host (+ Port) aus `config_json.http.target`
+     */
+    public static function hideHost(string $displayUrl, string $origin): string
+    {
+        $hidden = self::hiddenOrigin($origin);
+        $rest = self::rest($displayUrl, $origin, $hidden);
+        if ($rest === null) {
+            return $hidden . '/' . self::PLACEHOLDER . '?' . self::PLACEHOLDER;
+        }
+
+        return $hidden . $rest[1];
+    }
+
+    /**
+     * Verbirgt den Ursprung in den Zeilen `→ METHODE <ursprung>` einer gespeicherten Laufausgabe des HTTP-Runners
+     * (Läufe von vor `http.display_host = hidden`). Neue Läufe schreiben ihn dann schon verborgen. Ohne `u`, damit
+     * auch eine Ausgabe mit ungültigem UTF-8 (gespeicherte Antwort) bearbeitet wird; im Fehlerfall alles verbergen.
+     */
+    public static function hideHostInRunOutput(string $output): string
+    {
+        return preg_replace('~^(→ [A-Z]{1,10} )(https?)://\S+$~m', '$1$2://' . self::PLACEHOLDER, $output) ?? self::PLACEHOLDER;
+    }
+
+    /** Schema + `://••••`: der Ursprung ohne Host und Port. Unbekanntes Schema → `https`. */
+    public static function hiddenOrigin(string $origin): string
+    {
+        return (str_starts_with($origin, 'http://') ? 'http' : 'https') . '://' . self::PLACEHOLDER;
+    }
+
+    /**
+     * Zerlegt eine Anzeige-URL in den passenden Ursprung (echter oder verborgener) und den Rest (Pfad + Query).
+     *
+     * @return array{0: string, 1: string}|null null, wenn der Text zu keinem der beiden passt
+     */
+    private static function rest(string $displayUrl, string $origin, string $hiddenOrigin): ?array
+    {
+        foreach ([$origin, $hiddenOrigin] as $prefix) {
+            if (!str_starts_with($displayUrl, $prefix)) {
+                continue;
+            }
+            $rest = substr($displayUrl, strlen($prefix));
+            if ($rest === '' || $rest[0] === '/' || $rest[0] === '?') {
+                return [$prefix, $rest];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Verschärft eine **gespeicherte** Anzeige-URL auf den Modus `hidden`, ohne die Anfrage zu entschlüsseln
      * (docs/decisions/0003, E3): Ursprung + `/••••`, wenn ein Pfad da war, + `?••••`, wenn eine Query da war — genau
      * das, was {@see self::fromParsed()} im Modus `hidden` liefert. Nur strenger, nie lockerer: Passt der Text nicht
@@ -51,14 +143,17 @@ final class UrlDisplay
      */
     public static function hideStored(string $displayUrl, string $origin): string
     {
-        $rest = str_starts_with($displayUrl, $origin) ? substr($displayUrl, strlen($origin)) : null;
-        if ($rest === null || ($rest !== '' && $rest[0] !== '/' && $rest[0] !== '?')) {
+        // Auch eine schon host-verborgene Anzeige (`https://••••/…`) erkennen und so lassen: sonst käme der Host
+        // über den Rückfall wieder hinein.
+        $split = self::rest($displayUrl, $origin, self::hiddenOrigin($origin));
+        if ($split === null) {
             return $origin . '/' . self::PLACEHOLDER . '?' . self::PLACEHOLDER;
         }
+        [$prefix, $rest] = $split;
         $q = strpos($rest, '?');
         $path = $q === false ? $rest : substr($rest, 0, $q);
 
-        return $origin . ($path === '' ? '' : '/' . self::PLACEHOLDER) . ($q === false ? '' : '?' . self::PLACEHOLDER);
+        return $prefix . ($path === '' ? '' : '/' . self::PLACEHOLDER) . ($q === false ? '' : '?' . self::PLACEHOLDER);
     }
 
     /**
