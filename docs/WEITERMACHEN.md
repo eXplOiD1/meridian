@@ -1,46 +1,43 @@
-# Weitermachen – Stand vom 09.10.2026
+# Weitermachen – Stand vom 10.10.2026
 
-Branch `claude/great-clarke-ubr0vc`. Phase 1, 2 und 3 sind abgeschlossen (Review inkl. Nachprüfung durch `sicherheit`).
-Normativ für Phase 3: `docs/decisions/0003-phase3-http-jobs.md`. Aufgabenliste: `TODO.md`.
+Branch `claude/great-clarke-ubr0vc`. Phase 1–3 sind abgeschlossen (Review inkl. Nachprüfung). Phase 4a (Benutzer und Rollen)
+ist begonnen, Phase 4 (Shell-Jobs) ist entworfen. Normativ: `docs/decisions/0003-phase3-http-jobs.md` (+Nachtrag E13–E17),
+`0004-phase4-shell-jobs.md`, `0005-benutzer-und-rollen.md`. Aufgabenliste: `TODO.md`.
 
-## Was jetzt da ist
-- Anmeldung (auch über HTTP mit Warnhinweis), 2FA, Audit-Log, Sperre, Rollen und Kategorien.
-- Scheduler-Kern (Lease, Planer, Warteschlange, Überlappung, Wiederholen, Nachholen, Herzschlag).
-- HTTP-Jobs: Job-API (lesen/schreiben), manueller Lauf und Testlauf, HTTP-Runner mit SSRF-Schutz, Freigaben interner Ziele
-  (API, CLI `http:internal-targets`, Einstellungsseite), Einstellungen (API, CLI `settings:get|set`), `category:create`.
-- Oberfläche: Übersicht „Nächste Läufe“, Jobliste, Job anlegen/bearbeiten, Job-Detail mit Verlauf, Einstellungen.
+## Stand Phase 4a
+Fertig und gepusht: S1 (Migration 0009, Rechte, GrantPolicy, letzter Admin), S2 (Einmalpasswort, Passwort-Bestätigung, Sitzungen),
+S3 (lesende Benutzer-API), S7 (Kategorien-Verwaltung API + CLI).
+**Angefangen, ungeprüft: S4 (schreibende Benutzer-API).** Der Stand liegt als
+`docs/wip/phase4a-s4-benutzer-schreib-api-unfertig.patch` (`git apply`; betrifft `AppFactory`, `UserController`, `UserRepository`
+und neue Klassen `Actor`, `CreatedUser`, `DisplayName`, `UserAdminService`, `UserRequestRefused`). Danach Tests, Qualitätskette,
+committen, Patch löschen.
 
-## Nächste Schritte
-1. **Phase 4 – Shell-Jobs** (siehe `TODO.md`): zuerst Entwurf durch `architekt` (Shell-Runner, Docker-Socket-Proxy, eigener
-   Prozess für lange Läufe, Live-Log per SSE), dann Umsetzung, Review durch `sicherheit`.
-2. **PHPStan max unter PHP 8.4 oder in CI belegen** (lokal läuft PHP 8.3, PHPStan nur über die Sonderkonfiguration `tools/`).
-3. Phase 5 (restliche Oberfläche: Verlauf, Statusseiten, Benutzer & Rollen, Kategorien-Verwaltung), Benachrichtigungen,
-   Admin-2FA-Zurücksetzen, optional ghcr.io-Image.
+## Nächste Schritte (in dieser Reihenfolge)
+1. **S4** fertigstellen (anlegen mit Einmalpasswort, Anzeigename, Zuweisungen, deaktivieren/aktivieren, Soft-Delete, Audit, Grenzen).
+2. **S6** eigene Daten (`PUT /api/auth/profile`, `POST /api/auth/password`, Sitzungen), **S5** Admin-Passwort-Reset/2FA-Reset/Sitzungen beenden
+   (sicherheit), **S8** Gesamtsuite (tester).
+3. **U1–U5** Oberfläche (frontend): Benutzer & Rollen, Zuweisungs-Editor, Konto-/Sicherheitsaktionen, Kategorien-Seite, Mein Konto,
+   Screen „Passwort festlegen“ (403 mit `password_change_required`), Bezeichnung für `categories.manage` in `lib/permissions.ts`.
+4. Review Phase 4a (sicherheit); dabei auch prüfen: einmaliges 403 bei `POST /api/jobs` direkt nach frischer Sitzung (nicht reproduziert).
+5. **Phase 4 – Shell-Jobs** nach ADR 0004 (neue Compose-Struktur mit Proxy `wollomatic/socket-proxy`, Sandbox-Container, Worker).
+6. PHPStan max unter PHP 8.4 bzw. in CI belegen; neue ZIP an Alex nach jedem Abschluss.
 
 ## Beim Deploy zu beachten
-- Compose auf dem NAS neu einfügen (Dockerfile-Block hat sich geändert: curl-Prüfung im Build), Image neu bauen.
-  Falls der Build an der curl-Prüfung scheitert: Meldung an Claude.
-- Migrationen 0005–0007 und das Verschärfen der Anzeige-URLs laufen bei `migrate` beim Start automatisch.
-- Migration 0009 (Phase 4a) bricht ab, wenn zwei Kategorien sich nur in der Groß-/Kleinschreibung unterscheiden
-  (neuer eindeutiger Index ohne Schreibung). Vorher prüfen: `SELECT lower(name), COUNT(*) FROM categories GROUP BY 1 HAVING COUNT(*) > 1;`
-  — Treffer umbenennen, dann starten. Die Migration rollt sonst vollständig zurück.
-- Für Jobs im internen Netz: Einstellungen → „Freigaben interner Ziele“ oder
-  `docker exec -it meridian-web php bin/meridian http:internal-targets add …`.
-- Kategorien anlegen: `docker exec -it meridian-web php bin/meridian category:create "Name"`.
+- Compose auf dem NAS aus dem Repository neu einfügen (Raw-Datei `compose.yaml`; **keine** alte Git-Context-Fassung: das NAS hat kein `git`).
+  Vorher klären, ob der Hauptschlüssel im Volume `meridian-secrets` oder in einer Datei `secrets/master.key` liegt (nicht verlieren!).
+- Migrationen 0005–0009 und das Verschärfen der Anzeige-URLs laufen bei `migrate` beim Start automatisch.
+  **0009 bricht ab**, wenn zwei Kategorienamen sich nur in der Groß-/Kleinschreibung unterscheiden (Prüfabfrage siehe ADR 0005 §3).
+- Jobs im internen Netz: Einstellungen → „Freigaben interner Ziele“ oder `docker exec -it meridian-web php bin/meridian http:internal-targets add …`.
+- Kategorien: `category:create|rename|delete`. Einstellungen: `settings:get|set`.
 
-## Offene Entscheidungen von Alex
-- **Proxy-Frage** (Phase 1): A = Login ablehnen, wenn `X-Forwarded-For` ohne `MERIDIAN_TRUSTED_PROXIES` kommt (Empfehlung),
-  B = Risiko akzeptieren und dokumentieren.
-- **R1:** Standard von `http.display_path` auf `hidden` stellen? (`auto` zeigt reine Kleinbuchstaben-Pfadwörter, z. B. ntfy-Themen.)
-- **Sieht ein Beobachter die Anzeige-URL** (`display_url`) oder nur, wer bearbeiten darf?
-- **Host mit Geheimnis in der Subdomain** (z. B. `*.pipedream.net`) erscheint in Liste/Abfahrtstafel (O2).
-- **Loopback-/Docker-Netz-Freigaben** erreichen Meridian selbst bzw. ab Phase 4 den Socket-Proxy: ausschließen?
-- Admin-2FA-Zurücksetzen gehört zur Benutzerverwaltung (späterer Schritt).
+## Offene Entscheidungen von Alex (bis dahin gelten die Empfehlungen aus den ADRs)
+- ADR 0004 O1–O12 (u. a. Proxy-Image `wollomatic/socket-proxy`, Host-Ausführung für systemd erst Phase 9, Sandbox-Container, Skript nicht wieder lesbar).
+- ADR 0005 B1–B14 (u. a. feste Rollen, Soft-Delete, Einmalpasswort 7 Tage, eigenes Passwort bei gefährlichen Aktionen).
+- Compose-Betrieb: Scheduler erreicht Meridian über `web:8080`/Host-Port; optional `MERIDIAN_SELF_HOSTS` (0003 E17).
+- Sieht ein Host mit Geheimnis in der Subdomain (z. B. pipedream) → `http.display_host = hidden` einstellbar.
 
 ## Bekannte Punkte
-- Zweite IP-Prüfung (`CURLOPT_PREREQFUNCTION`) greift erst unter PHP 8.4 vor dem Senden (Produktiv-Image); lokal 8.3 danach.
-- Lange Läufe halten den Scheduler-Takt auf, bis Phase 4 einen eigenen Prozess bringt (Verpasst-Fenster 300 s).
-- `Australia/Lord_Howe` (30-Minuten-Umstellung) weicht im Zeitplan ab.
-- Optionale Härtung: v1-Anzeige-URLs ohne `=` komplett schwärzen (`UrlDisplay::upgradeStored`), siehe Nachprüfung.
-- Commit-Trailer mancher Agenten nannten „Opus“ statt „Sonnet“ (kosmetisch).
-- Anzeige-URL im Modus `auto` zeigt reine Kleinbuchstaben-Pfadsegmente (dokumentiertes Restrisiko).
+- Zweite IP-Prüfung (`CURLOPT_PREREQFUNCTION`) greift erst unter PHP 8.4 vor dem Senden; lokal 8.3 danach.
+- `Australia/Lord_Howe` weicht im Zeitplan ab. Optionale Härtung: v1-Anzeige-URLs ohne `=` komplett schwärzen.
+- Tests, `.claude/` und `CLAUDE.md` sind gitignored und liegen nur lokal (ZIP an Alex nach jedem Abschluss).
+- Agenten dürfen nie `git stash`/`git checkout` auf ungestagte Dateien anwenden.
