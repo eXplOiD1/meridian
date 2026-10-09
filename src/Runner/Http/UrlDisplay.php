@@ -38,6 +38,26 @@ final class UrlDisplay
     }
 
     /**
+     * Verschärft eine **gespeicherte** Anzeige-URL auf den Modus `hidden`, ohne die Anfrage zu entschlüsseln
+     * (docs/decisions/0003, E3): Ursprung + `/••••`, wenn ein Pfad da war, + `?••••`, wenn eine Query da war — genau
+     * das, was {@see self::fromParsed()} im Modus `hidden` liefert. Nur strenger, nie lockerer: Passt der Text nicht
+     * zum Ursprung des Jobs, werden Pfad und Query beide verborgen.
+     *
+     * @param string $origin Schema + Host (+ Port) aus `config_json.http.target`
+     */
+    public static function hideStored(string $displayUrl, string $origin): string
+    {
+        $rest = str_starts_with($displayUrl, $origin) ? substr($displayUrl, strlen($origin)) : null;
+        if ($rest === null || ($rest !== '' && $rest[0] !== '/' && $rest[0] !== '?')) {
+            return $origin . '/' . self::PLACEHOLDER . '?' . self::PLACEHOLDER;
+        }
+        $q = strpos($rest, '?');
+        $path = $q === false ? $rest : substr($rest, 0, $q);
+
+        return $origin . ($path === '' ? '' : '/' . self::PLACEHOLDER) . ($q === false ? '' : '?' . self::PLACEHOLDER);
+    }
+
+    /**
      * Darf dieses (rohe, nicht dekodierte) Pfadsegment im Modus `auto` sichtbar sein?
      * Nur Kleinbuchstaben-Wörter: höchstens vier Wortteile mit `-`/`_`, optional eine Endung aus fester Liste,
      * Länge ≤ 24, kein Wortteil länger als 16. Damit fallen Ziffern, Großbuchstaben, `%`, `;`, `:`, `=`, `~`, `@`
