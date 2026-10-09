@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace Meridian\Runner\Http;
 
+use Meridian\Security\Sealed;
+
 /**
  * Ergebnis eines Hops. `body` ist nur der Anfang der Antwort (höchstens {@see CurlTransport::KEEP_BODY_BYTES});
  * `bodyBytes` zählt alles Empfangene. `location` kann Geheimnisse des Ziels tragen und wird nie ausgegeben, nur
- * für die nächste Weiterleitung geprüft.
+ * für die nächste Weiterleitung geprüft. Beide liegen versiegelt ({@see Sealed}) und erscheinen in keiner
+ * Darstellung (var_dump, print_r, var_export, json_encode); die Klasse ist nicht serialisierbar.
  */
-final readonly class TransportResponse
+final readonly class TransportResponse implements \JsonSerializable
 {
+    /** @var Sealed<array{0: string|null, 1: string}> Location, Body */
+    private Sealed $secret;
+
     /**
      * @param int $status HTTP-Status, 0 wenn keine Antwort kam
      */
@@ -18,13 +24,25 @@ final readonly class TransportResponse
         public int $status,
         public ?TransportError $error,
         public ?int $errorCode,
-        public ?string $location,
+        #[\SensitiveParameter] ?string $location,
         public ?string $contentType,
-        #[\SensitiveParameter] public string $body,
+        #[\SensitiveParameter] string $body,
         public int $bodyBytes,
         public bool $bodyLimitReached,
         public int $durationMs,
     ) {
+        $this->secret = new Sealed([$location, $body]);
+    }
+
+    public function location(): ?string
+    {
+        return $this->secret->open()[0];
+    }
+
+    /** Anfang der Antwort (roh, ungeprüft): vor jeder Ausgabe maskieren, dann kürzen. */
+    public function body(): string
+    {
+        return $this->secret->open()[1];
     }
 
     public static function failure(TransportError $error, int $durationMs = 0, ?int $errorCode = null): self
@@ -43,6 +61,15 @@ final readonly class TransportResponse
             'body_bytes' => $this->bodyBytes,
             'duration_ms' => $this->durationMs,
         ];
+    }
+
+    /**
+     * @return array<string, int|string|bool|null>
+     */
+    #[\Override]
+    public function jsonSerialize(): array
+    {
+        return $this->__debugInfo();
     }
 
     /**

@@ -397,6 +397,10 @@ Ziel: PHP (`parse_url`) und curl dürfen die URL nicht unterschiedlich lesen.
   Bindestrich, Labels 1–63, gesamt ≤ 253, letztes Label nicht rein numerisch, kein Punkt am Ende, keine
   Nicht-ASCII-Zeichen (IDN als Punycode `xn--…`). Dadurch scheitern `http://2130706433/`, `http://0x7f.1/`,
   `http://127.1/`, `http://0/` schon an der Syntax.
+  Zusätzlich (S11, strenger): kein Label in Hex-Form mit `0x`-Präfix (`0x7f`, `0x`) und keines in Oktalform
+  (führende 0, nur Ziffern), damit kein IPv4-Parser einen Namen als Adresse liest: `http://0x7f000001/`,
+  `http://0x7f.0x0.0x0.0x1/`, `http://0177.0.0.0x1/` → 422. Erlaubt bleiben `a1b2.example.com`, `x0.example.com`,
+  `1.cdn.example.com`.
 - Namen `localhost`, `*.localhost`, `metadata.google.internal`, `metadata` → gesperrt, unabhängig von DNS.
 - Port 1–65535, optional.
 - Pfad und Query: erlaubte Zeichen RFC 3986 (`A-Za-z0-9-._~!$&'()*+,;=:@/?%` mit gültigen `%XX`; `@` nur

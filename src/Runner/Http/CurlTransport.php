@@ -43,7 +43,7 @@ final class CurlTransport implements HttpTransport
     }
 
     #[\Override]
-    public function send(TransportRequest $request, Heartbeat $heartbeat): TransportResponse
+    public function send(#[\SensitiveParameter] TransportRequest $request, Heartbeat $heartbeat): TransportResponse
     {
         $started = (int) hrtime(true);
         $hop = new CurlHop($request->target->ips, $request->target->url->port);
@@ -122,12 +122,12 @@ final class CurlTransport implements HttpTransport
      *
      * @return array<int, mixed>
      */
-    public function options(TransportRequest $request): array
+    public function options(#[\SensitiveParameter] TransportRequest $request): array
     {
         $url = $request->target->url;
         $timeout = max(1, $request->timeoutMs);
         $headers = [];
-        foreach ($request->headers as [$name, $value]) {
+        foreach ($request->headers() as [$name, $value]) {
             $headers[] = $name . ': ' . $value;
         }
         // curl setzt sonst bei großen Bodies „Expect: 100-continue“ (eigene Expect-Header sind verboten).
@@ -171,12 +171,13 @@ final class CurlTransport implements HttpTransport
                 break;
             case 'POST':
                 $options[CURLOPT_POST] = true;
-                $options[CURLOPT_POSTFIELDS] = $request->body ?? '';
+                $options[CURLOPT_POSTFIELDS] = $request->body() ?? '';
                 break;
             default:
                 $options[CURLOPT_CUSTOMREQUEST] = $request->method;
-                if ($request->body !== null) {
-                    $options[CURLOPT_POSTFIELDS] = $request->body;
+                $body = $request->body();
+                if ($body !== null) {
+                    $options[CURLOPT_POSTFIELDS] = $body;
                 }
         }
 
@@ -208,7 +209,7 @@ final class CurlTransport implements HttpTransport
         };
 
         $callbacks = [
-            CURLOPT_HEADERFUNCTION => static function (\CurlHandle $ch, string $line) use ($hop, $checkPeer): int {
+            CURLOPT_HEADERFUNCTION => static function (\CurlHandle $ch, #[\SensitiveParameter] string $line) use ($hop, $checkPeer): int {
                 $hop->headerBytes += strlen($line);
                 if ($hop->headerBytes > self::MAX_HEADER_BYTES) {
                     $hop->abort = TransportError::HeadersTooLarge;
@@ -231,7 +232,7 @@ final class CurlTransport implements HttpTransport
 
                 return strlen($line);
             },
-            CURLOPT_WRITEFUNCTION => static function (\CurlHandle $ch, string $data) use ($hop): int {
+            CURLOPT_WRITEFUNCTION => static function (\CurlHandle $ch, #[\SensitiveParameter] string $data) use ($hop): int {
                 $length = strlen($data);
                 $room = self::KEEP_BODY_BYTES - strlen($hop->body);
                 if ($room > 0) {

@@ -23,7 +23,7 @@ final class CsrfGuard
         return rtrim(strtr(base64_encode(hash_hmac('sha256', 'meridian-csrf-v1', $sessionToken, true)), '+/', '-_'), '=');
     }
 
-    public function check(Request $request, #[\SensitiveParameter] string $sessionToken): bool
+    public function check(#[\SensitiveParameter] Request $request, #[\SensitiveParameter] string $sessionToken): bool
     {
         $given = $request->headers->get(self::HEADER);
         if ($given === null || !hash_equals($this->tokenFor($sessionToken), $given)) {
@@ -36,7 +36,7 @@ final class CsrfGuard
     /**
      * Herkunftsprüfung ohne Sitzung (Anmeldung): fehlt Origin und Referer, wird abgelehnt.
      */
-    public function originMatches(Request $request): bool
+    public function originMatches(#[\SensitiveParameter] Request $request): bool
     {
         $source = $request->headers->get('Origin');
         if ($source === null || $source === '' || $source === 'null') {

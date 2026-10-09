@@ -29,7 +29,7 @@ final class Kernel
         private readonly SecretMasker $masker,
     ) {
         $this->routes = new RouteCollection();
-        $this->get('health', '/api/health', fn (Request $r): Response => new JsonResponse([
+        $this->get('health', '/api/health', fn (#[\SensitiveParameter] Request $r): Response => new JsonResponse([
             'status' => 'ok',
             'version' => $this->config->version,
         ]));
@@ -81,7 +81,7 @@ final class Kernel
         $this->handlers[$name] = $handler;
     }
 
-    public function handle(Request $request): Response
+    public function handle(#[\SensitiveParameter] Request $request): Response
     {
         try {
             $matcher = new UrlMatcher($this->routes, (new RequestContext())->fromRequest($request));
@@ -104,8 +104,8 @@ final class Kernel
         } catch (AccessDenied $e) {
             $response = $this->error(403, $e->getMessage());
         } catch (\Throwable $e) {
-            // Im Betrieb nie Details zeigen. In dev nur maskiert.
-            error_log($this->masker->mask($e::class . ': ' . $e->getMessage()));
+            // Im Betrieb nie Details zeigen. In dev nur maskiert. Ins Log nie die Meldung (ErrorLog).
+            ErrorLog::unexpected($e, 'Kernel');
             $response = $this->error(
                 500,
                 $this->config->isDev() ? $this->masker->mask($e->getMessage()) : 'Interner Fehler.',

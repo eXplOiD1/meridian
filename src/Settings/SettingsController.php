@@ -47,7 +47,7 @@ final class SettingsController
         $kernel->put('settings_change', '/api/settings/{key}', $this->change(...), ['key' => '[a-z][a-z0-9_.]{0,63}']);
     }
 
-    public function list(Request $request): Response
+    public function list(#[\SensitiveParameter] Request $request): Response
     {
         $session = $this->sessionAuth->authenticate($request);
         if ($session === null) {
@@ -58,7 +58,7 @@ final class SettingsController
         return JsonReply::json(['settings' => array_map($this->present(...), $this->service->entries())]);
     }
 
-    public function change(Request $request): Response
+    public function change(#[\SensitiveParameter] Request $request): Response
     {
         $session = $this->sessionAuth->authenticate($request);
         if ($session === null) {
@@ -88,7 +88,7 @@ final class SettingsController
      *
      * @throws ValidationFailed
      */
-    private static function value(Request $request): mixed
+    private static function value(#[\SensitiveParameter] Request $request): mixed
     {
         $data = JsonBody::object($request->getContent(), self::MAX_BODY, 2);
         if ($data === null || array_keys($data) !== ['value']) {

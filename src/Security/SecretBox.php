@@ -15,21 +15,20 @@ final class SecretBox
 {
     private const PREFIX = 'v1:';
 
-    private string $key;
+    /** @var Sealed<string> Nicht als Feld: var_export() und (array) zeigten den Schlüssel sonst roh. */
+    private readonly Sealed $key;
 
     public function __construct(#[\SensitiveParameter] string $key)
     {
         if (strlen($key) !== SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
             throw new \InvalidArgumentException('Der Schlüssel muss genau 32 Byte lang sein.');
         }
-        $this->key = $key;
+        $this->key = new Sealed($key);
     }
 
     public function __destruct()
     {
-        // sodium_memzero löscht den Puffer an Ort und Stelle; die Kopie teilt sich ihn mit der Property.
-        $key = $this->key;
-        sodium_memzero($key);
+        $this->key->wipe();
     }
 
     /**
@@ -42,15 +41,26 @@ final class SecretBox
         return ['key' => '••••'];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function __serialize(): array
     {
         throw new \LogicException('SecretBox darf nicht serialisiert werden.');
     }
 
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function __unserialize(array $data): void
+    {
+        throw new \LogicException('SecretBox darf nicht deserialisiert werden.');
+    }
+
     public function encrypt(#[\SensitiveParameter] string $plaintext): string
     {
         $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $cipher = sodium_crypto_secretbox($plaintext, $nonce, $this->key);
+        $cipher = sodium_crypto_secretbox($plaintext, $nonce, $this->key->open());
 
         return self::PREFIX . sodium_bin2base64($nonce . $cipher, SODIUM_BASE64_VARIANT_ORIGINAL);
     }
@@ -73,7 +83,7 @@ final class SecretBox
 
         $nonce = substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         $cipher = substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $plain = sodium_crypto_secretbox_open($cipher, $nonce, $this->key);
+        $plain = sodium_crypto_secretbox_open($cipher, $nonce, $this->key->open());
 
         if ($plain === false) {
             throw new SecretException('Entschlüsselung fehlgeschlagen: falscher Schlüssel oder manipulierter Wert.');

@@ -73,13 +73,13 @@ final class JobController
         $kernel->post('jobs_create', '/api/jobs', $this->create(...));
         $kernel->put('jobs_update', '/api/jobs/{id}', $this->update(...), $id);
         $kernel->delete('jobs_delete', '/api/jobs/{id}', $this->delete(...), $id);
-        $kernel->post('jobs_enable', '/api/jobs/{id}/enable', fn (Request $r): Response => $this->setEnabled($r, true), $id);
-        $kernel->post('jobs_disable', '/api/jobs/{id}/disable', fn (Request $r): Response => $this->setEnabled($r, false), $id);
-        $kernel->post('jobs_run', '/api/jobs/{id}/run', fn (Request $r): Response => $this->enqueueRun($r, RunTrigger::Manual), $id);
-        $kernel->post('jobs_test', '/api/jobs/{id}/test', fn (Request $r): Response => $this->enqueueRun($r, RunTrigger::Test), $id);
+        $kernel->post('jobs_enable', '/api/jobs/{id}/enable', fn (#[\SensitiveParameter] Request $r): Response => $this->setEnabled($r, true), $id);
+        $kernel->post('jobs_disable', '/api/jobs/{id}/disable', fn (#[\SensitiveParameter] Request $r): Response => $this->setEnabled($r, false), $id);
+        $kernel->post('jobs_run', '/api/jobs/{id}/run', fn (#[\SensitiveParameter] Request $r): Response => $this->enqueueRun($r, RunTrigger::Manual), $id);
+        $kernel->post('jobs_test', '/api/jobs/{id}/test', fn (#[\SensitiveParameter] Request $r): Response => $this->enqueueRun($r, RunTrigger::Test), $id);
     }
 
-    public function create(Request $request): Response
+    public function create(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request, mutating: true);
         if ($auth instanceof Response) {
@@ -94,7 +94,7 @@ final class JobController
             : JsonReply::json(['job' => $this->presenter->detail($job, $grants)], 201);
     }
 
-    public function update(Request $request): Response
+    public function update(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request, mutating: true);
         if ($auth instanceof Response) {
@@ -109,7 +109,7 @@ final class JobController
             : JsonReply::json(['job' => $this->presenter->detail($job, $grants)]);
     }
 
-    public function delete(Request $request): Response
+    public function delete(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request, mutating: true);
         if ($auth instanceof Response) {
@@ -127,7 +127,7 @@ final class JobController
      * `GET /api/runs/{id}`. 404 = Job nicht sichtbar, 403 = kein `jobs.run`, 409 = deaktiviert (nur manuell) oder
      * schon ein offener Lauf, 429 = Stundenkontingent.
      */
-    private function enqueueRun(Request $request, RunTrigger $trigger): Response
+    private function enqueueRun(#[\SensitiveParameter] Request $request, RunTrigger $trigger): Response
     {
         $auth = $this->authenticate($request, mutating: true);
         if ($auth instanceof Response) {
@@ -146,7 +146,7 @@ final class JobController
             : JsonReply::json(['run_id' => $runId], 202);
     }
 
-    private function setEnabled(Request $request, bool $enabled): Response
+    private function setEnabled(#[\SensitiveParameter] Request $request, bool $enabled): Response
     {
         $auth = $this->authenticate($request, mutating: true);
         if ($auth instanceof Response) {
@@ -161,7 +161,7 @@ final class JobController
             : JsonReply::json(['job' => $this->presenter->detail($job, $grants)]);
     }
 
-    public function list(Request $request): Response
+    public function list(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request);
         if ($auth instanceof Response) {
@@ -219,7 +219,7 @@ final class JobController
         return JsonReply::json(['jobs' => $out, 'truncated' => $listing->truncated]);
     }
 
-    public function show(Request $request): Response
+    public function show(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request);
         if ($auth instanceof Response) {
@@ -235,7 +235,7 @@ final class JobController
         return JsonReply::json(['job' => $this->presenter->detail($job, $grants)]);
     }
 
-    public function history(Request $request): Response
+    public function history(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request);
         if ($auth instanceof Response) {
@@ -293,7 +293,7 @@ final class JobController
         ]);
     }
 
-    public function runDetail(Request $request): Response
+    public function runDetail(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request);
         if ($auth instanceof Response) {
@@ -310,7 +310,7 @@ final class JobController
         return JsonReply::json(['run' => $this->presenter->run($run, true)]);
     }
 
-    public function preview(Request $request): Response
+    public function preview(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request);
         if ($auth instanceof Response) {
@@ -355,7 +355,7 @@ final class JobController
         return JsonReply::json(['runs' => array_map(static fn (\DateTimeImmutable $time): string => $time->format('c'), $runs)]);
     }
 
-    public function limits(Request $request): Response
+    public function limits(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request);
         if ($auth instanceof Response) {
@@ -373,7 +373,7 @@ final class JobController
         ]);
     }
 
-    public function categoryList(Request $request): Response
+    public function categoryList(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request);
         if ($auth instanceof Response) {
@@ -401,7 +401,7 @@ final class JobController
      *
      * @return array{0: Session, 1: list<RoleGrant>}|JsonResponse
      */
-    private function authenticate(Request $request, bool $mutating = false): array|JsonResponse
+    private function authenticate(#[\SensitiveParameter] Request $request, bool $mutating = false): array|JsonResponse
     {
         $session = $this->sessionAuth->authenticate($request);
         if ($session === null) {
@@ -421,7 +421,7 @@ final class JobController
      *
      * @throws ValidationFailed
      */
-    private static function body(Request $request): array
+    private static function body(#[\SensitiveParameter] Request $request): array
     {
         $data = JsonBody::object($request->getContent(), JobValidator::MAX_BODY_BYTES, 5);
         $message = 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 160 KiB, höchstens 5 Ebenen tief).';
@@ -435,7 +435,7 @@ final class JobController
         return $data;
     }
 
-    private static function id(Request $request): int
+    private static function id(#[\SensitiveParameter] Request $request): int
     {
         // Das Muster der Route lässt nur [1-9][0-9]{0,17} durch.
         return (int) $request->attributes->getString('id');

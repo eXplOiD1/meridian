@@ -4,15 +4,20 @@ declare(strict_types=1);
 
 namespace Meridian\Runner\Http;
 
+use Meridian\Security\Sealed;
+
 /**
  * Eine von UrlPolicy geprüfte URL. Schema, Host und Port sind kein Geheimnis (Ziel, O2); Pfad und Query
- * können eines sein und sind deshalb privat, erscheinen nicht in var_dump/print_r/json_encode und die Klasse
- * ist nicht serialisierbar.
+ * können eines sein: sie liegen versiegelt ({@see Sealed}), erscheinen weder in var_dump/print_r noch in
+ * var_export/json_encode, und die Klasse ist nicht serialisierbar.
  *
  * Entsteht nur in UrlPolicy::parse(); der Konstruktor setzt geprüfte Teile voraus.
  */
 final readonly class ParsedUrl implements \JsonSerializable
 {
+    /** @var Sealed<array{0: string, 1: string|null}> Pfad und Query */
+    private Sealed $secret;
+
     /**
      * @internal nur UrlPolicy
      *
@@ -26,9 +31,10 @@ final readonly class ParsedUrl implements \JsonSerializable
         public string $host,
         public int $port,
         public bool $isIpLiteral,
-        #[\SensitiveParameter] private string $path,
-        #[\SensitiveParameter] private ?string $query,
+        #[\SensitiveParameter] string $path,
+        #[\SensitiveParameter] ?string $query,
     ) {
+        $this->secret = new Sealed([$path, $query]);
     }
 
     public function isIpv6(): bool
@@ -55,18 +61,20 @@ final readonly class ParsedUrl implements \JsonSerializable
 
     public function path(): string
     {
-        return $this->path;
+        return $this->secret->open()[0];
     }
 
     public function query(): ?string
     {
-        return $this->query;
+        return $this->secret->open()[1];
     }
 
     /** Die vollständige, normalisierte URL, die gesendet wird. Geheim. */
     public function toUrl(): string
     {
-        return $this->origin() . $this->path . ($this->query === null ? '' : '?' . $this->query);
+        [$path, $query] = $this->secret->open();
+
+        return $this->origin() . $path . ($query === null ? '' : '?' . $query);
     }
 
     /**

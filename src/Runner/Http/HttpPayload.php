@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Meridian\Runner\Http;
 
+use Meridian\Security\Sealed;
 use Meridian\Security\SecretMasker;
 
 /**
@@ -13,7 +14,8 @@ use Meridian\Security\SecretMasker;
  * Format v1: `{"v": 1, "url": "https://…", "headers": [["Name", "Wert"]], "body": null}`. Andere Versionen
  * werden abgelehnt; ein künftiges Format wird beim Lesen umgedeutet, nie per SQL umgeschrieben.
  *
- * Die Werte erscheinen in keiner Debug-Ausgabe, json_encode() liefert nur Flags, serialize() wirft.
+ * Die Werte liegen versiegelt ({@see Sealed}) und erscheinen in keiner Darstellung (var_dump, print_r,
+ * var_export, debug_zval_dump); json_encode() liefert nur Flags, serialize() wirft.
  * Die Regeln für URL, Header und Body gelten beim Speichern und beim Lesen im Runner gleich.
  */
 final class HttpPayload implements \JsonSerializable
@@ -34,15 +36,28 @@ final class HttpPayload implements \JsonSerializable
 
     private readonly ParsedUrl $parsed;
 
+    /** @var Sealed<string> */
+    private readonly Sealed $url;
+
+    /** @var Sealed<list<array{0: string, 1: string}>> */
+    private readonly Sealed $headers;
+
+    /** @var Sealed<string|null> */
+    private readonly Sealed $body;
+
+    private readonly int $headerCount;
+
+    private readonly bool $hasBody;
+
     /**
      * @param list<array{0: string, 1: string}> $headers
      *
      * @throws InvalidPayload|InvalidUrl
      */
     public function __construct(
-        #[\SensitiveParameter] private readonly string $url,
-        #[\SensitiveParameter] private readonly array $headers = [],
-        #[\SensitiveParameter] private readonly ?string $body = null,
+        #[\SensitiveParameter] string $url,
+        #[\SensitiveParameter] array $headers = [],
+        #[\SensitiveParameter] ?string $body = null,
     ) {
         $this->parsed = (new UrlPolicy())->parse($url);
         self::checkHeaders($headers);
@@ -52,6 +67,11 @@ final class HttpPayload implements \JsonSerializable
         if ($body !== null && preg_match('//u', $body) !== 1) {
             throw new InvalidPayload('request.body', 'Der Body muss gültiger UTF-8-Text sein.');
         }
+        $this->url = new Sealed($url);
+        $this->headers = new Sealed($headers);
+        $this->body = new Sealed($body);
+        $this->headerCount = count($headers);
+        $this->hasBody = $body !== null;
     }
 
     /**
@@ -94,7 +114,7 @@ final class HttpPayload implements \JsonSerializable
     public function toJson(): string
     {
         return json_encode(
-            ['v' => self::VERSION, 'url' => $this->url, 'headers' => $this->headers, 'body' => $this->body],
+            ['v' => self::VERSION, 'url' => $this->url->open(), 'headers' => $this->headers->open(), 'body' => $this->body->open()],
             JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         );
     }
@@ -109,22 +129,22 @@ final class HttpPayload implements \JsonSerializable
      */
     public function headers(): array
     {
-        return $this->headers;
+        return $this->headers->open();
     }
 
     public function body(): ?string
     {
-        return $this->body;
+        return $this->body->open();
     }
 
     public function headerCount(): int
     {
-        return count($this->headers);
+        return $this->headerCount;
     }
 
     public function hasBody(): bool
     {
-        return $this->body !== null;
+        return $this->hasBody;
     }
 
     /**
@@ -134,13 +154,14 @@ final class HttpPayload implements \JsonSerializable
      */
     public function registerIn(SecretMasker $masker): void
     {
-        $masker->remember($this->url);
+        $url = $this->url->open();
+        $masker->remember($url);
         $masker->remember($this->parsed->toUrl());
         $query = $this->parsed->query();
         // URL ohne Query, normalisiert und roh (Schema/Host-Schreibweise, Standardport können abweichen).
         $masker->remember($query === null ? $this->parsed->toUrl() : substr($this->parsed->toUrl(), 0, -strlen($query) - 1));
-        $rawBase = strstr($this->url, '?', true);
-        $masker->remember($rawBase === false ? $this->url : $rawBase);
+        $rawBase = strstr($url, '?', true);
+        $masker->remember($rawBase === false ? $url : $rawBase);
 
         foreach (explode('/', $this->parsed->path()) as $segment) {
             if (strlen($segment) >= self::MIN_FRAGMENT_LENGTH && !UrlDisplay::isVisibleSegment($segment)) {
@@ -162,7 +183,7 @@ final class HttpPayload implements \JsonSerializable
         }
 
         $isForm = false;
-        foreach ($this->headers as [$name, $value]) {
+        foreach ($this->headers->open() as [$name, $value]) {
             $masker->remember($value);
             if (preg_match('/^(bearer|basic|token)\s+(\S+)$/iD', $value, $m) === 1) {
                 $masker->remember($m[2]);
@@ -181,15 +202,16 @@ final class HttpPayload implements \JsonSerializable
             }
         }
 
-        if ($this->body !== null) {
-            $masker->remember($this->body);
+        $body = $this->body->open();
+        if ($body !== null) {
+            $masker->remember($body);
             try {
-                self::rememberLeaves($masker, json_decode($this->body, true, 64, JSON_THROW_ON_ERROR));
+                self::rememberLeaves($masker, json_decode($body, true, 64, JSON_THROW_ON_ERROR));
             } catch (\JsonException) {
                 // kein JSON: der Body als Ganzes ist registriert
             }
             if ($isForm) {
-                foreach (explode('&', $this->body) as $pair) {
+                foreach (explode('&', $body) as $pair) {
                     $eq = strpos($pair, '=');
                     if ($eq !== false) {
                         self::rememberEncoded($masker, substr($pair, $eq + 1));
@@ -204,7 +226,7 @@ final class HttpPayload implements \JsonSerializable
      */
     public function __debugInfo(): array
     {
-        return ['v' => self::VERSION, 'header_count' => count($this->headers), 'has_body' => $this->body !== null];
+        return ['v' => self::VERSION, 'header_count' => $this->headerCount, 'has_body' => $this->hasBody];
     }
 
     /**

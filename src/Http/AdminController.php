@@ -42,7 +42,7 @@ final class AdminController
         $kernel->post('users_unlock', '/api/users/unlock', $this->unlock(...));
     }
 
-    public function auditList(Request $request): Response
+    public function auditList(#[\SensitiveParameter] Request $request): Response
     {
         $session = $this->sessionAuth->authenticate($request);
         if ($session === null) {
@@ -73,7 +73,7 @@ final class AdminController
         ]);
     }
 
-    public function unlock(Request $request): Response
+    public function unlock(#[\SensitiveParameter] Request $request): Response
     {
         $session = $this->sessionAuth->authenticate($request);
         if ($session === null) {
@@ -102,7 +102,7 @@ final class AdminController
     /**
      * @return array{kind: 'user'|'ip', value: string}|null genau eines von username oder ip, sonst null
      */
-    private function unlockTarget(Request $request): ?array
+    private function unlockTarget(#[\SensitiveParameter] Request $request): ?array
     {
         $data = JsonBody::object($request->getContent(), self::MAX_BODY);
         if ($data === null || (isset($data['username']) === isset($data['ip']))) {

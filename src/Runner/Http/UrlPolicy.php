@@ -83,26 +83,42 @@ final class UrlPolicy
     }
 
     /**
-     * Gültiger DNS-Name nach §3.3: Kleinbuchstaben, Ziffern, Bindestrich; Labels 1–63, gesamt ≤ 253; letztes Label
-     * nicht rein numerisch (sonst wären `127.1` oder `2130706433` Namen); kein Punkt am Ende.
+     * Gültiger DNS-Name nach §3.3: Kleinbuchstaben, Ziffern, Bindestrich; Labels 1–63, gesamt ≤ 253; kein Punkt am
+     * Ende. Dazu keine Zahlform, die ein IPv4-Parser (inet_aton, WHATWG-URL, curl) als Adresse lesen könnte:
+     *  - kein Label mit `0x`-Präfix und nur Hex-Ziffern dahinter (`0x7f`, `0x`, `0xa9fea9fe`),
+     *  - kein Label in Oktalform (führende 0 und nur Ziffern: `0177`, `00`),
+     *  - letztes Label nicht rein numerisch (sonst wären `127.1` oder `2130706433` Namen).
+     * So scheitern `http://0x7f000001/`, `http://0x7f.0x0.0x0.0x1/` und `http://0177.0.0.0x1/` schon an der Syntax.
+     * Erlaubt bleiben Namen wie `a1b2.example.com`, `x0.example.com`, `0xfoo.example.com` oder `1.cdn.example.com`.
      */
-    public static function isValidHostname(string $host): bool
+    public static function isValidHostname(#[\SensitiveParameter] string $host): bool
     {
         if ($host === '' || strlen($host) > 253) {
             return false;
         }
         $labels = explode('.', $host);
         foreach ($labels as $label) {
-            if (preg_match(self::LABEL, $label) !== 1) {
+            if (preg_match(self::LABEL, $label) !== 1 || self::isNumberLabel($label, false)) {
                 return false;
             }
         }
 
-        return preg_match('/^[0-9]+$/D', $labels[count($labels) - 1]) !== 1;
+        return !self::isNumberLabel($labels[count($labels) - 1], true);
+    }
+
+    /**
+     * Zahlform eines Labels: Hex mit `0x`-Präfix und Oktal (führende Null) immer; reine Dezimalzahl nur, wenn
+     * `$decimal` (für das letzte Label).
+     */
+    private static function isNumberLabel(string $label, bool $decimal): bool
+    {
+        return preg_match('/^0x[0-9a-f]*$/D', $label) === 1
+            || preg_match('/^0[0-9]+$/D', $label) === 1
+            || ($decimal && preg_match('/^[0-9]+$/D', $label) === 1);
     }
 
     /** Namen, die nie ein Ziel sein dürfen (Loopback, Metadaten-Dienste), unabhängig von DNS. */
-    public static function isBlockedHostname(string $host): bool
+    public static function isBlockedHostname(#[\SensitiveParameter] string $host): bool
     {
         return in_array($host, self::BLOCKED_NAMES, true) || str_ends_with($host, '.localhost');
     }
@@ -115,7 +131,7 @@ final class UrlPolicy
     /**
      * @return array{0: string, 1: bool, 2: string|null} Host, ist IP-Literal, Port-Text
      */
-    private function splitAuthority(string $authority): array
+    private function splitAuthority(#[\SensitiveParameter] string $authority): array
     {
         if ($authority[0] === '[') {
             if (preg_match('/^\[([^\[\]]*)\](?::(.*))?$/sD', $authority, $m) !== 1) {

@@ -41,11 +41,11 @@ final class UiController
     {
         $kernel->get('ui_root', '/', fn (): Response => new RedirectResponse('/app/', 302));
         $kernel->get('ui_app', '/app', fn (): Response => new RedirectResponse('/app/', 302));
-        $kernel->get('ui_index', '/app/', fn (Request $request): Response => $this->serve($request, 'index.html'));
-        $kernel->get('ui_file', '/app/{path}', fn (Request $request): Response => $this->serve($request, self::pathOf($request)), requirements: ['path' => '.+']);
+        $kernel->get('ui_index', '/app/', fn (#[\SensitiveParameter] Request $request): Response => $this->serve($request, 'index.html'));
+        $kernel->get('ui_file', '/app/{path}', fn (#[\SensitiveParameter] Request $request): Response => $this->serve($request, self::pathOf($request)), requirements: ['path' => '.+']);
     }
 
-    private static function pathOf(Request $request): string
+    private static function pathOf(#[\SensitiveParameter] Request $request): string
     {
         return self::textOrEmpty($request->attributes->get('path'));
     }
@@ -55,7 +55,7 @@ final class UiController
         return is_string($value) ? $value : '';
     }
 
-    private function serve(Request $request, string $path): Response
+    private function serve(#[\SensitiveParameter] Request $request, string $path): Response
     {
         if ($this->root === '') {
             return new JsonResponse(['error' => 'Die Oberfläche ist nicht gebaut. Docker: die compose.yaml auf den aktuellen Stand bringen (das Dockerfile steht darin) und neu bauen. Lokal: im Ordner frontend/ „npm ci && npm run build“ ausführen und MERIDIAN_UI_DIR=frontend/dist setzen.'], 404);

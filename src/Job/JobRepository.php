@@ -107,7 +107,7 @@ final class JobRepository
     /**
      * Legt einen Job an (ohne Termin: `next_run_at` NULL, Planner::reschedule() folgt nach dem Commit).
      */
-    public function insert(JobDraft $draft, int $ownerId): int
+    public function insert(#[\SensitiveParameter] JobDraft $draft, int $ownerId): int
     {
         if ($draft->payload === null) {
             throw new \LogicException('Ein neuer Job braucht eine Anfrage.');
@@ -145,7 +145,7 @@ final class JobRepository
      * `next_run_at` auf NULL (Zeitplan oder Aktivierung geändert); den neuen Termin berechnet danach
      * `Planner::reschedule()`.
      */
-    public function update(int $id, JobDraft $draft, bool $resetSchedule): void
+    public function update(int $id, #[\SensitiveParameter] JobDraft $draft, bool $resetSchedule): void
     {
         $this->db->execute(
             'UPDATE jobs SET name = :name, category_id = :category, cron = :cron, timezone = :timezone, config_json = :config,

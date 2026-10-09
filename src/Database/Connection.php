@@ -151,7 +151,7 @@ final class Connection
      *
      * @return T
      */
-    public function immediate(callable $work): mixed
+    public function immediate(#[\SensitiveParameter] callable $work): mixed
     {
         $this->pdo->exec('BEGIN IMMEDIATE');
         try {
@@ -172,7 +172,7 @@ final class Connection
      *
      * @return T
      */
-    public function transaction(callable $work): mixed
+    public function transaction(#[\SensitiveParameter] callable $work): mixed
     {
         $this->pdo->beginTransaction();
         try {
