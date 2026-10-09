@@ -31,6 +31,8 @@ use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretBox;
 use Meridian\Security\SecretMasker;
 use Meridian\Settings\Settings;
+use Meridian\Settings\SettingsController;
+use Meridian\Settings\SettingsService;
 use Meridian\User\UserRepository;
 
 /**
@@ -83,6 +85,8 @@ final class AppFactory
         ))->register($kernel);
         // Freigaben interner Ziele (network.internal_targets, nur Admin).
         (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock), $masker))->register($kernel);
+        // Globale Einstellungen (settings.manage, nur Admin).
+        (new SettingsController($sessionAuth, $csrf, $users, $access, new SettingsService($db, $audit, $clock), $masker))->register($kernel);
 
         return $kernel;
     }

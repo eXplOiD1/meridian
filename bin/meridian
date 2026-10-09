@@ -14,6 +14,8 @@ use Meridian\Console\InternalTargetsCommand;
 use Meridian\Console\KeyGenerateCommand;
 use Meridian\Console\MigrateCommand;
 use Meridian\Console\SchedulerRunCommand;
+use Meridian\Console\SettingsGetCommand;
+use Meridian\Console\SettingsSetCommand;
 use Meridian\Console\UnlockCommand;
 use Meridian\Console\UserPasswordCommand;
 use Meridian\Console\UserCreateCommand;
@@ -41,6 +43,7 @@ use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretBox;
 use Meridian\Security\SecretMasker;
 use Meridian\Settings\Settings;
+use Meridian\Settings\SettingsService;
 use Meridian\User\PasswordReset;
 use Meridian\User\UserRepository;
 use Symfony\Component\Console\Application;
@@ -67,6 +70,9 @@ if (is_dir($config->dataDir)) {
     $app->add(new UnlockCommand($throttle, $audit));
     $app->add(new UserPasswordCommand(new PasswordReset($users, new PasswordHasher(), new SessionManager($db, new SystemClock()), $throttle, $audit)));
     $app->add(new InternalTargetsCommand(new InternalTargetStore($db, new SystemClock()), $audit));
+    $settingsService = new SettingsService($db, $audit, new SystemClock());
+    $app->add(new SettingsGetCommand($settingsService));
+    $app->add(new SettingsSetCommand($settingsService));
     // Scheduler: eine Besitzer-ID pro Prozess; Runner kommen mit Phase 3 (HTTP) und 4 (Shell). Den Masker
     // erzeugt der Worker je Lauf (H4); H1 prüft ausgelöste Läufe beim Übernehmen mit frischen Rechten.
     $clock = new SystemClock();

@@ -42,6 +42,28 @@ final readonly class HttpJobConfig
     ) {
     }
 
+    /**
+     * Dieselbe Konfiguration mit anderer Anzeige-URL. Nur für {@see \Meridian\Settings\SettingsService} beim
+     * Verschärfen auf `http.display_path = hidden`; der Text kommt dort aus {@see UrlDisplay::hideStored()}.
+     */
+    public function withDisplayUrl(string $displayUrl): self
+    {
+        return new self(
+            $this->method,
+            $this->timeoutSeconds,
+            $this->expectedStatus,
+            $this->maxRedirects,
+            $this->storeResponse,
+            $this->scheme,
+            $this->host,
+            $this->port,
+            $displayUrl,
+            $this->hasHeaders,
+            $this->headerCount,
+            $this->hasBody,
+        );
+    }
+
     /** Schema + Host (+ Port, wenn nicht Standard): das Ziel ohne jeden geheimen Teil. */
     public function target(): string
     {

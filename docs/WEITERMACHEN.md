@@ -9,10 +9,11 @@ Job-Repositories und -API (lesen und schreiben), manueller Lauf/Testlauf, HTTP-R
 Freigaben interner Zielen (API + CLI `http:internal-targets`), `category:create`, `ext-curl`, Job-Bildschirme.
 
 ## Offen (in dieser Reihenfolge)
-1. **S14 Einstellungs-API** (sicherheit): `GET /api/settings`, `PUT /api/settings/{key}`, CLI `settings:get|set`,
-   `http.display_path = hidden` verschärft bestehende `display_url`. **Angefangen, ungeprüft:** der Stand liegt als
-   `docs/wip/s14-einstellungs-api-unfertig.patch` (mit `git apply` einspielen). Zwei PHPStan-Funde waren offen;
-   danach Tests (Rollen-Matrix, CSRF, Audit, Roundtrip, Mutation), PHPStan/Psalm/Taint, committen.
+1. **S14 Einstellungs-API** (sicherheit): **erledigt** (09.10.2026). `GET /api/settings`, `PUT /api/settings/{key}`,
+   CLI `settings:get [key]` / `settings:set <key> <wert>|--reset`, Audit `settings.changed`; `http.display_path = hidden`
+   verschärft bestehende `display_url` in derselben Transaktion, zurück auf `auto` lockert nichts. Tests (lokal, gitignored):
+   `tests/Unit/Settings/SettingsApiTest.php`, `tests/Unit/Console/SettingsCommandTest.php`,
+   `tests/Unit/Runner/Http/UrlDisplayHideStoredTest.php`. Der WIP-Patch ist entfernt.
 2. **S11 Leak- und SSRF-Gesamtsuite** (tester): Ende-zu-Ende über API → Scheduler → HttpRunner → Verlauf/Audit/Ausgabe.
    Nur lokal (`tests/Integration/Phase3/`, gitignored), war noch nicht fertig (Hilfsmethode `LeakServer::url()` fehlte).
 3. **U5 Einstellungsseite** (frontend): HTTP-Grenzwerte (Zeitlimit-Maximum, Antwort speichern, Anzeige-Pfad) und Freigaben

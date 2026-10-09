@@ -24,6 +24,8 @@ final class Settings
     public const MIN_TIMEOUT_SECONDS = 1;
     public const MAX_TIMEOUT_SECONDS = 3600;
 
+    private const ENTRIES = 'SELECT s.key, s.value_json, s.updated_at, u.display_name FROM settings s LEFT JOIN users u ON u.id = s.updated_by';
+
     public function __construct(
         private readonly Connection $db,
         private readonly Clock $clock = new SystemClock(),
@@ -93,11 +95,12 @@ final class Settings
 
     /**
      * Setzt eine Einstellung; `null` setzt sie auf den Standard zurück (Zeile löschen). Die Rechteprüfung
-     * (`settings.manage`) und den Audit-Eintrag macht der Aufrufer.
+     * (`settings.manage`) und den Audit-Eintrag macht der Aufrufer ({@see SettingsService}). `$userId` ist `null`
+     * an der Befehlszeile.
      *
      * @throws InvalidSetting
      */
-    public function set(SettingKey $key, mixed $value, int $userId): void
+    public function set(SettingKey $key, mixed $value, ?int $userId): void
     {
         if ($value === null) {
             $this->db->execute('DELETE FROM settings WHERE key = :key', ['key' => $key->value]);
@@ -118,6 +121,56 @@ final class Settings
         );
     }
 
+    /**
+     * Alle Schlüssel der Allowlist mit gültigem Wert, Standard und Herkunft, auch ohne Zeile (Admin-Ansicht).
+     *
+     * @return list<SettingEntry>
+     */
+    public function entries(): array
+    {
+        $rows = [];
+        foreach ($this->db->fetchAll(self::ENTRIES) as $row) {
+            $name = self::text($row, 'key');
+            $key = $name === null ? null : SettingKey::tryFrom($name);
+            if ($key !== null) {
+                $rows[$key->value] = $row;
+            }
+        }
+
+        $entries = [];
+        foreach (SettingKey::cases() as $key) {
+            $row = $rows[$key->value] ?? null;
+            $value = $row === null ? null : $this->decode($key, $row['value_json'] ?? null);
+            if ($row === null || $value === null) {
+                $entries[] = new SettingEntry($key, $key->default(), false, null, null);
+                continue;
+            }
+            $entries[] = new SettingEntry($key, $value, true, self::text($row, 'updated_at'), self::text($row, 'display_name'));
+        }
+
+        return $entries;
+    }
+
+    public function entry(SettingKey $key): SettingEntry
+    {
+        foreach ($this->entries() as $entry) {
+            if ($entry->key === $key) {
+                return $entry;
+            }
+        }
+
+        // Unerreichbar: entries() liefert jeden Schlüssel der Allowlist.
+        return new SettingEntry($key, $key->default(), false, null, null);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private static function text(array $row, string $column): ?string
+    {
+        return isset($row[$column]) && is_string($row[$column]) ? $row[$column] : null;
+    }
+
     private function read(SettingKey $key): int|string
     {
         $row = $this->db->fetchOne('SELECT value_json FROM settings WHERE key = :key', ['key' => $key->value]);
@@ -125,7 +178,15 @@ final class Settings
             return $key->default();
         }
 
-        $json = $row['value_json'] ?? null;
+        return $this->decode($key, $row['value_json'] ?? null) ?? $key->default();
+    }
+
+    /**
+     * Gespeicherten Wert streng prüfen; ungültig → `null` (der Aufrufer nimmt den Standard) und ein Fehlerlog, das
+     * nur den Schlüssel nennt, nie den Wert.
+     */
+    private function decode(SettingKey $key, mixed $json): int|string|null
+    {
         try {
             if (!is_string($json)) {
                 throw new InvalidSetting('Wert fehlt.');
@@ -136,7 +197,7 @@ final class Settings
             // Nur der Schlüssel ins Log, nie der Wert; es gilt der Standard.
             error_log((new SecretMasker())->mask('Meridian: Die Einstellung ' . $key->value . ' ist in der Datenbank ungültig, der Standardwert gilt. Wert im Admin-Bereich neu setzen.'));
 
-            return $key->default();
+            return null;
         }
     }
 }
