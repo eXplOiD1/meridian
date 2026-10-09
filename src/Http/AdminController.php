@@ -79,10 +79,11 @@ final class AdminController
         if ($session === null) {
             return self::error(401, 'Nicht angemeldet.');
         }
-        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageUsers);
+        // Reihenfolge wie überall (mer-security §1): CSRF/Herkunft vor dem Recht.
         if (!$this->csrf->check($request, $session->token)) {
             return self::error(403, 'CSRF-Prüfung fehlgeschlagen.');
         }
+        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageUsers);
 
         $target = $this->unlockTarget($request);
         if ($target === null) {

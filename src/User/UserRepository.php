@@ -6,12 +6,44 @@ namespace Meridian\User;
 
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
+use Meridian\Job\Row;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\Permission;
 use Meridian\Security\RoleGrant;
 
 final class UserRepository
 {
+    private const EFFECTIVE_GRANTS_SQL = 'SELECT ur.id AS user_role_id, ur.all_categories, r.name AS role, rp.permission
+               FROM user_roles ur
+               JOIN roles r ON r.id = ur.role_id
+               JOIN role_permissions rp ON rp.role_id = r.id
+               JOIN users u ON u.id = ur.user_id
+              WHERE ur.user_id = :id AND u.is_active = 1 AND u.deleted_at IS NULL AND u.password_must_change = 0';
+
+    private const ASSIGNED_GRANTS_SQL = 'SELECT ur.id AS user_role_id, ur.all_categories, r.name AS role, rp.permission
+               FROM user_roles ur
+               JOIN roles r ON r.id = ur.role_id
+               JOIN role_permissions rp ON rp.role_id = r.id
+              WHERE ur.user_id = :id';
+
+    private const SUMMARY_SQL = 'SELECT u.id, u.username, u.display_name, u.is_active, u.deleted_at, u.totp_enabled, u.password_must_change, u.last_login_at, u.created_at
+       FROM users u
+      WHERE (:id IS NULL OR u.id = :id)
+        AND (:status IS NULL OR CASE WHEN u.deleted_at IS NOT NULL THEN \'deleted\' WHEN u.is_active = 1 THEN \'active\' ELSE \'inactive\' END = :status)
+      ORDER BY u.username COLLATE NOCASE, u.id';
+
+    private const ASSIGNMENT_ROWS_SQL = 'SELECT ur.id AS user_role_id, ur.user_id, ur.all_categories, r.id AS role_id, r.name AS role
+       FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+      WHERE (:id IS NULL OR ur.user_id = :id)
+      ORDER BY ur.user_id, r.id';
+
+    private const ASSIGNMENT_CATEGORY_ROWS_SQL = 'SELECT urc.user_role_id, c.id AS category_id, c.name
+       FROM user_role_categories urc
+       JOIN user_roles ur ON ur.id = urc.user_role_id
+       JOIN categories c ON c.id = urc.category_id
+      WHERE (:id IS NULL OR ur.user_id = :id)
+      ORDER BY c.name COLLATE NOCASE, c.id';
+
     public function __construct(
         private readonly Connection $db,
         private readonly PasswordHasher $hasher,
@@ -107,6 +139,68 @@ final class UserRepository
     }
 
     /**
+     * Liste für die Verwaltung (alle Zustände, nach Benutzername), optional auf einen Zustand begrenzt.
+     * Liest nie Hash, Secret oder Codes.
+     *
+     * @return list<UserSummary>
+     */
+    public function summaries(?UserStatus $status = null): array
+    {
+        return $this->loadSummaries(null, $status);
+    }
+
+    /** Ein Benutzer für die Verwaltung, in jedem Zustand (auch gelöscht); null, wenn es die ID nicht gibt. */
+    public function summary(int $id): ?UserSummary
+    {
+        return $this->loadSummaries($id, null)[0] ?? null;
+    }
+
+    /**
+     * @return list<UserSummary>
+     */
+    private function loadSummaries(?int $id, ?UserStatus $status): array
+    {
+        $roleRows = [];
+        foreach ($this->db->fetchAll(self::ASSIGNMENT_ROWS_SQL, ['id' => $id]) as $row) {
+            $roleRows[Row::int($row, 'user_id')][] = $row;
+        }
+        $categoryRows = [];
+        foreach ($this->db->fetchAll(self::ASSIGNMENT_CATEGORY_ROWS_SQL, ['id' => $id]) as $row) {
+            $categoryRows[Row::int($row, 'user_role_id')][Row::int($row, 'category_id')] = Row::string($row, 'name');
+        }
+
+        $summaries = [];
+        foreach ($this->db->fetchAll(self::SUMMARY_SQL, ['id' => $id, 'status' => $status?->value]) as $row) {
+            $userId = Row::int($row, 'id');
+            $assignments = [];
+            foreach ($roleRows[$userId] ?? [] as $roleRow) {
+                $categories = $categoryRows[Row::int($roleRow, 'user_role_id')] ?? [];
+                $assignments[] = new AssignmentView(
+                    Row::int($roleRow, 'role_id'),
+                    Row::string($roleRow, 'role'),
+                    // Dieselbe Lesart wie grantsFor(): „alle“ nur mit Flag und ohne Kategoriezeilen.
+                    Row::bool($roleRow, 'all_categories') && $categories === [],
+                    $categories,
+                );
+            }
+            $summaries[] = new UserSummary(
+                $userId,
+                Row::string($row, 'username'),
+                Row::string($row, 'display_name'),
+                Row::stringOrNull($row, 'deleted_at') !== null ? UserStatus::Deleted : (Row::bool($row, 'is_active') ? UserStatus::Active : UserStatus::Inactive),
+                Row::bool($row, 'totp_enabled'),
+                // Unbekannter Wert ≠ 0: im Zweifel Pflichtwechsel (wie bei account()).
+                Row::int($row, 'password_must_change') !== 0,
+                Row::stringOrNull($row, 'last_login_at'),
+                Row::string($row, 'created_at'),
+                $assignments,
+            );
+        }
+
+        return $summaries;
+    }
+
+    /**
      * Lädt die Rollen eines Benutzers inklusive Kategorie-Beschränkung. Die einzige Quelle für Rechte.
      *
      * Fail-closed: inaktive, gelöschte Benutzer und Benutzer mit offenem Pflicht-Passwortwechsel haben keine Rechte
@@ -116,16 +210,29 @@ final class UserRepository
      */
     public function grantsFor(int $userId): array
     {
-        $rows = $this->db->fetchAll(
-            'SELECT ur.id AS user_role_id, ur.all_categories, r.name AS role, rp.permission
-               FROM user_roles ur
-               JOIN roles r ON r.id = ur.role_id
-               JOIN role_permissions rp ON rp.role_id = r.id
-               JOIN users u ON u.id = ur.user_id
-              WHERE ur.user_id = :id AND u.is_active = 1 AND u.deleted_at IS NULL AND u.password_must_change = 0',
-            ['id' => $userId],
-        );
+        return $this->buildGrants($this->db->fetchAll(self::EFFECTIVE_GRANTS_SQL, ['id' => $userId]));
+    }
 
+    /**
+     * Die **zugewiesenen** Rechte eines Benutzers, unabhängig von seinem Zustand (auch inaktiv, mit offenem
+     * Pflichtwechsel). Nur für Vergleiche der Verwaltung (`GrantPolicy::mayManage()`): ein Benutzer mit
+     * Einmalpasswort oder deaktiviert hat zurzeit keine wirksamen Rechte, die Zuweisung bleibt aber das, was ein
+     * Verwalter selbst besitzen muss, um ihn zu verwalten. Nie für eine Rechteprüfung einer Anfrage benutzen.
+     *
+     * @return list<RoleGrant>
+     */
+    public function assignedGrantsFor(int $userId): array
+    {
+        return $this->buildGrants($this->db->fetchAll(self::ASSIGNED_GRANTS_SQL, ['id' => $userId]));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<RoleGrant>
+     */
+    private function buildGrants(array $rows): array
+    {
         /** @var array<int, array{role: string, all: bool, permissions: list<Permission>}> $byGrant */
         $byGrant = [];
         foreach ($rows as $row) {
