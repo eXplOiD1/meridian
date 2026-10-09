@@ -276,3 +276,11 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .rundetail__head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .rundetail__note { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .runout { margin: 0; background: var(--tafel-tief); color: var(--text-auf-tafel); border-radius: var(--radius); padding: 14px 16px; font-family: var(--schrift-mono); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
+
+/* --- Einstellungen ----------------------------------------------------------------------------- */
+.settings { display: flex; flex-direction: column; gap: 20px; max-width: 920px; }
+.setting { display: flex; flex-direction: column; gap: 14px; padding-top: 18px; border-top: 1px solid var(--linie); }
+.setting__head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.setting h3, .targets__form h3 { font-size: 22px; }
+.targets__form { padding-top: 18px; border-top: 1px solid var(--linie); }
+.table .mono, .mono { font-family: var(--schrift-mono); font-size: 12.5px; overflow-wrap: anywhere; }

@@ -11,6 +11,7 @@ import { JobEdit } from './screens/JobEdit';
 import { Jobs } from './screens/Jobs';
 import { Login } from './screens/Login';
 import { Overview } from './screens/Overview';
+import { Settings } from './screens/Settings';
 import type { Profile } from './types';
 
 type Session = { status: 'loading' } | { status: 'anonymous' } | { status: 'failed'; message: string } | { status: 'in'; profile: Profile };
@@ -18,6 +19,7 @@ type Session = { status: 'loading' } | { status: 'anonymous' } | { status: 'fail
 const HEADINGS: Record<Route['name'], { kicker: string; title: string }> = {
   home: { kicker: 'Alles auf einen Blick', title: 'Übersicht' },
   audit: { kicker: 'Wer hat wann was getan', title: 'Audit-Log' },
+  settings: { kicker: 'Betrieb und Schutz', title: 'Einstellungen' },
   konto: { kicker: 'Anmeldung und Sicherheit', title: 'Mein Konto' },
   jobs: { kicker: 'Zeitgesteuerte Aufgaben', title: 'Jobs' },
   'job-new': { kicker: 'Jobs', title: 'Neuer Job' },
@@ -96,6 +98,7 @@ export function App() {
     <Layout profile={profile} route={effective} kicker={heading.kicker} title={heading.title} onLogout={() => void logout(profile)}>
       {effective.name === 'home' && <Overview profile={profile} />}
       {effective.name === 'konto' && <Account profile={profile} onChanged={refresh} />}
+      {effective.name === 'settings' && <Settings profile={profile} />}
       {effective.name === 'audit' && <Audit profile={profile} />}
       {effective.name === 'jobs' && <Jobs profile={profile} />}
       {effective.name === 'job' && <JobDetail key={effective.id} profile={profile} id={effective.id} />}

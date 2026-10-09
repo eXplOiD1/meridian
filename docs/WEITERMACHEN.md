@@ -4,7 +4,7 @@ Branch `claude/great-clarke-ubr0vc`. Phase 1 und 2 sind abgeschlossen (Review in
 Phase 3 (HTTP-Jobs) ist zum großen Teil fertig. Normativ: `docs/decisions/0003-phase3-http-jobs.md`, Aufgabenliste: `TODO.md`.
 
 ## Fertig in Phase 3
-S1–S10, S12, S13 und U1–U4: Rechte und Migration 0007, Kernel (PUT/DELETE, 422), URL-/Payload-/SSRF-Bausteine,
+S1–S10, S12–S14 und U1–U5: Rechte und Migration 0007, Kernel (PUT/DELETE, 422), URL-/Payload-/SSRF-Bausteine,
 Job-Repositories und -API (lesen und schreiben), manueller Lauf/Testlauf, HTTP-Runner mit Schutz vor internen Zielen,
 Freigaben interner Zielen (API + CLI `http:internal-targets`), `category:create`, `ext-curl`, Job-Bildschirme.
 
@@ -16,8 +16,8 @@ Freigaben interner Zielen (API + CLI `http:internal-targets`), `category:create`
    `tests/Unit/Runner/Http/UrlDisplayHideStoredTest.php`. Der WIP-Patch ist entfernt.
 2. **S11 Leak- und SSRF-Gesamtsuite** (tester): Ende-zu-Ende über API → Scheduler → HttpRunner → Verlauf/Audit/Ausgabe.
    Nur lokal (`tests/Integration/Phase3/`, gitignored), war noch nicht fertig (Hilfsmethode `LeakServer::url()` fehlte).
-3. **U5 Einstellungsseite** (frontend): HTTP-Grenzwerte (Zeitlimit-Maximum, Antwort speichern, Anzeige-Pfad) und Freigaben
-   interner Ziele; Menüpunkt „Einstellungen“ nur mit Recht `settings.manage`. Braucht S14 und die API aus S10.
+3. **U5 Einstellungsseite** (frontend): **erledigt** (09.10.2026). `#/einstellungen`, `frontend/src/screens/Settings.tsx`: drei HTTP-Einstellungen
+   mit Standard/Quelle/Zurücksetzen, Freigaben interner Ziele (Liste, Anlegen, Entfernen mit Rückfrage). Im Chromium geprüft (Admin, Operator, Beobachter, 375 px).
 4. **Regeländerungen aus ADR §10** in `CLAUDE.md` und Skills: Ausnahme `display_url` und Einstellungs-/Freigabe-Regeln
    sind lokal eingetragen; Rest prüfen (mer-ui, mer-runner, Hook-Muster). Dateien liegen nur lokal (gitignored).
 5. **Review Phase 3** (sicherheit), inkl. Ausnahme `display_url`. Danach `TODO.md` abhaken.

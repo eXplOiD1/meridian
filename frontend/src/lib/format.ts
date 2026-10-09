@@ -11,6 +11,9 @@ const ACTIONS: Record<string, { label: string; tone: 'ok' | 'warn' | 'err' | 'in
   'auth.2fa_enable_failed': { label: '2FA-Aktivierung fehlgeschlagen', tone: 'err' },
   'auth.2fa_disable_failed': { label: '2FA-Abschaltung fehlgeschlagen', tone: 'err' },
   'auth.recovery_code_used': { label: 'Wiederherstellungscode benutzt', tone: 'warn' },
+  'settings.changed': { label: 'Einstellung geändert', tone: 'warn' },
+  'network.internal_target_added': { label: 'Interne Freigabe angelegt', tone: 'warn' },
+  'network.internal_target_removed': { label: 'Interne Freigabe entfernt', tone: 'info' },
   'user.created': { label: 'Benutzer angelegt', tone: 'info' },
 };
 
