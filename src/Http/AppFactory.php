@@ -12,6 +12,8 @@ use Meridian\Auth\LoginThrottle;
 use Meridian\Auth\SessionManager;
 use Meridian\Auth\SystemClock;
 use Meridian\Auth\TwoFactor;
+use Meridian\Category\CategoryController;
+use Meridian\Category\CategoryService;
 use Meridian\Config;
 use Meridian\Database\Connection;
 use Meridian\Job\CategoryRepository;
@@ -89,6 +91,8 @@ final class AppFactory
         ))->register($kernel);
         // Freigaben interner Ziele (network.internal_targets, nur Admin).
         (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock, $infrastructure), $masker))->register($kernel);
+        // Kategorien-Verwaltung (categories.manage, nur Admin).
+        (new CategoryController($sessionAuth, $csrf, $users, $access, new CategoryService($db, $audit, $clock), $masker))->register($kernel);
         // Globale Einstellungen (settings.manage, nur Admin).
         (new SettingsController($sessionAuth, $csrf, $users, $access, new SettingsService($db, $audit, $clock), $masker))->register($kernel);
 
