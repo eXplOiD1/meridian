@@ -102,7 +102,10 @@ final class HttpRunner implements Runner
             return RunResult::failed('', self::NOTE_BODY_FOR_GET, retryable: false);
         }
 
-        return $this->hops($spec, $payload, $job->categoryId, $timeout, $store, $notes, $heartbeat, $masker);
+        // http.display_host = hidden: auch die Laufausgabe nennt keinen Host (frisch je Lauf gelesen).
+        $hideHost = $this->settings->hidesHost();
+
+        return $this->hops($spec, $payload, $job->categoryId, $timeout, $store, $notes, $heartbeat, $masker, $hideHost);
     }
 
     /**
@@ -124,7 +127,7 @@ final class HttpRunner implements Runner
     /**
      * @param list<string> $notes
      */
-    private function hops(HttpJobConfig $spec, #[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat, SecretMasker $masker): RunResult
+    private function hops(HttpJobConfig $spec, #[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat, SecretMasker $masker, bool $hideHost): RunResult
     {
         $deadline = (int) hrtime(true) + $timeout * 1_000_000_000;
         $url = $payload->url();
@@ -154,7 +157,7 @@ final class HttpRunner implements Runner
                 return RunResult::failed('', self::NOTE_ABORTED);
             }
 
-            $lines[] = '→ ' . $method . ' ' . $url->origin();
+            $lines[] = '→ ' . $method . ' ' . ($hideHost ? UrlDisplay::hiddenOrigin($url->origin()) : $url->origin());
             $response = $this->transport->send(new TransportRequest($method, $pinned, $headers, $body, $remainingMs), $heartbeat);
 
             if ($response->error !== null) {

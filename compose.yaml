@@ -123,6 +123,7 @@ services:
       # MERIDIAN_ENV bleibt prod; dev ist nur für die Entwicklung (kein HSTS, ausführlichere Fehlerhinweise).
       MERIDIAN_ENV: ${MERIDIAN_ENV:-prod}
       # IP des Reverse-Proxys, damit Sperre und Audit die echte Client-IP sehen, z. B. 172.19.0.0/16.
+      # Pflicht hinter einem Proxy: Anmeldungen mit X-Forwarded-For/Forwarded ohne diese Angabe werden abgelehnt.
       MERIDIAN_TRUSTED_PROXIES: ${MERIDIAN_TRUSTED_PROXIES:-}
     ports:
       - "${MERIDIAN_PORT:-8090}:8080"

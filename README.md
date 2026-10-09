@@ -104,10 +104,26 @@ Die Sitzung liegt in einem `HttpOnly`-, `SameSite=Strict`-Cookie. Über HTTPS zu
 `__Host-meridian_session`. Die Anmeldung funktioniert auch über reines HTTP (z. B. `http://nas:8090` im Heimnetz); dann
 verzichtet Meridian auf `Secure`, und die Oberfläche zeigt eine Warnung: Passwort und Sitzung sind im Netz mitlesbar.
 Außerhalb eines vertrauenswürdigen Heimnetzes Meridian hinter einem HTTPS-Proxy betreiben.
-Nach 5 Fehlversuchen pro Benutzername (20 pro IP) wird gesperrt, die Sperre wächst bis 15 Minuten.
-Läuft Meridian hinter einem Proxy, dessen IP oder Netz in `MERIDIAN_TRUSTED_PROXIES` eintragen; sonst zählt die
-Sperre alle Clients als eine IP (im Log steht dann eine Warnung). Wer sich selbst ausgesperrt hat, hebt die Sperre an der
-Befehlszeile auf: `docker compose exec web php bin/meridian auth:unlock <benutzername-oder-ip>`.
+Nach 5 Fehlversuchen pro Benutzername (50 pro IP) wird gesperrt, die Sperre wächst bis 15 Minuten.
+
+**Hinter einem Reverse-Proxy** (z. B. Nginx Proxy Manager) dessen IP oder Netz in `MERIDIAN_TRUSTED_PROXIES` eintragen,
+z. B. `MERIDIAN_TRUSTED_PROXIES=172.19.0.0/16`, und Meridian neu starten. Kommt eine Anmeldung mit einem Header
+`X-Forwarded-For` oder `Forwarded` an, ohne dass `MERIDIAN_TRUSTED_PROXIES` gesetzt ist, lehnt Meridian sie ab
+(HTTP 503 mit Hinweis): Sonst sähe die Sperre nach Fehlversuchen nur die IP des Proxys, und alle Clients würden
+gemeinsam gesperrt. `X-Forwarded-For` gilt nur, wenn die Verbindung von einem eingetragenen Proxy kommt; ein
+gefälschter Header ändert die gezählte IP nie. Meridian dann nur über den Proxy erreichbar machen.
+Wer sich selbst ausgesperrt hat, hebt die Sperre an der Befehlszeile auf:
+`docker compose exec web php bin/meridian auth:unlock <benutzername-oder-ip>`.
+
+**Nie erreichbare Ziele für HTTP-Jobs**, auch nicht per Freigabe: der docker-socket-proxy (Name `docker-proxy`, weitere
+Namen über `MERIDIAN_DOCKER_PROXY_HOSTS`, kommagetrennt; Docker-API-Ports 2375/2376 auf internen Adressen) und
+Meridians eigener Port auf Loopback und den eigenen Adressen (`MERIDIAN_LISTEN_PORT`, Standard 8080, wie FrankenPHP
+`:8080`). Lauscht Meridian auf einem anderen Port (z. B. systemd mit `--listen :9000`), `MERIDIAN_LISTEN_PORT`
+entsprechend für Web **und** Scheduler setzen.
+
+**Anzeige der Ziel-URL:** Standard ist `http.display_path = hidden` (Pfad und Query als `••••`); bestehende Jobs werden
+beim nächsten `migrate` verschärft. Mit `http.display_host = hidden` verbirgt die API auch Host und Port
+(`settings:set http.display_host hidden`). Zurückstellen lockert gespeicherte Anzeigen nie.
 
 ## Oberfläche
 

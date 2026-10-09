@@ -58,17 +58,18 @@ final class AuthController
             return self::error(403, 'Ungültige Herkunft der Anfrage.');
         }
 
+        // Proxy-Header ohne MERIDIAN_TRUSTED_PROXIES: ablehnen, bevor ein Passwort geprüft wird (Variante A).
+        $ip = ClientIp::forThrottle($request, $this->config);
+        if ($ip instanceof Response) {
+            return $ip;
+        }
+
         $credentials = $this->credentials($request);
         if ($credentials === null) {
             return self::error(400, 'Ungültige Anfrage: JSON mit username und password erwartet.');
         }
 
-        if ($request->headers->has('X-Forwarded-For') && $this->config->trustedProxies === []) {
-            // Sonst zählt die Sperre alle Clients als eine IP (die des Proxys) und sperrt im Zweifel alle gemeinsam.
-            error_log('Meridian: Die Anfrage kommt über einen Proxy (X-Forwarded-For), aber MERIDIAN_TRUSTED_PROXIES ist nicht gesetzt. Die Sperre nach Fehlversuchen sieht nur die IP des Proxys.');
-        }
-
-        $result = $this->auth->login($credentials['username'], $credentials['password'], $request->getClientIp() ?? 'unbekannt', $credentials['totp_code']);
+        $result = $this->auth->login($credentials['username'], $credentials['password'], $ip, $credentials['totp_code']);
         if ($result->status === LoginStatus::Locked) {
             $response = self::error(429, 'Zu viele Fehlversuche. Bitte später erneut versuchen.');
             $response->headers->set('Retry-After', (string) $result->retryAfter);
@@ -142,7 +143,10 @@ final class AuthController
             return $user;
         }
 
-        $ip = $request->getClientIp() ?? 'unbekannt';
+        $ip = ClientIp::forThrottle($request, $this->config);
+        if ($ip instanceof Response) {
+            return $ip;
+        }
         $data = $this->body($request);
         if ($data === null || !isset($data['code'], $data['password']) || !is_string($data['code']) || !is_string($data['password']) || strlen($data['code']) > self::MAX_CODE) {
             return self::error(400, 'Ungültige Anfrage: JSON mit password und code erwartet.');
@@ -167,7 +171,10 @@ final class AuthController
             return $user;
         }
 
-        $ip = $request->getClientIp() ?? 'unbekannt';
+        $ip = ClientIp::forThrottle($request, $this->config);
+        if ($ip instanceof Response) {
+            return $ip;
+        }
         $data = $this->body($request);
         if ($data === null || !isset($data['password'], $data['code']) || !is_string($data['password']) || !is_string($data['code']) || strlen($data['code']) > self::MAX_CODE) {
             return self::error(400, 'Ungültige Anfrage: JSON mit password und code erwartet.');

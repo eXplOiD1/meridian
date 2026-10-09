@@ -91,7 +91,7 @@ final class JobController
 
         return $job === null
             ? JsonReply::error(404, 'Job nicht gefunden.')
-            : JsonReply::json(['job' => $this->presenter->detail($job, $grants)], 201);
+            : JsonReply::json(['job' => $this->presenter->detail($job, $grants, $this->settings->httpDisplay())], 201);
     }
 
     public function update(#[\SensitiveParameter] Request $request): Response
@@ -106,7 +106,7 @@ final class JobController
 
         return $job === null
             ? JsonReply::error(404, 'Job nicht gefunden.')
-            : JsonReply::json(['job' => $this->presenter->detail($job, $grants)]);
+            : JsonReply::json(['job' => $this->presenter->detail($job, $grants, $this->settings->httpDisplay())]);
     }
 
     public function delete(#[\SensitiveParameter] Request $request): Response
@@ -158,7 +158,7 @@ final class JobController
 
         return $job === null
             ? JsonReply::error(404, 'Job nicht gefunden.')
-            : JsonReply::json(['job' => $this->presenter->detail($job, $grants)]);
+            : JsonReply::json(['job' => $this->presenter->detail($job, $grants, $this->settings->httpDisplay())]);
     }
 
     public function list(#[\SensitiveParameter] Request $request): Response
@@ -212,8 +212,9 @@ final class JobController
         // Typ, Kategorie und „nur aktive“ sind Anfragen innerhalb des Bereichs, nie eine Berechtigung.
         $listing = $this->jobs->list($scope, $type, $category, $enabledOnly, $sort);
         $out = [];
+        $display = $this->settings->httpDisplay();
         foreach ($listing->jobs as $job) {
-            $out[] = $this->presenter->summary($job, $grants);
+            $out[] = $this->presenter->summary($job, $grants, $display);
         }
 
         return JsonReply::json(['jobs' => $out, 'truncated' => $listing->truncated]);
@@ -232,7 +233,7 @@ final class JobController
         }
         $this->access->require($grants, Permission::ViewJobs, $job->categoryName);
 
-        return JsonReply::json(['job' => $this->presenter->detail($job, $grants)]);
+        return JsonReply::json(['job' => $this->presenter->detail($job, $grants, $this->settings->httpDisplay())]);
     }
 
     public function history(#[\SensitiveParameter] Request $request): Response
@@ -283,8 +284,9 @@ final class JobController
         $more = count($records) > $limit;
         $page = array_slice($records, 0, $limit);
         $out = [];
+        $display = $this->settings->httpDisplay();
         foreach ($page as $run) {
-            $out[] = $this->presenter->run($run, false);
+            $out[] = $this->presenter->run($run, false, $display);
         }
 
         return JsonReply::json([
@@ -307,7 +309,7 @@ final class JobController
         // Ein Lauf erbt die Kategorie seines Jobs.
         $this->access->require($grants, Permission::ViewJobs, $run->categoryName);
 
-        return JsonReply::json(['run' => $this->presenter->run($run, true)]);
+        return JsonReply::json(['run' => $this->presenter->run($run, true, $this->settings->httpDisplay())]);
     }
 
     public function preview(#[\SensitiveParameter] Request $request): Response

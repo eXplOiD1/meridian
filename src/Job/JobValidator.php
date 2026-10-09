@@ -490,7 +490,7 @@ final class JobValidator
             if ($reason !== null) {
                 $errors['request.url'] = $reason->isReleasable()
                     ? 'Ziel gesperrt: Die Adresse liegt in einem internen oder reservierten Netz. Ein Admin kann interne Ziele freigeben (global oder für die Kategorie des Jobs).'
-                    : 'Ziel gesperrt: Die Adresse liegt in einem Netz, das nie freigegeben werden kann (z. B. Link-local, Metadaten-Dienst, Multicast oder reserviert).';
+                    : 'Ziel gesperrt: Die Adresse liegt in einem Netz, das nie freigegeben werden kann (z. B. Link-local, Metadaten-Dienst, Multicast, reserviert oder Meridians eigene Infrastruktur: Docker-Proxy, Docker-API-Ports 2375/2376, eigener Port).';
             }
         }
     }
@@ -512,7 +512,7 @@ final class JobValidator
             $url->host,
             $url->port,
             // Die einzige Stelle, die die Anzeige-URL bildet: beim Ersetzen der Anfrage, aus der geprüften URL.
-            UrlDisplay::fromParsed($url, $this->settings->displayPath()),
+            UrlDisplay::build($url, $this->settings->httpDisplay()),
             $payload->headerCount() > 0,
             $payload->headerCount(),
             $payload->hasBody(),

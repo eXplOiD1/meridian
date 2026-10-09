@@ -13,7 +13,9 @@ namespace Meridian\Runner\Http;
  * - `port` 0 = alle Ports; `categoryId` null = global, sonst nur für Jobs dieser Kategorie.
  *
  * Entsteht nur über create(): dieselbe Prüfung beim Anlegen und beim Laden aus der Datenbank. Nie freigebbare
- * Netze (Link-local/Metadaten, 0.0.0.0/8, Multicast, reserviert) kommen so nie in eine Freigabe.
+ * Netze (Link-local/Metadaten, 0.0.0.0/8, Multicast, reserviert) und die Docker-API-Ports 2375/2376 kommen so nie
+ * in eine Freigabe. Namen des Docker-Proxys und Meridians eigenen Listen-Port auf Loopback lehnt zusätzlich
+ * {@see \Meridian\Network\InternalTargetStore::validate()} ab; zur Laufzeit sperrt beides {@see AddressPolicy}.
  */
 final readonly class InternalTarget
 {
@@ -42,6 +44,10 @@ final readonly class InternalTarget
     {
         if ($port < 0 || $port > 65535) {
             throw new InvalidInternalTarget('port', 'Ungültiger Port. Erlaubt sind 1 bis 65535 oder 0 für alle Ports.');
+        }
+        if (in_array($port, InfrastructureTargets::DOCKER_PORTS, true)) {
+            // docs/decisions/0004, E11: auch beim Laden aus der DB (die Zeile wird dann ignoriert).
+            throw new InvalidInternalTarget('port', 'Docker-API-Ports sind nie freigebbar.');
         }
 
         if ($kind === self::KIND_HOST) {

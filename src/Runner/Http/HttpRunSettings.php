@@ -17,4 +17,7 @@ interface HttpRunSettings
     public function maxTimeoutSeconds(): int;
 
     public function responseStorage(): ResponseStorage;
+
+    /** `http.display_host = hidden`: die Laufausgabe zeigt statt des Ursprungs nur `https://••••`. */
+    public function hidesHost(): bool;
 }

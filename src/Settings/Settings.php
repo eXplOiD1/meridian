@@ -54,6 +54,19 @@ final class Settings
         return is_string($value) ? (DisplayPathMode::tryFrom($value) ?? DisplayPathMode::default()) : DisplayPathMode::default();
     }
 
+    public function displayHost(): DisplayHostMode
+    {
+        $value = $this->read(SettingKey::HttpDisplayHost);
+
+        return is_string($value) ? (DisplayHostMode::tryFrom($value) ?? DisplayHostMode::default()) : DisplayHostMode::default();
+    }
+
+    /** Beide Anzeige-Einstellungen eines HTTP-Jobs, einmal je Anfrage zu lesen. */
+    public function httpDisplay(): HttpDisplay
+    {
+        return new HttpDisplay($this->displayPath(), $this->displayHost());
+    }
+
     /**
      * Gültiger Wert der Einstellung (Zeile oder Standard), für die Admin-Ansicht.
      */
@@ -90,6 +103,13 @@ final class Settings
                 }
 
                 return $mode->value;
+            case SettingKey::HttpDisplayHost:
+                $host = is_string($value) ? DisplayHostMode::tryFrom($value) : null;
+                if ($host === null) {
+                    throw new InvalidSetting('Host in der URL-Anzeige: erlaubt sind „auto“ und „hidden“.');
+                }
+
+                return $host->value;
         }
     }
 
