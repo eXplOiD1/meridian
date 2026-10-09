@@ -2,7 +2,7 @@
 
 Agent = zuständiger Subagent aus `.claude/agents/`. Jede Phase endet mit einem Review durch `sicherheit`.
 
-> **Weitermachen:** siehe `docs/WEITERMACHEN.md` (Stand 07.10.2026, offene Schritte S14, S11, U5, Review Phase 3).
+> **Weitermachen:** siehe `docs/WEITERMACHEN.md` (Stand 09.10.2026, Phase 3 abgeschlossen, nächster Schritt Phase 4).
 
 ## Phase 1 – Fundament (MVP 6 PT)
 
@@ -63,8 +63,8 @@ Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). O1�
 | [x] | U3 Job anlegen/bearbeiten: maskierte `display_url` als Text, „Anfrage ersetzen“, Cron mit Presets und Vorschau, Zeitlimit mit Hinweis, Antwort speichern (erben/an/aus) | frontend |
 | [x] | U4 Job-Detail: Verlauf, Ausgabe als Text, „Jetzt ausführen“, Testlauf mit Abfrage des Ergebnisses | frontend |
 | [x] | U5 Einstellungen für Admins: HTTP-Grenzwerte und Freigaben interner Ziele | frontend |
-| [ ] | Regeländerungen aus §10 in `CLAUDE.md` und Skills eintragen | Koordinator |
-| [ ] | Review Phase 3 (inkl. Ausnahme `display_url`) | sicherheit |
+| [x] | Regeländerungen aus §10 in `CLAUDE.md` und Skills eintragen (lokal, gitignored) | Koordinator |
+| [x] | Review Phase 3 (inkl. Ausnahme `display_url`): Befunde behoben (a2ca5f6), Nachprüfung: Phase 3 erledigt. Bedingung: PHPStan max unter PHP 8.4 bzw. in CI belegen | sicherheit |
 
 ## Phase 4 – Shell-Jobs (MVP 6 PT)
 
