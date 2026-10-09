@@ -66,6 +66,29 @@ Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). O1�
 | [x] | Regeländerungen aus §10 in `CLAUDE.md` und Skills eintragen (lokal, gitignored) | Koordinator |
 | [x] | Review Phase 3 (inkl. Ausnahme `display_url`): Befunde behoben (a2ca5f6), Nachprüfung: Phase 3 erledigt. Bedingung: PHPStan max unter PHP 8.4 bzw. in CI belegen | sicherheit |
 
+## Phase 4a – Benutzer und Rollen (vor Phase 4 Umsetzung)
+
+Entwurf: `docs/decisions/0005-benutzer-und-rollen.md` (Abschnitte in Klammern). Offene Entscheidungen B1–B14 (§9): bis Alex entscheidet, gilt die Empfehlung. Regeländerungen für `CLAUDE.md`, Skills und Hook: §10. Erledigt zusätzlich „2FA-Reset durch einen Administrator“ (Phase 1) und „Benutzer und Rollen mit Rechte-Matrix“ (Phase 5).
+
+| Status | Aufgabe | Agent |
+|---|---|---|
+| [x] | Entwurf Phase 4a: Datenmodell, Rechte-Katalog, API mit Rechte-Matrix, Oberfläche, Reihenfolge | architekt |
+| [ ] | S1 Migration `0009_users_roles.sql` (nächste freie Nummer, §3.1), Recht `categories.manage` (gefährlich, nur Admin), `GrantPolicy` (`mayAssign`/`mayManage`), `AdminInvariant`, `AssignmentValidator`, `grantsFor()` leer bei Pflicht-Passwortwechsel (E1–E4) | sicherheit |
+| [ ] | S2 `OneTimePassword` (Sealed), `AuthService::confirmPassword()`/`changeOwnPassword()`, Ablauf des Einmalpassworts, `/me` mit `password_change_required`, `SessionManager` mit Browser/IP und Einzel-Beenden (E6, E7, E10) | sicherheit |
+| [ ] | S3 Lesende Benutzer-API `GET /api/users`, `/api/users/{id}`, `/api/roles`, `UserPresenter`, `unlock` CSRF vor Recht (§4.2, §4.4) | backend |
+| [ ] | S4 Schreibende Benutzer-API: anlegen (Einmalpasswort), Anzeigename, Zuweisungen ersetzen, deaktivieren/aktivieren, Soft-Delete, Audit, Grenzen (E3–E5, §4.3–§4.6) | backend |
+| [ ] | S5 Admin-Passwort-Reset, 2FA-Reset (Sitzungen enden, Audit), Sitzungen eines Benutzers beenden, jeweils mit Passwort-Bestätigung (E7, E8) | sicherheit |
+| [ ] | S6 Eigene Daten: `PUT /api/auth/profile`, `POST /api/auth/password`, Sitzungsübersicht/-beenden, Pflichtwechsel sperrt alles außer `me`/`password`/`logout` (E10) | backend |
+| [ ] | S7 Kategorien-Verwaltung: `GET /api/categories/manage`, anlegen, umbenennen, löschen nur ohne Jobs (409), Freigaben per CASCADE weg, Zuweisungen werden „wirkungslos“, nie „alle“; CLI `category:rename`/`category:delete` (E9) | backend |
+| [ ] | S8 Gesamtsuite: Rollen-Matrix, IDOR, Rechteausweitung, letzter Admin (auch parallel), H1, Leak-Tests aller Ausgabestellen (§5), Roundtrip, Mutation | tester |
+| [ ] | U1 Menü „Benutzer & Rollen“ und „Kategorien“ nach Recht, Benutzerliste, Rechte-Matrix (nur lesend) (§7) | frontend |
+| [ ] | U2 Benutzer anlegen/bearbeiten mit Zuweisungs-Editor, Einmalpasswort einmal anzeigen (§7) | frontend |
+| [ ] | U3 Sicherheits- und Kontoaktionen (Passwort-/2FA-Reset, Sitzungen, Sperre, Deaktivieren, Löschen) mit `Confirm` + Passwortfeld (§7) | frontend |
+| [ ] | U4 Kategorien-Seite mit Folgen-Vorschau (§7) | frontend |
+| [ ] | U5 Mein Konto (Anzeigename, Passwort, Sitzungen), Screen „Passwort festlegen“ (§7) | frontend |
+| [ ] | Regeländerungen aus §10 in `CLAUDE.md`, Skills und Hook eintragen | Koordinator |
+| [ ] | Review Phase 4a | sicherheit |
+
 ## Phase 4 – Shell-Jobs (MVP 6 PT)
 
 | Status | Aufgabe | Agent |
