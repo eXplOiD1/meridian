@@ -12,14 +12,24 @@ export class ApiError extends Error {
   readonly totpRequired: boolean;
   /** Feldfehler einer 422-Antwort: Feldpfad => feste Meldung des Servers (enthält nie Eingabewerte). */
   readonly fields: Record<string, string>;
+  /** 503 bei der Anmeldung: Proxy-Header ohne MERIDIAN_TRUSTED_PROXIES. Konfigurationsfehler, kein Grund für erneute Versuche. */
+  readonly trustedProxiesRequired: boolean;
 
-  constructor(message: string, status: number, retryAfter: number | null, totpRequired: boolean, fields: Record<string, string> = {}) {
+  constructor(
+    message: string,
+    status: number,
+    retryAfter: number | null,
+    totpRequired: boolean,
+    fields: Record<string, string> = {},
+    trustedProxiesRequired = false,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.retryAfter = retryAfter;
     this.totpRequired = totpRequired;
     this.fields = fields;
+    this.trustedProxiesRequired = trustedProxiesRequired;
   }
 }
 
@@ -80,6 +90,7 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path
       Number.isFinite(retry) ? retry : null,
       isRecord(data) && data.totp_required === true,
       fieldErrors(data),
+      isRecord(data) && data.trusted_proxies_required === true,
     );
   }
 

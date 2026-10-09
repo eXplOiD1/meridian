@@ -76,12 +76,18 @@ export interface HttpDetail {
   max_redirects: number;
   store_response: StoreResponse;
   target: string;
+  /** Für alle Rollen gesetzt: Es gibt eine gespeicherte Anfrage. */
+  has_request?: boolean;
+  /**
+   * Die folgenden Felder liefert der Server nur mit can.edit; ohne dieses Recht fehlen sie ganz.
+   * Ein Fehlen heißt „nicht sichtbar“, nie „keine Header“ oder „kein Body“.
+   */
   /** Beim Speichern der Anfrage erzeugte, maskierte Anzeige (nur Text, nie als Eingabewert oder Link). */
-  display_url: string;
-  has_url: boolean;
-  has_headers: boolean;
-  header_count: number;
-  has_body: boolean;
+  display_url?: string;
+  has_url?: boolean;
+  has_headers?: boolean;
+  header_count?: number;
+  has_body?: boolean;
 }
 
 export interface JobDetail extends Omit<JobSummary, 'http'> {
@@ -120,7 +126,7 @@ export interface JobLimits {
   response_storage: 'off' | 'on' | 'never';
 }
 
-export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path';
+export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path' | 'http.display_host';
 
 export interface SettingEntry {
   key: string;

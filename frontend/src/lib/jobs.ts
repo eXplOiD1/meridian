@@ -16,6 +16,16 @@ export function presetName(cron: string): string | null {
   return CRON_PRESETS.find((preset) => preset.cron === cron.trim().replace(/\s+/g, ' '))?.label ?? null;
 }
 
+/** Der Server liefert bei http.display_host = hidden „https://••••“: Host und Port sind verborgen. */
+export function isHostHidden(target: string): boolean {
+  return target.includes('•');
+}
+
+/** Anzeige des Ziels als reiner Text: Host oder – bei verborgenem Host – das Schema mit Platzhalter. */
+export function targetLabel(target: string): string {
+  return isHostHidden(target) ? target : hostOf(target);
+}
+
 /** Nur der Host eines Ziels („https://api.example.org:8443“ → „api.example.org“), nie Pfad oder Parameter. */
 export function hostOf(target: string): string {
   try {

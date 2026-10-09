@@ -46,15 +46,31 @@ const SPECS: SettingSpec[] = [
   {
     key: 'http.display_path',
     title: 'Pfad in der URL-Anzeige',
-    lead: 'Bestimmt, wie viel von der Adresse eines Jobs in Listen und Detailansichten erscheint. Die Adresse selbst bleibt verschlüsselt gespeichert und wird nie angezeigt.',
+    lead: 'Bestimmt, wie viel vom Pfad einer Adresse in Listen und Detailansichten erscheint. Die Adresse selbst bleibt verschlüsselt gespeichert und wird nie angezeigt. Standard: versteckt.',
     options: [
+      { value: 'hidden', label: 'Immer verbergen', help: 'Standard. Es erscheinen nur Protokoll, Host und Port. Pfad und Query sind nie sichtbar.' },
       { value: 'auto', label: 'Automatisch', help: 'Einfache Pfade bleiben sichtbar, mögliche Geheimnisse in Pfad und Query werden durch •••• ersetzt. Restrisiko: Ein Geheimnis, das wie ein einfacher Kleinbuchstaben-Pfad aussieht, kann sichtbar bleiben.' },
-      { value: 'hidden', label: 'Immer verbergen', help: 'Es erscheinen nur Protokoll, Host und Port. Pfad und Query sind nie sichtbar.' },
     ],
     extra: (entry) => (
       <Alert tone="warn">
         „Immer verbergen“ verschärft bestehende Jobs sofort: Ihre gespeicherten Anzeige-URLs werden gekürzt. Das Zurückstellen auf „Automatisch“ lockert nichts nachträglich: Bereits gekürzte Anzeigen
         kommen nicht zurück, erst neu gespeicherte Anfragen nutzen wieder die automatische Anzeige.
+        {entry.value === 'hidden' ? ' Aktuell ist „Immer verbergen“ aktiv.' : ''}
+      </Alert>
+    ),
+  },
+  {
+    key: 'http.display_host',
+    title: 'Host in der URL-Anzeige',
+    lead: 'Bestimmt, ob der Host (und Port) eines Ziels in Listen, Übersicht und Anzeige-URL erscheint. Verborgen zeigt nur noch das Protokoll, z. B. https://••••, für alle Rollen. Standard: automatisch (Host sichtbar).',
+    options: [
+      { value: 'auto', label: 'Automatisch', help: 'Standard. Der Host bleibt in Listen und Anzeige sichtbar.' },
+      { value: 'hidden', label: 'Immer verbergen', help: 'Host und Port erscheinen nirgends mehr, auch nicht für Administratoren. Den Host sieht nur, wer die Anfrage neu eingibt. Auch die Ausgabe neuer Läufe nennt ihn nicht.' },
+    ],
+    extra: (entry) => (
+      <Alert tone="warn">
+        „Immer verbergen“ verschärft bestehende Jobs sofort: Ihre gespeicherten Anzeige-URLs verlieren den Host. Das Zurückstellen auf „Automatisch“ lockert nichts nachträglich: Bereits verborgene Anzeigen
+        kommen nicht zurück, erst neu gespeicherte Anfragen zeigen den Host wieder.
         {entry.value === 'hidden' ? ' Aktuell ist „Immer verbergen“ aktiv.' : ''}
       </Alert>
     ),
@@ -92,7 +108,7 @@ function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry:
       const tightened = result.tightened_jobs;
       setDone(
         (value === null ? 'Auf den Standard zurückgesetzt.' : 'Gespeichert.') +
-          (tightened > 0 ? ' Die Anzeige-URL wurde bei ' + String(tightened) + (tightened === 1 ? ' Job' : ' Jobs') + ' verschärft.' : ''),
+          (tightened > 0 ? ' Die Anzeige wurde bei ' + String(tightened) + (tightened === 1 ? ' Job' : ' Jobs') + ' verschärft.' : ''),
       );
     } catch (caught) {
       if (caught instanceof ApiError && caught.fields.value !== undefined) {
@@ -309,8 +325,8 @@ function InternalTargets({ csrf }: { csrf: string }) {
         wähle möglichst eine Kategorie und einen Port.
       </Alert>
       <p className="hint">
-        Nie freigebbar sind Link-local-Adressen (169.254.0.0/16, fe80::/10) einschließlich der Metadaten-Dienste von Cloud-Anbietern, die Adressen des Docker-Socket-Proxys sowie unspezifizierte, Multicast-,
-        Broadcast- und reservierte Bereiche. Hostnamen geben nur private Adressen frei, Loopback nur als einzelne Adresse mit Port. Wird eine Kategorie gelöscht, entfallen ihre Freigaben, sie werden nie global.
+        Nie freigebbar sind Link-local-Adressen (169.254.0.0/16, fe80::/10) einschließlich der Metadaten-Dienste von Cloud-Anbietern, unspezifizierte, Multicast-, Broadcast- und reservierte Bereiche
+        sowie Meridians eigene Infrastruktur: der Docker-Socket-Proxy (jeder Port), die Docker-API-Ports 2375 und 2376 sowie Meridians eigener Port auf dem eigenen Rechner. Hostnamen geben nur private Adressen frei, Loopback nur als einzelne Adresse mit Port. Wird eine Kategorie gelöscht, entfallen ihre Freigaben, sie werden nie global.
       </p>
 
       {loadError !== null && <Alert tone="err">{loadError}</Alert>}

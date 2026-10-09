@@ -284,3 +284,7 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .setting h3, .targets__form h3 { font-size: 22px; }
 .targets__form { padding-top: 18px; border-top: 1px solid var(--linie); }
 .table .mono, .mono { font-family: var(--schrift-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+
+/* Hinweis hinter einem verborgenen Host: gleiche Farbe wie der Umgebungstext, nicht Schiefer auf Tafelblau. */
+.hint--inline { font-family: var(--schrift-text); font-size: 12px; color: inherit; opacity: 0.8; }
+.login .alert p { margin: 6px 0 0; }

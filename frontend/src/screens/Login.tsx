@@ -23,11 +23,14 @@ export function Login({ onLoggedIn }: LoginProps) {
   const [needsCode, setNeedsCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Konfigurationsfehler des Servers (Proxy-Header ohne MERIDIAN_TRUSTED_PROXIES): Meldung des Servers, kein Erneut-versuchen.
+  const [proxyError, setProxyError] = useState<string | null>(null);
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    setProxyError(null);
     try {
       await request<Profile>('POST', '/api/auth/login', {
         body: needsCode ? { username, password, totp_code: code.trim() } : { username, password },
@@ -45,7 +48,11 @@ export function Login({ onLoggedIn }: LoginProps) {
         throw probe;
       }
     } catch (caught) {
-      if (caught instanceof ApiError && caught.totpRequired) {
+      if (caught instanceof ApiError && caught.trustedProxiesRequired) {
+        setProxyError(caught.message);
+        setError(null);
+        setNeedsCode(false);
+      } else if (caught instanceof ApiError && caught.totpRequired) {
         setNeedsCode(true);
         setError(null);
       } else if (caught instanceof ApiError) {
@@ -66,6 +73,7 @@ export function Login({ onLoggedIn }: LoginProps) {
     setCode('');
     setPassword('');
     setError(null);
+    setProxyError(null);
   }
 
   return (
@@ -83,11 +91,21 @@ export function Login({ onLoggedIn }: LoginProps) {
         <form className="login__card form" onSubmit={(event) => void submit(event)} noValidate>
           <h1>{needsCode ? 'Zweiter Faktor' : 'Anmelden'}</h1>
           <InsecureWarning />
+          {proxyError !== null && (
+            <div className="alert alert--err" role="alert" data-testid="proxy-required">
+              <strong>Anmeldung nicht möglich: Reverse-Proxy nicht eingerichtet.</strong>
+              <p>{proxyError}</p>
+              <p>
+                Das ist ein Konfigurationsfehler des Servers (<code className="cron cron--inline">MERIDIAN_TRUSTED_PROXIES</code>), kein Problem mit deinen Zugangsdaten. Erneutes Versuchen hilft nicht, bis ein
+                Administrator ihn behoben hat.
+              </p>
+            </div>
+          )}
           {error !== null && <Alert tone="err">{error}</Alert>}
           {!needsCode ? (
             <>
-              <Field label="Benutzername" name="username" autoComplete="username" autoFocus required value={username} onChange={(e) => setUsername(e.target.value)} />
-              <Field label="Passwort" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Field label="Benutzername" name="username" autoComplete="username" autoFocus required value={username} onChange={(e) => { setUsername(e.target.value); setProxyError(null); }} />
+              <Field label="Passwort" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => { setPassword(e.target.value); setProxyError(null); }} />
             </>
           ) : (
             <>
@@ -108,7 +126,7 @@ export function Login({ onLoggedIn }: LoginProps) {
             </>
           )}
           <div className="row">
-            <button type="submit" className="btn btn--solid" disabled={busy || username === '' || password === '' || (needsCode && code.trim() === '')}>
+            <button type="submit" className="btn btn--solid" disabled={busy || proxyError !== null || username === '' || password === '' || (needsCode && code.trim() === '')}>
               {busy ? 'Einen Moment …' : needsCode ? 'Bestätigen' : 'Anmelden'}
             </button>
             {needsCode && (
