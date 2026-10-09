@@ -173,7 +173,9 @@ final class HttpPayload implements \JsonSerializable
             foreach (explode('&', $query) as $pair) {
                 $eq = strpos($pair, '=');
                 $name = $eq === false ? $pair : substr($pair, 0, $eq);
-                if (!UrlDisplay::isVisibleQueryName($name)) {
+                // Ohne `=` ist der Teil ein Wert; unsichtbare Namen sind es ebenso. Sichtbare Namen (Wörter, in der
+                // Anzeige-URL ohnehin zu sehen) ab acht Zeichen zusätzlich: kostet nur Lesbarkeit, nie Sicherheit.
+                if ($eq === false || !UrlDisplay::isVisibleQueryName($name) || strlen($name) >= self::MIN_FRAGMENT_LENGTH) {
                     self::rememberEncoded($masker, $name);
                 }
                 if ($eq !== false) {

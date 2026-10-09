@@ -21,6 +21,7 @@ use Meridian\Console\UserPasswordCommand;
 use Meridian\Console\UserCreateCommand;
 use Meridian\Database\Connection;
 use Meridian\Database\Migrator;
+use Meridian\Job\DisplayUrlUpgrade;
 use Meridian\Job\CategoryRepository;
 use Meridian\Network\InternalTargetStore;
 use Meridian\Runner\Http\AddressPolicy;
@@ -60,7 +61,7 @@ $app->add(new KeyGenerateCommand());
 // Befehle mit Datenbank nur, wenn das Datenverzeichnis existiert.
 if (is_dir($config->dataDir)) {
     $db = Connection::open($config->databasePath());
-    $app->add(new MigrateCommand(new Migrator($db, dirname(__DIR__) . '/migrations')));
+    $app->add(new MigrateCommand(new Migrator($db, dirname(__DIR__) . '/migrations'), new DisplayUrlUpgrade($db)));
     $users = new UserRepository($db, new PasswordHasher());
     $audit = new AuditLog($db, new SystemClock(), new SecretMasker());
     $app->add(new UserCreateCommand($users, $audit));

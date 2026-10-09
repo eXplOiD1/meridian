@@ -104,8 +104,15 @@ ausdrückliche Ausnahme von „keine Geheimnisse in Antworten, auch nicht maskie
      Alles andere → `••••`. Damit fallen Ziffern-/Base64-/Hex-/UUID-Tokens, Telegram `bot123:ABC…`,
      Slack `T…/B…/X…`, Discord-IDs und camelCase heraus.
      Im Modus `hidden` ist **jeder** Pfad `/••••` (ein fester Platzhalter, auch die Segmentzahl verschwindet).
-   - **Query-Namen**, nur wenn `^[a-z][a-z0-9_.-]{0,31}$`; sonst `••••`. **Query-Werte immer** `••••`, auch wenn
-     sie leer sind oder fehlen (`a&b=` → `a=••••&b=••••`). Im Modus `hidden` wird die ganze Query `?••••`.
+   - **Query-Namen** (ab `display_v` 2, S11-Review) nach derselben Wortregel wie Pfadsegmente: nur Kleinbuchstaben,
+     höchstens vier Wortteile mit `-`/`_`/`.`, Länge ≤ 24, Wortteil ≤ 16, **keine Ziffern**; sonst `••••`. Ein Teil
+     **ohne `=`** ist selbst ein Wert und wird ganz `••••` (`?<token>` → `?••••`). **Query-Werte immer** `••••`, auch
+     wenn sie leer sind (`a&b=` → `••••&b=••••`). Im Modus `hidden` wird die ganze Query `?••••`.
+     v1 (`^[a-z][a-z0-9_.-]{0,31}$`, Teil ohne `=` als Name) ließ Hex-/base36-Tokens als Namen sichtbar. Gespeicherte
+     v1-Anzeigen werden ohne Entschlüsseln verschärft: beim Lesen (`HttpJobConfig::fromJson()` →
+     `UrlDisplay::upgradeStored()`) und dauerhaft bei jedem `migrate` (`Job\DisplayUrlUpgrade`). Aus `name=••••` mit
+     nach v2 unsichtbarem Namen wird `••••=••••`; ein v1-Teil ohne `=` ist nicht mehr erkennbar und bleibt nur sichtbar,
+     wenn er die v2-Wortregel erfüllt.
    - Userinfo und Fragment kommen nicht vor (die URL-Syntax lehnt `@` und `#` ab, §3.3).
 4. Sichtbar bleibt bewusst die **Struktur**: Zahl der Pfadsegmente und Query-Parameter (nur in `auto`). Das ist
    keine Information über Geheimnis-Inhalte.
@@ -619,6 +626,9 @@ IPv4: `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16
 IPv6: `::/128`, `::1/128`, `::ffff:0:0/96` und `64:ff9b::/96` (eingebettete IPv4 prüfen), `2002::/16`
 (6to4: eingebettete IPv4 prüfen), `100::/64`, `2001::/23`, `2001:db8::/32`, `fc00::/7`, `fe80::/10`,
 `fec0::/10`, `ff00::/8`.
+Metadaten-Dienste innerhalb privater Netze stehen **davor** und sind nie freigebbar (Klasse Link-local, S11-Review):
+`100.100.100.200/32` (Alibaba Cloud, in `100.64/10`) und `fd00:ec2::254/128` (AWS IMDS IPv6, in `fc00::/7`). Eine
+Freigabe genau dieser Adressen wird abgelehnt; ein größeres privates Netz bleibt freigebbar, gibt sie aber nie frei.
 Freigebbar laut E5 nur „privat“ (`cidr` oder `host`) und „Loopback“ (nur `cidr` einzeln, mit Port). Hat ein Name
 mehrere Adressen, muss **jede** erlaubt sein, sonst wird abgelehnt. Keine Adresse → `failed` „Ziel nicht
 auflösbar: Hostname prüfen.“
@@ -680,7 +690,7 @@ Fehlerzuordnung (feste Texte, nie `curl_error()`; die Meldung enthält die URL):
 | `CURLOPT_FRESH_CONNECT`, `CURLOPT_FORBID_REUSE` | `true` |
 | `CURLOPT_NOSIGNAL` | `true` |
 | `CURLOPT_HEADERFUNCTION` | Statuszeile, `Location`, `Content-Type`, `Content-Length` merken; Header gesamt ≤ 32 KiB, sonst abbrechen |
-| `CURLOPT_WRITEFUNCTION` | erste 80 KiB behalten (64 KiB Ausgabe + Überhang fürs Maskieren), Rest nur zählen; > 10 MiB abbrechen (H3) |
+| `CURLOPT_WRITEFUNCTION` | erste 80 KiB behalten (64 KiB Ausgabe + Überhang fürs Maskieren), Rest nur zählen; > 10 MiB abbrechen (H3). Der Schnitt liegt vor dem Maskieren: `HttpRunner` ruft für einen gekürzten Body `SecretMasker::maskCut()` (maskieren, dann ein Textende entfernen, das Anfang eines bekannten Geheimnisses ist) |
 | `CURLOPT_ACCEPT_ENCODING` | nicht setzen (keine Entpack-Bombe) |
 | Cookies, `CURLOPT_UNRESTRICTED_AUTH` | aus |
 | `CURLOPT_USERAGENT` | `Meridian/<version>` |

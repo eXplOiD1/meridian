@@ -80,6 +80,31 @@ final class SecretMasker implements \JsonSerializable
     }
 
     /**
+     * Für einen Text, dessen Ende abgeschnitten wurde, **bevor** maskiert werden konnte (z. B. ein beim Lesen auf
+     * 80 KiB begrenzter Antwort-Body): maskiert und entfernt danach ein Textende, das der Anfang eines bekannten
+     * Geheimnisses (roh, URL-kodiert, base64) ist — sonst bliebe der angeschnittene Teil im Klartext stehen.
+     * Schon ein Zeichen zählt: an der Schnittkante kostet ein Platzhalter mehr nichts.
+     */
+    public function maskCut(#[\SensitiveParameter] string $text): string
+    {
+        $text = $this->mask($text);
+        $longest = 0;
+        foreach ($this->known->open() as $secret) {
+            foreach ([$secret, rawurlencode($secret), urlencode($secret), base64_encode($secret)] as $form) {
+                $max = min(strlen($form) - 1, strlen($text));
+                for ($n = $max; $n > $longest; --$n) {
+                    if (substr_compare($text, substr($form, 0, $n), -$n) === 0) {
+                        $longest = $n;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $longest === 0 ? $text : substr($text, 0, -$longest) . self::MASK;
+    }
+
+    /**
      * @return array<string, string>
      */
     public function __debugInfo(): array

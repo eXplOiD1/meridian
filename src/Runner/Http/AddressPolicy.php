@@ -17,7 +17,12 @@ namespace Meridian\Runner\Http;
  */
 final class AddressPolicy
 {
+    /**
+     * Reihenfolge zählt: der erste Treffer gilt. Metadaten-Dienste, die in einem privaten Netz liegen, stehen deshalb
+     * vor diesem Netz und sind nie freigebbar (S11-Review): Alibaba Cloud 100.100.100.200 (in CGNAT 100.64/10).
+     */
     private const V4 = [
+        ['100.100.100.200/32', BlockReason::LinkLocal],
         ['0.0.0.0/8', BlockReason::Reserved],
         ['10.0.0.0/8', BlockReason::Private],
         ['100.64.0.0/10', BlockReason::Private],
@@ -35,7 +40,9 @@ final class AddressPolicy
         ['240.0.0.0/4', BlockReason::Reserved],
     ];
 
+    /** AWS IMDS über IPv6 fd00:ec2::254 (in ULA fc00::/7) steht vor fc00::/7: nie freigebbar. */
     private const V6 = [
+        ['fd00:ec2::254/128', BlockReason::LinkLocal],
         ['::1/128', BlockReason::Loopback],
         ['::/96', BlockReason::Reserved],
         ['100::/64', BlockReason::Reserved],
@@ -101,9 +108,19 @@ final class AddressPolicy
         return $packed === null ? BlockReason::Reserved : self::classifyPacked($packed);
     }
 
-    /** Liegt das Netz vollständig in einem Netz der Klasse „privat“? */
+    /**
+     * Liegt das Netz vollständig in einem Netz der Klasse „privat“? Ein Netz, das ganz in einem nie freigebbaren
+     * Bereich liegt (z. B. eine Metadaten-Adresse innerhalb von 100.64/10 oder fc00::/7), nie. Ein größeres privates
+     * Netz, das eine solche Adresse nur enthält, bleibt freigebbar; die Adresse selbst gibt {@see self::check()}
+     * trotzdem nie frei (ihre Klasse ist nicht freigebbar).
+     */
     public static function isWithinPrivate(IpNetwork $network): bool
     {
+        foreach (self::ranges() as [$range, $reason]) {
+            if (!$reason->isReleasable() && $range->containsNetwork($network)) {
+                return false;
+            }
+        }
         foreach (self::ranges() as [$range, $reason]) {
             if ($reason === BlockReason::Private && $range->containsNetwork($network)) {
                 return true;

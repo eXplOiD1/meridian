@@ -104,11 +104,12 @@ final class Kernel
         } catch (AccessDenied $e) {
             $response = $this->error(403, $e->getMessage());
         } catch (\Throwable $e) {
-            // Im Betrieb nie Details zeigen. In dev nur maskiert. Ins Log nie die Meldung (ErrorLog).
+            // Nie die Meldung, weder im Log noch in der Antwort (auch nicht in dev: der Masker hier kennt die
+            // Geheimnisse der Jobs nicht). In dev höchstens Klasse und Datei:Zeile wie im Log.
             ErrorLog::unexpected($e, 'Kernel');
             $response = $this->error(
                 500,
-                $this->config->isDev() ? $this->masker->mask($e->getMessage()) : 'Interner Fehler.',
+                $this->config->isDev() ? $this->masker->mask('Interner Fehler: ' . ErrorLog::where($e) . '.') : 'Interner Fehler.',
             );
         }
 
