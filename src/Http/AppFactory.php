@@ -47,7 +47,7 @@ final class AppFactory
         $masker = new SecretMasker();
         $hasher = new PasswordHasher();
         $users = new UserRepository($db, $hasher);
-        $sessions = new SessionManager($db, $clock);
+        $sessions = new SessionManager($db, $clock, $masker);
         $twoFactor = new TwoFactor($db, $box, $hasher, $clock);
 
         $throttle = new LoginThrottle($db, $clock);
@@ -55,7 +55,7 @@ final class AppFactory
         $sessionAuth = new SessionAuth($sessions);
         $csrf = new CsrfGuard();
 
-        $auth = new AuthService($users, $hasher, $sessions, $throttle, $audit, $clock, $twoFactor);
+        $auth = new AuthService($users, $hasher, $sessions, $throttle, $audit, $clock, $twoFactor, $db);
 
         $access = new AccessControl();
         $settings = new Settings($db, $clock);

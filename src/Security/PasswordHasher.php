@@ -16,9 +16,17 @@ final class PasswordHasher
      */
     public const DUMMY_HASH = '$argon2id$v=19$m=65536,t=4,p=1$eFBydWwxUEVzWWhYVHN0ZA$+KwT8BnfgdbyeOFtgHaMdZIvtIEtg4FXIDr/Qm34Tdk';
 
+    /**
+     * Erfüllt das Passwort die Regeln (mindestens 8 Zeichen)? Für Prüfungen vor einer teuren Operation.
+     */
+    public static function meetsPolicy(#[\SensitiveParameter] string $password): bool
+    {
+        return mb_strlen($password) >= self::MIN_LENGTH;
+    }
+
     public function hash(#[\SensitiveParameter] string $password): string
     {
-        if (mb_strlen($password) < self::MIN_LENGTH) {
+        if (!self::meetsPolicy($password)) {
             throw new \InvalidArgumentException('Das Passwort muss mindestens 8 Zeichen lang sein.');
         }
 

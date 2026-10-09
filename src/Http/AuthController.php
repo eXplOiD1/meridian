@@ -69,7 +69,8 @@ final class AuthController
             return self::error(400, 'Ungültige Anfrage: JSON mit username und password erwartet.');
         }
 
-        $result = $this->auth->login($credentials['username'], $credentials['password'], $ip, $credentials['totp_code']);
+        $agent = $request->headers->get('User-Agent');
+        $result = $this->auth->login($credentials['username'], $credentials['password'], $ip, $credentials['totp_code'], $agent);
         if ($result->status === LoginStatus::Locked) {
             $response = self::error(429, 'Zu viele Fehlversuche. Bitte später erneut versuchen.');
             $response->headers->set('Retry-After', (string) $result->retryAfter);
@@ -92,7 +93,8 @@ final class AuthController
 
     public function logout(#[\SensitiveParameter] Request $request): Response
     {
-        $session = $this->authenticate($request);
+        // Auch bei offenem Pflicht-Passwortwechsel (ADR 0005, E6).
+        $session = $this->sessionAuth->authenticateAllowingPasswordChange($request);
         if ($session === null) {
             return self::error(401, 'Nicht angemeldet.');
         }
@@ -109,7 +111,8 @@ final class AuthController
 
     public function me(#[\SensitiveParameter] Request $request): Response
     {
-        $session = $this->authenticate($request);
+        // Auch bei offenem Pflicht-Passwortwechsel: die Oberfläche zeigt dann nur „Passwort festlegen“.
+        $session = $this->sessionAuth->authenticateAllowingPasswordChange($request);
         if ($session === null) {
             return self::error(401, 'Nicht angemeldet.');
         }
@@ -230,7 +233,7 @@ final class AuthController
             return null;
         }
 
-        // Rechte bei jeder Anfrage frisch laden, nie aus der Sitzung.
+        // Rechte bei jeder Anfrage frisch laden, nie aus der Sitzung. Bei Pflichtwechsel leer (fail-closed).
         $roles = [];
         foreach ($this->users->grantsFor($user->id) as $grant) {
             $roles[] = [
@@ -244,6 +247,7 @@ final class AuthController
             'user' => ['id' => $user->id, 'username' => $user->username, 'display_name' => $user->displayName],
             'roles' => $roles,
             'totp_enabled' => $this->twoFactor->isEnabled($user->id),
+            'password_change_required' => $user->passwordMustChange,
             'csrf_token' => $this->csrf->tokenFor($session->token),
         ]);
     }

@@ -13,6 +13,10 @@ final readonly class Session
         public int $userId,
         #[\SensitiveParameter]
         public string $token,
+        /** Zeilen-ID in `sessions` (für „diese Sitzung“ in der Übersicht), null nur in Sonderfällen. */
+        public ?int $id = null,
+        /** Einmalpasswort noch nicht ersetzt: nur `me`, `password`, `logout` (ADR 0005, E6). */
+        public bool $passwordChangeRequired = false,
     ) {
     }
 

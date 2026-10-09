@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Meridian\Http;
 
+use Meridian\Auth\PasswordChangeRequired;
+use Meridian\Auth\TooManyAttempts;
 use Meridian\Config;
 use Meridian\Security\AccessDenied;
 use Meridian\Security\SecretMasker;
@@ -104,6 +106,12 @@ final class Kernel
             $response = JsonReply::validation($e);
         } catch (AccessDenied $e) {
             $response = $this->error(403, $e->getMessage());
+        } catch (PasswordChangeRequired) {
+            $response = JsonReply::json(['error' => PasswordChangeRequired::MESSAGE, 'password_change_required' => true], 403);
+        } catch (TooManyAttempts $e) {
+            // Passwort-Bestätigung/-wechsel gesperrt (gleiche Sperre wie die Anmeldung): nichts wurde geprüft.
+            $response = $this->error(429, $e->getMessage());
+            $response->headers->set('Retry-After', (string) $e->retryAfter);
         } catch (LastAdminRemoved) {
             // Die Transaktion ist schon zurückgerollt (AdminInvariant prüft nach dem Schreiben, ADR 0005 E3).
             $response = $this->error(409, LastAdminRemoved::MESSAGE);
