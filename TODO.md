@@ -54,7 +54,7 @@ Entwurf: `docs/decisions/0003-phase3-http-jobs.md` (Abschnitte in Klammern). O1�
 | [x] | S8 Manueller Lauf und Testlauf (202 über die Warteschlange, H1 beim Einreihen + Audit, 409/429-Grenzen); erledigt auch den offenen Punkt aus Phase 2 | backend |
 | [x] | S9 `HttpRunner` + `CurlTransport` (§5): gepinnte IP, Freigaben je Hop, Weiterleitungen manuell, TLS an, Proxy ignoriert, Zeitlimit `min(Job, Maximum)`, Antwort speichern global/Job (`never` gewinnt), Rohausgabe beim Lesen begrenzt (H3), `Heartbeat::beat()` in der `curl_multi`-Schleife; Verdrahtung in `bin/meridian` (Schlüssel erst beim Start von `scheduler:run`) | backend |
 | [x] | S10 Freigaben interner Ziele (Host/CIDR + Port, global oder je Kategorie): API `GET/POST/DELETE /api/settings/internal-targets` (`Network\InternalTargetController`, `InternalTargetStore`) + CLI `http:internal-targets` (`list`, `add`, `remove`), Audit, nie freigebbare Netze | sicherheit |
-| [ ] | S11 Leak- und SSRF-Gesamtsuite: Geheimnis in URL, Header und Body taucht in keiner Ausgabe auf (Verlauf, Notiz, API inkl. `display_url`, Audit, Prozessausgabe, `error_log`) | tester |
+| [x] | S11 Leak- und SSRF-Gesamtsuite: Geheimnis in URL, Header und Body taucht in keiner Ausgabe auf (Verlauf, Notiz, API inkl. `display_url`, Audit, Prozessausgabe, `error_log`) | tester |
 | [x] | S12 `ext-curl` in `composer.json`, `php-curl` im Installer, Image und CA-Bündel prüfen | infra |
 | [x] | S13 `category:create` (CLI, Audit) | backend |
 | [x] | S14 Einstellungs-API `GET /api/settings`, `PUT /api/settings/{key}` (Allowlist, Validierung, Audit); bei `http.display_path = hidden` bestehende `display_url` verschärfen | sicherheit |
