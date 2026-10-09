@@ -26,15 +26,17 @@ final class ErrorLog
      */
     public static function line(#[\SensitiveParameter] \Throwable $e, string $where): string
     {
-        // Anonyme Klassen tragen nach einem NUL-Byte den Pfad der Datei; die Datei steht ohnehin dahinter.
+        return 'Meridian: Unerwartete Ausnahme ' . self::where($e) . ' (' . $where . '). Die Meldung wird nicht protokolliert, weil sie Geheimnisse enthalten kann; Ursache an der genannten Stelle prüfen.';
+    }
+
+    /**
+     * `Klasse in Datei:Zeile`, nie die Meldung. Anonyme Klassen tragen nach einem NUL-Byte den Pfad der Datei; die
+     * Datei steht ohnehin dahinter.
+     */
+    public static function where(#[\SensitiveParameter] \Throwable $e): string
+    {
         $class = strstr($e::class, "\0", true);
 
-        return sprintf(
-            'Meridian: Unerwartete Ausnahme %s in %s:%d (%s). Die Meldung wird nicht protokolliert, weil sie Geheimnisse enthalten kann; Ursache an der genannten Stelle prüfen.',
-            $class === false ? $e::class : $class,
-            $e->getFile(),
-            $e->getLine(),
-            $where,
-        );
+        return ($class === false ? $e::class : $class) . ' in ' . $e->getFile() . ':' . $e->getLine();
     }
 }

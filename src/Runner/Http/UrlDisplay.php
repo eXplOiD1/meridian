@@ -15,14 +15,17 @@ use Meridian\Settings\DisplayPathMode;
  * Länge. Aufgerufen nur beim Ersetzen der Anfrage; lesende Endpunkte geben den gespeicherten Text aus und bilden
  * ihn nie neu (und entschlüsseln nie).
  *
- * Sichtbar: Schema, Host, Port; im Modus `auto` Pfadsegmente aus harmlosen Kleinbuchstaben-Wörtern und
- * Query-Namen nach fester Regel. Query-Werte nie. Leere Pfadsegmente (`/`, `/api/`) bleiben leer: sie tragen
- * keinen Inhalt.
+ * Sichtbar: Schema, Host, Port; im Modus `auto` Pfadsegmente und Query-Namen aus harmlosen Kleinbuchstaben-Wörtern
+ * (dieselbe Wortregel, keine Ziffern). Query-Werte nie; ein Query-Teil ohne `=` ist selbst ein Wert und wird ganz
+ * zu `••••`. Leere Pfadsegmente (`/`, `/api/`) bleiben leer: sie tragen keinen Inhalt.
+ *
+ * Version 2 (S11-Review): Query-Namen ohne Ziffern (v1 ließ `?e3b0c442…` und `?<token>=1` sichtbar). Gespeicherte
+ * v1-Anzeigen verschärft {@see self::upgradeStored()} ohne Entschlüsseln.
  */
 final class UrlDisplay
 {
     /** Version der Maskierungsregel (`config_json.http.display_v`). Strengere Regel → neue Version. */
-    public const VERSION = 1;
+    public const VERSION = 2;
 
     public const PLACEHOLDER = SecretMasker::MASK;
 
@@ -30,7 +33,8 @@ final class UrlDisplay
     private const SEGMENT_MAX_LENGTH = 24;
     private const WORD_MAX_LENGTH = 16;
 
-    private const QUERY_NAME = '/^[a-z][a-z0-9_.\-]{0,31}$/D';
+    /** Query-Name: wie ein Pfadsegment ohne Endung, Wortteile auch mit `.` getrennt (`page.size`). */
+    private const QUERY_NAME = '/^[a-z]+(?:[-_.][a-z]+){0,3}$/D';
 
     public static function fromParsed(#[\SensitiveParameter] ParsedUrl $url, DisplayPathMode $mode): string
     {
@@ -65,23 +69,68 @@ final class UrlDisplay
      */
     public static function isVisibleSegment(string $segment): bool
     {
-        if (strlen($segment) > self::SEGMENT_MAX_LENGTH || preg_match(self::SEGMENT, $segment) !== 1) {
-            return false;
+        return strlen($segment) <= self::SEGMENT_MAX_LENGTH && preg_match(self::SEGMENT, $segment) === 1 && self::wordsShort($segment);
+    }
+
+    /**
+     * Darf dieser (rohe) Query-Name im Modus `auto` sichtbar sein? Dieselbe Wortregel wie für Pfadsegmente: nur
+     * Kleinbuchstaben, höchstens vier Wortteile mit `-`, `_` oder `.`, Länge ≤ 24, kein Wortteil länger als 16.
+     * Ziffern, Großbuchstaben und `%` machen den Namen unsichtbar (Hex-/base36-Tokens als Name).
+     */
+    public static function isVisibleQueryName(string $name): bool
+    {
+        return strlen($name) <= self::SEGMENT_MAX_LENGTH && preg_match(self::QUERY_NAME, $name) === 1 && self::wordsShort($name);
+    }
+
+    /**
+     * Verschärft eine gespeicherte Anzeige-URL einer älteren Regel auf die aktuelle, ohne zu entschlüsseln:
+     * v1 → v2 ersetzt jeden Query-Namen, der die neue Regel nicht erfüllt, durch `••••` (aus `name=••••` wird
+     * `••••`). Der Pfad blieb gleich. Passt der Text nicht zur erwarteten Form oder zum Ursprung, werden Pfad und
+     * Query verborgen (nur strenger, nie lockerer).
+     *
+     * @param string $origin Schema + Host (+ Port) aus `config_json.http.target`
+     */
+    public static function upgradeStored(string $displayUrl, string $origin, int $fromVersion): string
+    {
+        if ($fromVersion === self::VERSION) {
+            return $displayUrl;
         }
-        $words = preg_split('/[-_.]/', $segment);
-        foreach ($words === false ? [$segment] : $words as $word) {
+        $rest = str_starts_with($displayUrl, $origin) ? substr($displayUrl, strlen($origin)) : null;
+        if ($fromVersion !== 1 || $rest === null || ($rest !== '' && $rest[0] !== '/' && $rest[0] !== '?')) {
+            return self::hideStored($displayUrl, $origin);
+        }
+        $q = strpos($rest, '?');
+        if ($q === false) {
+            return $displayUrl;
+        }
+        $shown = [];
+        foreach (explode('&', substr($rest, $q + 1)) as $pair) {
+            if ($pair === self::PLACEHOLDER) {
+                $shown[] = $pair;
+                continue;
+            }
+            $suffix = '=' . self::PLACEHOLDER;
+            if (!str_ends_with($pair, $suffix)) {
+                // Keine v1-Form: im Zweifel alles hinter dem Pfad verbergen.
+                return $origin . substr($rest, 0, $q) . '?' . self::PLACEHOLDER;
+            }
+            $name = substr($pair, 0, -strlen($suffix));
+            $shown[] = $name === self::PLACEHOLDER ? $pair : (self::isVisibleQueryName($name) ? $pair : self::PLACEHOLDER . $suffix);
+        }
+
+        return $origin . substr($rest, 0, $q) . '?' . implode('&', $shown);
+    }
+
+    private static function wordsShort(string $text): bool
+    {
+        $words = preg_split('/[-_.]/', $text);
+        foreach ($words === false ? [$text] : $words as $word) {
             if (strlen($word) > self::WORD_MAX_LENGTH) {
                 return false;
             }
         }
 
         return true;
-    }
-
-    /** Darf dieser (rohe) Query-Name im Modus `auto` sichtbar sein? */
-    public static function isVisibleQueryName(string $name): bool
-    {
-        return preg_match(self::QUERY_NAME, $name) === 1;
     }
 
     private static function path(#[\SensitiveParameter] string $path, DisplayPathMode $mode): string
@@ -114,8 +163,13 @@ final class UrlDisplay
         $shown = [];
         foreach (explode('&', $query) as $pair) {
             $eq = strpos($pair, '=');
-            $name = $eq === false ? $pair : substr($pair, 0, $eq);
-            // Werte immer verborgen, auch leere und fehlende: `a&b=` → `a=••••&b=••••`.
+            if ($eq === false) {
+                // Ohne `=` ist der ganze Teil ein Wert (`?<token>`): nie zeigen, auch nicht als Name.
+                $shown[] = self::PLACEHOLDER;
+                continue;
+            }
+            $name = substr($pair, 0, $eq);
+            // Werte immer verborgen, auch leere: `b=` → `b=••••`.
             $shown[] = (self::isVisibleQueryName($name) ? $name : self::PLACEHOLDER) . '=' . self::PLACEHOLDER;
         }
 

@@ -101,11 +101,10 @@ final class InternalTargetsCommand extends Command
 
         try {
             $target = $this->store->validate($kind, $value, (int) $port, $categoryId, $note);
-            $record = $this->store->add($target, $note, null);
+            $record = $this->store->add($target, $note, null, $this->audit);
         } catch (InvalidTargetInput $e) {
             return $this->fail($output, $e->getMessage());
         }
-        $this->audit->record(null, 'network.internal_target_added', $record->describe());
         $output->writeln($this->masker->mask('Freigabe angelegt: ' . $this->line($record)), OutputInterface::OUTPUT_RAW);
 
         return self::SUCCESS;
@@ -116,11 +115,10 @@ final class InternalTargetsCommand extends Command
         if (preg_match('/^[1-9][0-9]{0,17}$/D', $id) !== 1) {
             return $this->fail($output, 'Nummer der Freigabe fehlt oder ist ungültig (siehe „list“).');
         }
-        $record = $this->store->remove((int) $id);
+        $record = $this->store->remove((int) $id, null, $this->audit);
         if ($record === null) {
             return $this->fail($output, 'Freigabe nicht gefunden (siehe „list“).');
         }
-        $this->audit->record(null, 'network.internal_target_removed', $record->describe());
         $output->writeln($this->masker->mask('Freigabe entfernt: ' . $this->line($record)), OutputInterface::OUTPUT_RAW);
 
         return self::SUCCESS;

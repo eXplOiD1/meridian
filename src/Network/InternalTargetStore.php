@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Meridian\Network;
 
+use Meridian\Auth\AuditLog;
 use Meridian\Auth\Clock;
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
@@ -60,11 +61,14 @@ final class InternalTargetStore
     }
 
     /**
+     * Legt die Freigabe an und schreibt den Audit-Eintrag `network.internal_target_added` in **derselben**
+     * Transaktion: scheitert das Protokoll, gibt es auch keine Freigabe (Schutz lockern nur mit Audit).
+     *
      * @throws InvalidTargetInput doppelte Freigabe
      */
-    public function add(InternalTarget $target, string $note, ?int $userId): InternalTargetRecord
+    public function add(InternalTarget $target, string $note, ?int $userId, AuditLog $audit): InternalTargetRecord
     {
-        return $this->db->transaction(function () use ($target, $note, $userId): InternalTargetRecord {
+        return $this->db->immediate(function () use ($target, $note, $userId, $audit): InternalTargetRecord {
             $exists = $this->db->fetchOne(
                 'SELECT id FROM http_internal_targets WHERE kind = :kind AND value = :value AND port = :port AND COALESCE(category_id, 0) = COALESCE(:category, 0)',
                 ['kind' => $target->kind, 'value' => $target->value, 'port' => $target->port, 'category' => $target->categoryId],
@@ -88,22 +92,25 @@ final class InternalTargetStore
             if ($record === null) {
                 throw new \RuntimeException('Die Freigabe wurde gespeichert, ist aber nicht lesbar.');
             }
+            $audit->record($userId, 'network.internal_target_added', $record->describe());
 
             return $record;
         });
     }
 
     /**
-     * Löscht eine Freigabe und gibt sie zurück (für den Audit-Eintrag); null, wenn es sie nicht gibt.
+     * Löscht eine Freigabe und schreibt `network.internal_target_removed` in derselben Transaktion; gibt sie zurück,
+     * null, wenn es sie nicht gibt (dann kein Audit-Eintrag).
      */
-    public function remove(int $id): ?InternalTargetRecord
+    public function remove(int $id, ?int $userId, AuditLog $audit): ?InternalTargetRecord
     {
-        return $this->db->transaction(function () use ($id): ?InternalTargetRecord {
+        return $this->db->immediate(function () use ($id, $userId, $audit): ?InternalTargetRecord {
             $record = $this->find($id);
             if ($record === null) {
                 return null;
             }
             $this->db->execute('DELETE FROM http_internal_targets WHERE id = :id', ['id' => $id]);
+            $audit->record($userId, 'network.internal_target_removed', $record->describe());
 
             return $record;
         });

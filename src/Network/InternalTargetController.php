@@ -78,11 +78,11 @@ final class InternalTargetController
         [$kind, $value, $port, $categoryId, $note] = self::input($request);
         try {
             $target = $this->store->validate($kind, $value, $port, $categoryId, $note);
-            $record = $this->store->add($target, $note, $session->userId);
+            // Freigabe und Audit in einer Transaktion (scheitert das Protokoll, wird zurückgerollt).
+            $record = $this->store->add($target, $note, $session->userId, $this->audit);
         } catch (InvalidTargetInput $e) {
             throw ValidationFailed::field($e->field, $e->getMessage());
         }
-        $this->audit->record($session->userId, 'network.internal_target_added', $record->describe());
 
         return JsonReply::json(['target' => $this->present($record)], 201);
     }
@@ -99,11 +99,10 @@ final class InternalTargetController
         $this->access->require($this->users->grantsFor($session->userId), Permission::ManageInternalTargets);
 
         $id = $request->attributes->getString('id');
-        $record = preg_match('/^[1-9][0-9]{0,17}$/D', $id) === 1 ? $this->store->remove((int) $id) : null;
+        $record = preg_match('/^[1-9][0-9]{0,17}$/D', $id) === 1 ? $this->store->remove((int) $id, $session->userId, $this->audit) : null;
         if ($record === null) {
             return JsonReply::error(404, 'Freigabe nicht gefunden.');
         }
-        $this->audit->record($session->userId, 'network.internal_target_removed', $record->describe());
 
         return new Response(null, 204, ['Cache-Control' => 'no-store']);
     }

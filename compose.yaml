@@ -118,8 +118,9 @@ services:
       MERIDIAN_ADMIN_PASSWORD: ${MERIDIAN_ADMIN_PASSWORD:-}
       # Sicherer als das Passwort in der Umgebung (sichtbar in docker inspect): eine Datei, z. B. ein Docker-Secret,
       # und hier MERIDIAN_ADMIN_PASSWORD_FILE auf deren Pfad setzen. Nach dem ersten Start beides entfernen.
-      # Die Sitzung liegt in einem Secure-Cookie: Anmelden geht nur über HTTPS (z. B. hinter dem
-      # Nginx Proxy Manager). Nur zum Ausprobieren über HTTP: MERIDIAN_ENV=dev (zeigt Fehler im Klartext).
+      # Empfohlen ist HTTPS (z. B. hinter dem Nginx Proxy Manager): dann Secure-Cookie mit __Host-Präfix.
+      # Über reines HTTP (LAN) geht die Anmeldung auch, die Oberfläche zeigt dann dauerhaft eine Warnung.
+      # MERIDIAN_ENV bleibt prod; dev ist nur für die Entwicklung (kein HSTS, ausführlichere Fehlerhinweise).
       MERIDIAN_ENV: ${MERIDIAN_ENV:-prod}
       # IP des Reverse-Proxys, damit Sperre und Audit die echte Client-IP sehen, z. B. 172.19.0.0/16.
       MERIDIAN_TRUSTED_PROXIES: ${MERIDIAN_TRUSTED_PROXIES:-}

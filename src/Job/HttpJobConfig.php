@@ -67,10 +67,15 @@ final readonly class HttpJobConfig
     /** Schema + Host (+ Port, wenn nicht Standard): das Ziel ohne jeden geheimen Teil. */
     public function target(): string
     {
-        $host = str_contains($this->host, ':') ? '[' . $this->host . ']' : $this->host;
-        $default = $this->port === ($this->scheme === 'https' ? 443 : 80);
+        return self::originOf($this->scheme, $this->host, $this->port);
+    }
 
-        return $this->scheme . '://' . $host . ($default ? '' : ':' . $this->port);
+    /** Ursprung wie {@see \Meridian\Runner\Http\ParsedUrl::origin()}: Standardport weggelassen, IPv6 in Klammern. */
+    private static function originOf(string $scheme, string $host, int $port): string
+    {
+        $hostForUrl = str_contains($host, ':') ? '[' . $host . ']' : $host;
+
+        return $scheme . '://' . $hostForUrl . ($port === ($scheme === 'https' ? 443 : 80) ? '' : ':' . $port);
     }
 
     /** Erwartete Statuscodes als Text, z. B. `200-299,404`. */
@@ -164,7 +169,8 @@ final readonly class HttpJobConfig
             || !is_int($redirects) || $redirects < 0 || $redirects > 5
             || !is_int($count) || $count < 0 || $count > 30
             || !is_bool($http['has_headers']) || $http['has_headers'] !== ($count > 0) || !is_bool($http['has_body'])
-            || $http['display_v'] !== UrlDisplay::VERSION || !is_string($http['display_url']) || strlen($http['display_url']) > 2200
+            || !is_int($http['display_v']) || $http['display_v'] < 1 || $http['display_v'] > UrlDisplay::VERSION
+            || !is_string($http['display_url']) || strlen($http['display_url']) > 2200
             || !is_array($target) || array_keys($target) !== ['scheme', 'host', 'port']) {
             throw new InvalidJobConfig();
         }
@@ -185,7 +191,9 @@ final readonly class HttpJobConfig
             $scheme,
             $host,
             $port,
-            $http['display_url'],
+            // Ältere Anzeige-Regel: beim Lesen verschärfen (ohne Entschlüsseln); dauerhaft schreibt es
+            // {@see DisplayUrlUpgrade} beim `migrate`.
+            UrlDisplay::upgradeStored($http['display_url'], self::originOf($scheme, $host, $port), $http['display_v']),
             $http['has_headers'],
             $count,
             $http['has_body'],

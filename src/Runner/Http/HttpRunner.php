@@ -102,7 +102,7 @@ final class HttpRunner implements Runner
             return RunResult::failed('', self::NOTE_BODY_FOR_GET, retryable: false);
         }
 
-        return $this->hops($spec, $payload, $job->categoryId, $timeout, $store, $notes, $heartbeat);
+        return $this->hops($spec, $payload, $job->categoryId, $timeout, $store, $notes, $heartbeat, $masker);
     }
 
     /**
@@ -124,7 +124,7 @@ final class HttpRunner implements Runner
     /**
      * @param list<string> $notes
      */
-    private function hops(HttpJobConfig $spec, #[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat): RunResult
+    private function hops(HttpJobConfig $spec, #[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat, SecretMasker $masker): RunResult
     {
         $deadline = (int) hrtime(true) + $timeout * 1_000_000_000;
         $url = $payload->url();
@@ -195,7 +195,7 @@ final class HttpRunner implements Runner
                 continue;
             }
 
-            return $this->evaluate($spec, $response, $method, $lines, $notes, $store);
+            return $this->evaluate($spec, $response, $method, $lines, $notes, $store, $masker);
         }
     }
 
@@ -203,7 +203,7 @@ final class HttpRunner implements Runner
      * @param list<string> $lines
      * @param list<string> $notes
      */
-    private function evaluate(HttpJobConfig $spec, #[\SensitiveParameter] TransportResponse $response, string $method, #[\SensitiveParameter] array $lines, array $notes, bool $store): RunResult
+    private function evaluate(HttpJobConfig $spec, #[\SensitiveParameter] TransportResponse $response, string $method, #[\SensitiveParameter] array $lines, array $notes, bool $store, SecretMasker $masker): RunResult
     {
         $lines[] = sprintf(
             '← %d · %s · %s',
@@ -215,7 +215,7 @@ final class HttpRunner implements Runner
             $notes[] = self::NOTE_BODY_LIMIT;
         }
         if ($store && $method !== 'HEAD') {
-            $lines[] = self::responseText($response);
+            $lines[] = self::responseText($response, $masker);
         }
 
         if (self::expects($spec, $response->status)) {
@@ -304,9 +304,10 @@ final class HttpRunner implements Runner
 
     /**
      * Antwort für die Ausgabe: nur UTF-8-Text (ohne NUL), sonst ein Vermerk mit der Größe. Der Worker maskiert,
-     * dann kürzt er.
+     * dann kürzt er. Hat der Transport den Body schon beim Lesen gekürzt (vor dem Maskieren), kann an der Kante ein
+     * angeschnittenes Geheimnis stehen: dann hier sofort {@see SecretMasker::maskCut()} (S11-Review).
      */
-    private static function responseText(#[\SensitiveParameter] TransportResponse $response): string
+    private static function responseText(#[\SensitiveParameter] TransportResponse $response, SecretMasker $masker): string
     {
         if ($response->bodyBytes === 0) {
             return 'Antwort: (leer)';
@@ -319,6 +320,9 @@ final class HttpRunner implements Runner
         }
         if (str_contains($body, "\0") || preg_match('//u', $body) !== 1) {
             return '[Binärinhalt, ' . self::bytes($response->bodyBytes) . ', nicht gespeichert]';
+        }
+        if ($cut) {
+            $body = $masker->maskCut($body);
         }
 
         return ($cut ? "Antwort (maskiert, gekürzt):\n" : "Antwort (maskiert):\n") . $body;
