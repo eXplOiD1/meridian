@@ -9,6 +9,15 @@ export function canManageUsers(profile: Profile): boolean {
   return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('users.manage'));
 }
 
+/** Gefährliche Rechte gelten nur uneingeschränkt (alle Kategorien ausdrücklich). */
+export function canManageSettings(profile: Profile): boolean {
+  return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('settings.manage'));
+}
+
+export function canManageInternalTargets(profile: Profile): boolean {
+  return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('network.internal_targets'));
+}
+
 /**
  * Hat der Benutzer das Recht in dieser Kategorie? `category === undefined` fragt „irgendwo“ (z. B. für den
  * Knopf „Neuen Job anlegen“); `null` ist „ohne Kategorie“, das nur uneingeschränkte Rollen bedienen.

@@ -119,3 +119,31 @@ export interface JobLimits {
   max_timeout_seconds: number;
   response_storage: 'off' | 'on' | 'never';
 }
+
+export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path';
+
+export interface SettingEntry {
+  key: string;
+  value: number | string;
+  default: number | string;
+  source: 'default' | 'stored';
+  updated_at: string | null;
+  updated_by: { display_name: string } | null;
+}
+
+export interface SettingChange {
+  setting: SettingEntry;
+  tightened_jobs: number;
+}
+
+export interface InternalTarget {
+  id: number;
+  kind: 'cidr' | 'host';
+  value: string;
+  /** 0 = alle Ports */
+  port: number;
+  category: CategoryRef | null;
+  note: string;
+  created_at: string;
+  created_by: { display_name: string } | null;
+}

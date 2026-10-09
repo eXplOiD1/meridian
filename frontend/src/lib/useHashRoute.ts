@@ -9,6 +9,7 @@ export type Route =
   | { name: 'home' }
   | { name: 'audit' }
   | { name: 'konto' }
+  | { name: 'settings' }
   | { name: 'jobs' }
   | { name: 'job-new' }
   | { name: 'job'; id: string }
@@ -27,6 +28,9 @@ export function parseRoute(hash: string): Route {
   }
   if (parts.length === 1 && first === 'konto') {
     return { name: 'konto' };
+  }
+  if (parts.length === 1 && first === 'einstellungen') {
+    return { name: 'settings' };
   }
   if (first === 'jobs') {
     if (parts.length === 1) {
