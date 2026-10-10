@@ -39,6 +39,7 @@ use Meridian\Runner\Http\TargetGuard;
 use Meridian\Runner\Heartbeat;
 use Meridian\Runner\JobType;
 use Meridian\Runner\RunnerRegistry;
+use Meridian\Schedule\DbLiveLogFactory;
 use Meridian\Schedule\DbRunAuthorizer;
 use Meridian\Schedule\LeaseHeartbeat;
 use Meridian\Schedule\Planner;
@@ -123,13 +124,14 @@ if (is_dir($config->dataDir)) {
                 $runnersFor(JobType::Http),
                 $authorizer,
                 static fn (Heartbeat $heartbeat): Heartbeat => new LeaseHeartbeat($heartbeat, $lease, $clock),
+                new DbLiveLogFactory($db, $clock),
             );
 
             return new Scheduler($lease, $planner, $staleRuns, $worker);
         },
     ));
     $app->add(new WorkerRunCommand(
-        static fn (JobType $type): Worker => new Worker($db, $clock, WorkerIdentity::generate($type), [$type], $runnersFor($type), $authorizer),
+        static fn (JobType $type): Worker => new Worker($db, $clock, WorkerIdentity::generate($type), [$type], $runnersFor($type), $authorizer, null, new DbLiveLogFactory($db, $clock)),
         $env,
         __FILE__,
     ));

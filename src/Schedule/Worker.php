@@ -9,6 +9,7 @@ use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
 use Meridian\Runner\Heartbeat;
 use Meridian\Runner\JobType;
+use Meridian\Runner\NullLiveLog;
 use Meridian\Runner\RunnerRegistry;
 use Meridian\Runner\RunRequest;
 use Meridian\Runner\RunResult;
@@ -65,6 +66,7 @@ final class Worker
     /**
      * @param non-empty-list<JobType>                $types       Job-Typen, die dieser Worker übernimmt
      * @param (\Closure(Heartbeat): Heartbeat)|null $wrapHeartbeat nur `--inline-worker`: {@see LeaseHeartbeat}
+     * @param LiveLogFactory|null                    $liveLogs    Live-Log je Lauf (Betrieb: {@see DbLiveLogFactory}); null = keins
      */
     public function __construct(
         private readonly Connection $db,
@@ -74,6 +76,7 @@ final class Worker
         private readonly RunnerRegistry $runners,
         private readonly RunAuthorizer $authorizer,
         private readonly ?\Closure $wrapHeartbeat = null,
+        private readonly ?LiveLogFactory $liveLogs = null,
     ) {
         $this->types = array_values(array_unique($types, SORT_REGULAR));
         $this->typesJson = json_encode(array_map(static fn (JobType $t): string => $t->value, $this->types), JSON_THROW_ON_ERROR);
@@ -250,22 +253,28 @@ final class Worker
             // Ein fehlender Runner ist ein Einrichtungsfehler: Wiederholen hilft nicht.
             $result = RunResult::failed('', self::NOTE_NO_RUNNER, retryable: false);
         } else {
+            $live = $this->liveLogs?->forRun($request->runId, $masker) ?? new NullLiveLog();
             try {
-                $result = $runner->run($request, $heartbeat, $masker);
+                $result = $runner->run($request, $heartbeat, $masker, $live);
             } catch (\Throwable) {
                 // Die Meldung der Ausnahme kann Payload enthalten: nicht speichern.
                 $result = RunResult::failed('', self::NOTE_RUNNER_ERROR);
+            } finally {
+                $live->flush();
             }
         }
 
         // Abbruch durch Benutzer oder Beenden des Workers: immer „aborted“ mit fester Notiz, nie wiederholt — egal,
         // was der Runner daraus gemacht hat. „Stale“: der Lauf gehört nicht mehr diesem Worker, das Speichern unten
         // trifft keine Zeile mehr.
-        $result = match ($heartbeat->stopReason()) {
+        $aborted = match ($heartbeat->stopReason()) {
             StopReason::Cancelled => RunResult::aborted($result->output, self::NOTE_CANCELLED),
             StopReason::WorkerStopping => RunResult::aborted($result->output, self::NOTE_WORKER_STOPPED),
-            StopReason::Stale, null => $result,
+            StopReason::Stale, null => null,
         };
+        if ($aborted !== null) {
+            $result = $result->outputBytes === null ? $aborted : $aborted->withOutputBytes($result->outputBytes);
+        }
 
         return $this->finish($request, $result, $started, $masker);
     }
@@ -305,7 +314,7 @@ final class Worker
             $now = $this->clock->now();
             $durationMs = max(0, (int) round(((float) $now->format('U.u') - (float) $started->format('U.u')) * 1000.0));
             $updated = $this->db->execute(
-                "UPDATE runs SET status = :status, finished_at = :now, duration_ms = :duration, exit_code = :exit, http_status = :http, output = :output, note = CASE WHEN :note IS NULL THEN note WHEN note IS NULL THEN :note ELSE note || ' ' || :note END WHERE id = :id AND status = 'running' AND worker = :me",
+                "UPDATE runs SET status = :status, finished_at = :now, duration_ms = :duration, exit_code = :exit, http_status = :http, output = :output, output_bytes = :bytes, note = CASE WHEN :note IS NULL THEN note WHEN note IS NULL THEN :note ELSE note || ' ' || :note END WHERE id = :id AND status = 'running' AND worker = :me",
                 [
                     'status' => $result->status->value,
                     'now' => Timestamp::format($now),
@@ -313,6 +322,7 @@ final class Worker
                     'exit' => $result->exitCode,
                     'http' => $result->httpStatus,
                     'output' => $output,
+                    'bytes' => $result->outputBytes,
                     'note' => $note,
                     'id' => $request->runId,
                     'me' => $this->me->id,
