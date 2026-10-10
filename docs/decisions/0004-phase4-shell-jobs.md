@@ -733,6 +733,12 @@ $process = proc_open(
 - Ende: Strom-EOF → `GET /exec/{id}/json` → `ExitCode`. EOF bei `Running = true` → `failed` „Verbindung zum
   Docker-Proxy abgebrochen.“ + `terminate()`-Versuch.
 - `ref()` = `{"kind":"docker","container":…,"exec_id":…,"pgid":…,"user":…}` → `runs.exec_ref`.
+- **Umsetzung S8** (`src/Runner/Shell/Docker/`): Wrapper wie oben, `PAYLOAD_WRAP` beginnt zusätzlich mit
+  `command -v "$1" >/dev/null 2>&1 || exit 127` (Interpreter fehlt → Exit 127 ohne Ausgabe). `DetachKeys: "ctrl-@"`
+  (NUL ist im Skript verboten, also löst kein Byte das Abkoppeln aus). API-Präfix aus `GET /_ping` (`API-Version`,
+  mindestens 1.41, sonst „Docker-API zu alt“; Docker ab 29 lehnt 1.41 ab). Ohne PGID-Kennung oder mit falscher
+  Nonce → Protokollfehler; vor jedem Kill-Exec `GET /exec/{id}/json`. Geprüft gegen einen Fake-Proxy, der das `Cmd`
+  lokal wirklich ausführt (`tests/Support/FakeDockerProxy.php`); gegen echten Docker/wollomatic noch **ungeprüft**.
 
 ### 5.6 `HostSocketExecutor` und Agent-Protokoll (S11)
 
