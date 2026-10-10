@@ -111,8 +111,8 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 | [x] | U1 Job-Editor für Shell (§8): Ausführungsort, Interpreter, Benutzer (Warnung bei `root`), Arbeitsverzeichnis, Skript und Umgebung nur schreibend, „Skript ersetzen“ | frontend |
 | [x] | U2 Live-Log-Ansicht mit EventSource und Rückfall auf Abfragen, Ausgabe als Text, „Lauf abbrechen“ mit `Confirm` (§8) | frontend |
 | [x] | U3 Einstellungen: Karte „Shell-Jobs“ (Maximum Zeitlimit) und „Ausführungsorte“ (§8) | frontend |
-| [ ] | Regeländerungen aus §13 in `CLAUDE.md`, Skills und Hook eintragen | Koordinator |
-| [ ] | Review Phase 4 (Proxy-Allowlist, Kind-Umgebungen, Strom-Maskierung, SSE-Autorisierung) | sicherheit |
+| [x] | Regeländerungen aus §13 in `CLAUDE.md`, Skills und Hook eintragen (lokal, gitignored) | Koordinator |
+| [~] | Review Phase 4 (Proxy-Allowlist, Kind-Umgebungen, Strom-Maskierung, SSE-Autorisierung): Teilprüfung 11.10. durch Koordinator (Executor, Policy, Quelltext-Abruf, Proxy-Client); Fund Container-ID-Umgehung behoben. Offen: unabhängiges Review durch `sicherheit` (Kind-Umgebungen, Strom-Maskierung, SSE) und Abnahme gegen echten Docker (Skript lief am 11.10. auf dem NAS im Container) | sicherheit |
 
 ## Phase 5 – Oberfläche (MVP 8 PT)
 
