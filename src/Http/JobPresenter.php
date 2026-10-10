@@ -159,6 +159,19 @@ final class JobPresenter
     }
 
     /**
+     * Lauf der globalen Verlaufsliste: wie {@see self::run()} ohne Ausgabe, dazu der Job (Name maskiert) und seine Kategorie.
+     *
+     * @return array<string, mixed>
+     */
+    public function runWithJob(RunRecord $run, HttpDisplay $display): array
+    {
+        return $this->run($run, false, $display) + [
+            'job' => ['id' => $run->jobId, 'name' => $this->text($run->jobName), 'type' => $run->jobType->value],
+            'category' => $run->categoryName === null ? null : ['name' => $this->text($run->categoryName)],
+        ];
+    }
+
+    /**
      * @param list<RoleGrant> $grants
      *
      * @return array<string, mixed>

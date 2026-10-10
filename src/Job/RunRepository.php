@@ -62,6 +62,27 @@ AND (:status IS NULL OR r.status = :status) ORDER BY r.id DESC LIMIT :limit';
         return $this->records($rows);
     }
 
+    /**
+     * Verlauf über alle sichtbaren Jobs, neueste zuerst, ohne Ausgabe; gleiche Abfrage und Sichtbarkeit wie
+     * {@see self::history()}. Liefert bis zu `$limit + 1` Läufe (Hinweis auf eine weitere Seite).
+     *
+     * @return list<RunRecord>
+     */
+    public function recent(CategoryScope $scope, int $limit, ?int $beforeId, ?RunStatus $status, ?int $jobId = null): array
+    {
+        $limit = max(1, min($limit, self::MAX_LIMIT));
+        $rows = $this->db->fetchAll(self::QUERY, $scope->sqlParameters() + [
+            'with_output' => 0,
+            'run' => null,
+            'job' => $jobId,
+            'before' => $beforeId,
+            'status' => $status?->value,
+            'limit' => $limit + 1,
+        ]);
+
+        return $this->records($rows);
+    }
+
     /** Ein Lauf (mit Ausgabe, falls verlangt), falls sein Job im Bereich liegt; sonst null (→ 404). */
     public function findVisible(int $runId, CategoryScope $scope, bool $withOutput = true): ?RunRecord
     {
