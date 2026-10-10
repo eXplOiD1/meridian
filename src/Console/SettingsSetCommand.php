@@ -77,12 +77,12 @@ final class SettingsSetCommand extends Command
     }
 
     /**
-     * Die Befehlszeile kennt nur Text: Für das Zeitlimit-Maximum wird eine Ziffernfolge ohne führende Null zur Zahl,
+     * Die Befehlszeile kennt nur Text: Für die Zeitlimit-Maxima (HTTP und Shell) wird eine Ziffernfolge ohne führende Null zur Zahl,
      * sonst bleibt der Text, und {@see \Meridian\Settings\Settings::validate()} entscheidet wie bei der API.
      */
     private static function typed(SettingKey $key, string $value): int|string
     {
-        if ($key === SettingKey::HttpMaxTimeout && preg_match('/^(0|[1-9][0-9]{0,8})$/D', $value) === 1) {
+        if (($key === SettingKey::HttpMaxTimeout || $key === SettingKey::ShellMaxTimeout) && preg_match('/^(0|[1-9][0-9]{0,8})$/D', $value) === 1) {
             return (int) $value;
         }
 

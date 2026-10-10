@@ -18,6 +18,8 @@ enum Permission: string
     case ManageSettings = 'settings.manage';
     /** Kategorien anlegen, umbenennen, löschen (ändert Sichtbarkeit und Freigaben aller betroffenen Benutzer). */
     case ManageCategories = 'categories.manage';
+    /** Ausführungsorte für Shell-Jobs freigeben (Container/Host-Profile: erlaubt Code-Ausführung dort, ADR 0004 E4). */
+    case ManageShellTargets = 'shell.targets';
 
     /**
      * Gefährliche Rechte: Shell-Jobs (über den Docker-Socket praktisch Root), Benutzerverwaltung und alles,
@@ -27,7 +29,7 @@ enum Permission: string
     public function isDangerous(): bool
     {
         return match ($this) {
-            self::EditShellJobs, self::ManageUsers, self::ManageInternalTargets, self::ManageSettings, self::ManageCategories => true,
+            self::EditShellJobs, self::ManageUsers, self::ManageInternalTargets, self::ManageSettings, self::ManageCategories, self::ManageShellTargets => true,
             self::ViewJobs, self::RunJobs, self::EditHttpJobs, self::EditStatusPages => false,
         };
     }
