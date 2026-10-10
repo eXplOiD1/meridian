@@ -6,14 +6,15 @@ namespace Meridian\Job;
 
 use Meridian\Database\Connection;
 use Meridian\Runner\JobType;
+use Meridian\Runner\LiveStream;
 use Meridian\Schedule\RunStatus;
 use Meridian\Schedule\RunTrigger;
 use Meridian\Security\CategoryScope;
 
 /**
  * Läufe lesen. Läufe erben die Kategorie ihres Jobs und kappen über dasselbe Prädikat wie
- * {@see JobRepository} ({@see ScopeSql::PREDICATE}). Die Spalten sind eine Allowlist: `worker` und
- * `heartbeat_at` werden nie geladen (H2), `exit_code` ist für HTTP-Läufe ohne Bedeutung.
+ * {@see JobRepository} ({@see ScopeSql::PREDICATE}). Die Spalten sind eine Allowlist: `worker`,
+ * `heartbeat_at` und `exec_ref` werden nie geladen (H2), `exit_code` ist für HTTP-Läufe ohne Bedeutung.
  */
 final class RunRepository
 {
@@ -22,22 +23,19 @@ final class RunRepository
     /**
      * Die eine Abfrage für Verlauf und Einzelabruf. Das Prädikat der Sichtbarkeit ist derselbe Text wie
      * {@see ScopeSql::PREDICATE} (ein Test prüft das). `output` liefert nur der Einzelabruf. Ausgewählt wird nie
-     * `worker` oder `heartbeat_at` (H2).
+     * `worker`, `heartbeat_at` oder `exec_ref` (H2). Unter 1000 Zeichen halten: längere Konstanten sieht Psalm nicht
+     * mehr als `literal-string`.
      */
     private const QUERY = 'SELECT r.id, r.job_id, r.trigger, r.status, r.attempt, r.scheduled_for, r.started_at, r.finished_at,
-            r.duration_ms, r.http_status, r.note, r.started_by, u.display_name AS started_by_name, c.name AS category_name,
-            j.type AS job_type, CASE WHEN :with_output = 1 THEN r.output END AS output
-       FROM runs r
-       JOIN jobs j ON j.id = r.job_id
-       LEFT JOIN categories c ON c.id = j.category_id
-       LEFT JOIN users u ON u.id = r.started_by
-      WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))
-        AND (:run IS NULL OR r.id = :run)
-        AND (:job IS NULL OR r.job_id = :job)
-        AND (:before IS NULL OR r.id < :before)
-        AND (:status IS NULL OR r.status = :status)
-      ORDER BY r.id DESC
-      LIMIT :limit';
+r.duration_ms, r.http_status, r.note, r.started_by, u.display_name AS started_by_name, c.name AS category_name,
+j.type AS job_type, j.name AS job_name, CASE WHEN :with_output = 1 THEN r.output END AS output, r.exit_code,
+r.cancel_requested_at, r.cancel_requested_by, cu.display_name AS cancelled_by_name, r.output_bytes,
+EXISTS (SELECT 1 FROM run_log_chunks k WHERE k.run_id = r.id) AS live
+FROM runs r JOIN jobs j ON j.id = r.job_id LEFT JOIN categories c ON c.id = j.category_id
+LEFT JOIN users u ON u.id = r.started_by LEFT JOIN users cu ON cu.id = r.cancel_requested_by
+WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))
+AND (:run IS NULL OR r.id = :run) AND (:job IS NULL OR r.job_id = :job) AND (:before IS NULL OR r.id < :before)
+AND (:status IS NULL OR r.status = :status) ORDER BY r.id DESC LIMIT :limit';
 
     public function __construct(private readonly Connection $db)
     {
@@ -64,11 +62,11 @@ final class RunRepository
         return $this->records($rows);
     }
 
-    /** Ein Lauf mit Ausgabe, falls sein Job im Bereich liegt; sonst null (→ 404). */
-    public function findVisible(int $runId, CategoryScope $scope): ?RunRecord
+    /** Ein Lauf (mit Ausgabe, falls verlangt), falls sein Job im Bereich liegt; sonst null (→ 404). */
+    public function findVisible(int $runId, CategoryScope $scope, bool $withOutput = true): ?RunRecord
     {
         $rows = $this->db->fetchAll(self::QUERY, $scope->sqlParameters() + [
-            'with_output' => 1,
+            'with_output' => $withOutput ? 1 : 0,
             'run' => $runId,
             'job' => null,
             'before' => null,
@@ -77,6 +75,30 @@ final class RunRepository
         ]);
 
         return $this->records($rows)[0] ?? null;
+    }
+
+    /**
+     * Stücke des Live-Logs nach `$afterSeq`, in Reihenfolge. Nur nach `findVisible()` und `require()` für denselben
+     * Lauf aufrufen: diese Abfrage prüft keinen Bereich.
+     *
+     * @return list<LiveChunk>
+     */
+    public function chunksAfter(int $runId, int $afterSeq, int $limit): array
+    {
+        $rows = $this->db->fetchAll(
+            'SELECT seq, stream, data FROM run_log_chunks WHERE run_id = :run AND seq > :after ORDER BY seq LIMIT :limit',
+            ['run' => $runId, 'after' => max(0, $afterSeq), 'limit' => max(1, min($limit, LiveChunk::MAX_LIMIT))],
+        );
+        $chunks = [];
+        foreach ($rows as $row) {
+            $stream = LiveStream::tryFrom(Row::string($row, 'stream'));
+            if ($stream === null) {
+                throw new \UnexpectedValueException('Live-Log von Lauf ' . $runId . ' hat einen unbekannten Strom.');
+            }
+            $chunks[] = new LiveChunk(Row::int($row, 'seq'), $stream, Row::string($row, 'data'));
+        }
+
+        return $chunks;
     }
 
     /**
@@ -111,6 +133,13 @@ final class RunRepository
                 Row::stringOrNull($row, 'started_by_name'),
                 Row::stringOrNull($row, 'category_name'),
                 $type,
+                Row::intOrNull($row, 'exit_code'),
+                Row::stringOrNull($row, 'cancel_requested_at'),
+                Row::intOrNull($row, 'cancel_requested_by'),
+                Row::stringOrNull($row, 'cancelled_by_name'),
+                Row::intOrNull($row, 'output_bytes'),
+                Row::int($row, 'live') === 1,
+                Row::string($row, 'job_name'),
             );
         }
 
