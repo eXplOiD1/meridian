@@ -6,6 +6,7 @@ namespace Meridian\Http;
 
 use Meridian\Auth\AuditLog;
 use Meridian\Auth\Clock;
+use Meridian\Auth\CsrfGuard;
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
 use Meridian\Job\JobRepository;
@@ -31,8 +32,8 @@ use Symfony\Component\HttpFoundation\Response;
  * sie bearbeitbar zeigt. Deshalb streng: nur bei Einstellung `jobs.reveal_for_edit = on`, nie im normalen Detail
  * oder in der Liste, nur mit Bearbeitungsrecht (nicht bloßer Ansicht), `no-store`, Rate-Limit und Audit je Abruf.
  *
- * Ablauf: Sitzung (401; Pflicht-Passwortwechsel → 403) → `Sec-Fetch-Site: same-origin` (403, Pflicht: nur die
- * Oberfläche im Browser) → Einstellung (403 `reveal_disabled`) → Job über die Sicht `jobs.view` (nicht sichtbar → 404)
+ * Ablauf: Sitzung (401; Pflicht-Passwortwechsel → 403) → Herkunft (403): `Sec-Fetch-Site` wenn vorhanden `same-origin`, sonst
+ * (reines HTTP) gültiges `X-CSRF-Token` und passender Origin/Referer-Host → Einstellung (403 `reveal_disabled`) → Job über die Sicht `jobs.view` (nicht sichtbar → 404)
  * → `jobs.edit_http` bzw. `jobs.edit_shell` für die gespeicherte Kategorie (403) → in einer Transaktion
  * Rate-Limit (429 + Retry-After) und Audit `job.source_viewed` (nur `job:ID Name`, nie Inhalt) → entschlüsseln.
  * Der Inhalt erscheint in keinem Log, keiner Exception und keiner Fehlermeldung.
@@ -42,11 +43,12 @@ final class JobSourceController
     public const MAX_PER_HOUR = 60;
     public const AUDIT_ACTION = 'job.source_viewed';
     public const DISABLED_MESSAGE = 'Die Anzeige gespeicherter Skripte und Links ist deaktiviert (Einstellungen).';
-    public const ORIGIN_MESSAGE = 'Nur aus der Oberfläche im Browser abrufbar (Sec-Fetch-Site: same-origin). Die Seite neu laden.';
+    public const ORIGIN_MESSAGE = 'Nur aus der Oberfläche im Browser abrufbar (gleiche Herkunft, gültiges Sitzungs-Token). Die Seite neu laden.';
     public const RATE_MESSAGE = 'Zu viele Abrufe gespeicherter Werte (höchstens 60 je Stunde). Später erneut versuchen.';
 
     public function __construct(
         private readonly SessionAuth $sessionAuth,
+        private readonly CsrfGuard $csrf,
         private readonly UserRepository $users,
         private readonly AccessControl $access,
         private readonly JobRepository $jobs,
@@ -69,8 +71,21 @@ final class JobSourceController
         if ($session === null) {
             return JsonReply::error(401, 'Nicht angemeldet.');
         }
-        if ($request->headers->get('Sec-Fetch-Site') !== 'same-origin') {
-            return JsonReply::error(403, self::ORIGIN_MESSAGE);
+        // Browser senden Sec-Fetch-Site nur bei „vertrauenswürdigen“ Herkünften (HTTPS, localhost), nicht bei
+        // http://<LAN-IP>. Fehlt der Header, zählt stattdessen das CSRF-Token im Header (ohne CORS-Preflight setzt
+        // es keine fremde Seite) und, falls vorhanden, ein zum Host passender Origin/Referer.
+        $site = $request->headers->get('Sec-Fetch-Site');
+        if ($site !== null) {
+            if ($site !== 'same-origin') {
+                return JsonReply::error(403, self::ORIGIN_MESSAGE);
+            }
+        } else {
+            if (!$this->csrf->tokenValid($request, $session->token)) {
+                return JsonReply::csrfFailed();
+            }
+            if (!$this->csrf->originMatchesIfPresent($request)) {
+                return JsonReply::error(403, self::ORIGIN_MESSAGE);
+            }
         }
         if (!$this->settings->revealForEdit()) {
             return JsonReply::json(['error' => self::DISABLED_MESSAGE, 'reveal_disabled' => true], 403);

@@ -34,6 +34,30 @@ final class CsrfGuard
     }
 
     /**
+     * Nur das Token im Header, gegen die Sitzung geprüft (für lesende Anfragen ohne `Sec-Fetch-Site`).
+     */
+    public function tokenValid(#[\SensitiveParameter] Request $request, #[\SensitiveParameter] string $sessionToken): bool
+    {
+        $given = $request->headers->get(self::HEADER);
+
+        return $given !== null && hash_equals($this->tokenFor($sessionToken), $given);
+    }
+
+    /**
+     * Wie {@see originMatches()}, aber ohne Origin und Referer ist das in Ordnung; sind sie da, muss der Host passen.
+     */
+    public function originMatchesIfPresent(#[\SensitiveParameter] Request $request): bool
+    {
+        $origin = $request->headers->get('Origin');
+        $referer = $request->headers->get('Referer');
+        if (($origin === null || $origin === '') && ($referer === null || $referer === '')) {
+            return true;
+        }
+
+        return $this->originMatches($request);
+    }
+
+    /**
      * Herkunftsprüfung ohne Sitzung (Anmeldung): fehlt Origin und Referer, wird abgelehnt.
      */
     public function originMatches(#[\SensitiveParameter] Request $request): bool

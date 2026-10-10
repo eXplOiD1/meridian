@@ -224,7 +224,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       return undefined;
     }
     let cancelled = false;
-    request<JobSource>('GET', '/api/jobs/' + id + '/source')
+    request<JobSource>('GET', '/api/jobs/' + id + '/source', { csrf: profile.csrf_token })
       .then((source) => {
         if (cancelled) {
           return;
