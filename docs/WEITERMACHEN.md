@@ -4,24 +4,23 @@ Branch `claude/great-clarke-ubr0vc`. Phase 1–3 sind abgeschlossen (Review inkl
 ist begonnen, Phase 4 (Shell-Jobs) ist entworfen. Normativ: `docs/decisions/0003-phase3-http-jobs.md` (+Nachtrag E13–E17),
 `0004-phase4-shell-jobs.md`, `0005-benutzer-und-rollen.md`. Aufgabenliste: `TODO.md`.
 
-## Stand Phase 4a
-Fertig und gepusht: S1 (Migration 0009, Rechte, GrantPolicy, letzter Admin), S2 (Einmalpasswort, Passwort-Bestätigung, Sitzungen),
-S3 (lesende Benutzer-API), S7 (Kategorien-Verwaltung API + CLI).
-**S4 und S6 sind fertig (2e73311, 2fb0401).** Offen in 4a: S5, S8, U1–U5, Review.
-(alter Hinweis, erledigt:) S4 Der Stand liegt als
-`docs/wip/phase4a-s4-benutzer-schreib-api-unfertig.patch` (`git apply`; betrifft `AppFactory`, `UserController`, `UserRepository`
-und neue Klassen `Actor`, `CreatedUser`, `DisplayName`, `UserAdminService`, `UserRequestRefused`). Danach Tests, Qualitätskette,
-committen, Patch löschen.
+## Stand (11.10.2026)
+Phase 1–3 und **Phase 4a (Benutzer und Rollen)** sind abgeschlossen (Review inkl. Fixes, d5860bf).
+**Phase 4 (Shell-Jobs) läuft:** fertig und gepusht: S9 (Compose mit docker-socket-proxy, worker-http/-shell, Sandbox), S1 (Migrationen 0010/0011,
+Recht `shell.targets`, `shell.max_timeout_seconds`), S2 (Planer/Worker getrennt, `worker:run --type=http|shell`).
+**S3 (StreamMasker, OutputCollector, LiveLog) ist angefangen, ungeprüft:** Stand als `docs/wip/phase4-s3-streammasker-unfertig.patch`
+(`git apply`; betrifft bin/meridian, HttpRunner, RunResult, Runner, Worker, SecretMasker und neue Klassen LiveLog*, Utf8, `src/Runner/Shell/`,
+DbLiveLog*). Tests liegen teils lokal (gitignored). Danach S3 abschließen, Patch löschen.
 
 ## Nächste Schritte (in dieser Reihenfolge)
-1. **S4** fertigstellen (anlegen mit Einmalpasswort, Anzeigename, Zuweisungen, deaktivieren/aktivieren, Soft-Delete, Audit, Grenzen).
-2. **S6** eigene Daten (`PUT /api/auth/profile`, `POST /api/auth/password`, Sitzungen), **S5** Admin-Passwort-Reset/2FA-Reset/Sitzungen beenden
-   (sicherheit), **S8** Gesamtsuite (tester).
-3. **U1–U5** Oberfläche (frontend): Benutzer & Rollen, Zuweisungs-Editor, Konto-/Sicherheitsaktionen, Kategorien-Seite, Mein Konto,
-   Screen „Passwort festlegen“ (403 mit `password_change_required`), Bezeichnung für `categories.manage` in `lib/permissions.ts`.
-4. Review Phase 4a (sicherheit); dabei auch prüfen: einmaliges 403 bei `POST /api/jobs` direkt nach frischer Sitzung (nicht reproduziert).
-5. **Phase 4 – Shell-Jobs** nach ADR 0004 (neue Compose-Struktur mit Proxy `wollomatic/socket-proxy`, Sandbox-Container, Worker).
-6. PHPStan max unter PHP 8.4 bzw. in CI belegen; neue ZIP an Alex nach jedem Abschluss.
+1. **Phase 4 S3** fertig (StreamMasker zeilenweise mit Überhang, OutputCollector Kopf 16 KiB + Ende 48 KiB, LiveLog 1 MiB, Runner-Signatur).
+2. S4 (Abbruch- und Log-API), S5 (Live-Log per SSE), S6 (Shell-Domäne, Ausführungsorte), S7 (LocalProcessExecutor, ShellRunner),
+   S8 (Docker-Exec über Proxy), S10 (Proxy für HTTP unerreichbar), S11 (Host-Agent, darf nach Phase 9), S12 (Gesamtsuite), U1–U3, Review.
+3. PHPStan max unter PHP 8.4 bzw. in CI belegen; neue ZIP an Alex nach jedem Abschluss.
+
+## Offene Entscheidungen von Alex (bis dahin gelten die Empfehlungen aus ADR 0004 O1–O12 und 0005 B1–B14)
+- Proxy-Image `wollomatic/socket-proxy` mit Digest pinnen (lokal kein Netz: Digest selbst eintragen, `MERIDIAN_PROXY_IMAGE`).
+- Compose-Betrieb: Scheduler erreicht Meridian über `web:8080`/Host-Port; optional `MERIDIAN_SELF_HOSTS` (0003 E17).
 
 ## Arbeitsweise (Sparmodus, Entscheidung Alex 10.10.)
 - Agenten starten mit Stufe **mittel** (Umsetzung); **hoch** nur für Entwürfe und das Phasen-Review der Sicherheit. Stufe nur beim Start einstellbar.
