@@ -73,6 +73,17 @@ final class Settings
         return is_string($value) ? (DisplayHostMode::tryFrom($value) ?? DisplayHostMode::default()) : DisplayHostMode::default();
     }
 
+    /**
+     * `jobs.reveal_for_edit`: liefert `GET /api/jobs/{id}/source` gespeicherte Werte an Bearbeiter? Ein ungültiger
+     * Wert in der Datenbank gilt als „aus“ (nie lockerer als der Standard).
+     */
+    public function revealForEdit(): bool
+    {
+        $value = $this->read(SettingKey::JobsRevealForEdit);
+
+        return is_string($value) && RevealForEdit::tryFrom($value) === RevealForEdit::On;
+    }
+
     /** Beide Anzeige-Einstellungen eines HTTP-Jobs, einmal je Anfrage zu lesen. */
     public function httpDisplay(): HttpDisplay
     {
@@ -128,6 +139,13 @@ final class Settings
                 }
 
                 return $host->value;
+            case SettingKey::JobsRevealForEdit:
+                $reveal = is_string($value) ? RevealForEdit::tryFrom($value) : null;
+                if ($reveal === null) {
+                    throw new InvalidSetting('Gespeicherte Skripte und Links im Editor anzeigen: erlaubt sind „off“ und „on“.');
+                }
+
+                return $reveal->value;
         }
     }
 

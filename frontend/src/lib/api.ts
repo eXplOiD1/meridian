@@ -32,6 +32,8 @@ export class ApiError extends Error {
   readonly trustedProxiesRequired: boolean;
   /** 403 wegen veraltetem CSRF-Token (`csrf_failed: true`): das Token ist neu geladen, der Benutzer sendet erneut. */
   readonly csrfFailed: boolean;
+  /** 403 von `GET /api/jobs/{id}/source`, weil die Einstellung `jobs.reveal_for_edit` aus ist (`reveal_disabled: true`). */
+  readonly revealDisabled: boolean;
 
   constructor(
     message: string,
@@ -41,6 +43,7 @@ export class ApiError extends Error {
     fields: Record<string, string> = {},
     trustedProxiesRequired = false,
     csrfFailed = false,
+    revealDisabled = false,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -50,6 +53,7 @@ export class ApiError extends Error {
     this.fields = fields;
     this.trustedProxiesRequired = trustedProxiesRequired;
     this.csrfFailed = csrfFailed;
+    this.revealDisabled = revealDisabled;
   }
 }
 
@@ -83,6 +87,8 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path
     response = await fetch(path, {
       method,
       credentials: 'same-origin',
+      // API-Antworten nie im Browser-Cache (der Server schickt ohnehin no-store; gespeicherte Werte im Editor).
+      cache: 'no-store',
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     });
@@ -129,6 +135,7 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path
       fieldErrors(data),
       isRecord(data) && data.trusted_proxies_required === true,
       csrfFailed,
+      response.status === 403 && isRecord(data) && data.reveal_disabled === true,
     );
   }
 

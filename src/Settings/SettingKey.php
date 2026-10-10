@@ -6,7 +6,7 @@ namespace Meridian\Settings;
 
 /**
  * Die Allowlist der globalen Einstellungen (docs/decisions/0003, E10). Dieselben Schlüssel stehen als CHECK in
- * `settings.key` (Migration 0007, `http.display_host` seit 0008, `shell.max_timeout_seconds` seit 0011); ein neuer Schlüssel braucht deshalb eine neue Migration. Nie Geheimnisse.
+ * `settings.key` (Migration 0007, `http.display_host` seit 0008, `shell.max_timeout_seconds` seit 0011, `jobs.reveal_for_edit` seit 0012); ein neuer Schlüssel braucht deshalb eine neue Migration. Nie Geheimnisse.
  */
 enum SettingKey: string
 {
@@ -15,6 +15,7 @@ enum SettingKey: string
     case HttpDisplayPath = 'http.display_path';
     case HttpDisplayHost = 'http.display_host';
     case ShellMaxTimeout = 'shell.max_timeout_seconds';
+    case JobsRevealForEdit = 'jobs.reveal_for_edit';
 
     /** Standardwert ohne Zeile in `settings`. */
     public function default(): int|string
@@ -25,6 +26,7 @@ enum SettingKey: string
             self::HttpDisplayPath => DisplayPathMode::default()->value,
             self::HttpDisplayHost => DisplayHostMode::default()->value,
             self::ShellMaxTimeout => Settings::SHELL_DEFAULT_MAX_TIMEOUT_SECONDS,
+            self::JobsRevealForEdit => RevealForEdit::default()->value,
         };
     }
 }

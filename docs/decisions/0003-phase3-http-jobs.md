@@ -958,3 +958,24 @@ Offen: Im Compose-Betrieb erreicht der Scheduler das Web unter dem Dienstnamen `
 die eigene Schnittstelle) und über den veröffentlichten Host-Port (`MERIDIAN_PORT`, Standard 8090); beides fängt
 die Regel nur, wenn der Admin es nicht per Freigabe öffnet.
 
+
+## Nachtrag N1 (2026-10-10): Gespeicherte Anfrage im Editor anzeigen (`jobs.reveal_for_edit`)
+
+Entscheidung Alex (im Chat bestätigt, übermittelt vom Hauptagenten): „Ja, so bauen, aber hinter einer Einstellung,
+Standard ist wie jetzt.“ Grund: Beim Bearbeiten musste jedes Mal die ganze Anfrage neu eingegeben werden.
+
+- Neue globale Einstellung `jobs.reveal_for_edit` = `off` | `on`, **Standard `off`** (Migration 0012 erweitert den
+  CHECK von `settings.key`). Ändern nur mit `settings.manage`, Audit `settings.changed` (API und CLI gleich).
+- Weitere Ausnahme von „keine Geheimnisse in Antworten“ neben `display_url`: **nur** der dedizierte Endpunkt
+  `GET /api/jobs/{id}/source`, nie Detail, Liste oder Verlauf. Antwort unmaskiert
+  `{job_id, type: "http", url, headers: [{name, value}], body}`.
+- Prüfreihenfolge: Sitzung (401, Pflichtwechsel 403) → `Sec-Fetch-Site: same-origin` Pflicht (403) → Einstellung
+  (403 `reveal_disabled`, „Die Anzeige gespeicherter Skripte und Links ist deaktiviert (Einstellungen).“) → Sicht
+  `jobs.view` (404) → `jobs.edit_http` für die gespeicherte Kategorie (403) → Rate-Limit 60 je Benutzer und Stunde
+  (429 + `Retry-After`, gezählt über die Audit-Einträge) → Audit `job.source_viewed` (`job:ID Name`, nie Inhalt) je
+  Abruf → Entschlüsseln im Web-Prozess (`JobSourceReader`), `Cache-Control: no-store`, `Pragma: no-cache`.
+- Der Inhalt erscheint in keinem Log, keiner Exception, keiner Fehlermeldung (`#[\SensitiveParameter]`, `Sealed`,
+  feste Meldung `JobSourceUnreadable`). Die Oberfläche hält die Werte nur im Zustand des Editors und löscht sie beim
+  Speichern und Verlassen; nie Browser-Speicher oder URL. Bearbeiten bleibt: `PUT` ersetzt die Anfrage als Ganzes.
+- Restrisiko (bewusst akzeptiert): Wer `jobs.edit_http` für eine Kategorie hat, sieht bei `on` Tokens in URLs,
+  Header-Werte und Bodies dieser Jobs im Klartext.

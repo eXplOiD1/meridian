@@ -119,6 +119,15 @@ final class HttpPayload implements \JsonSerializable
         );
     }
 
+    /**
+     * Die URL genau wie gespeichert. Nur für den Bearbeiten-Endpunkt `GET /api/jobs/{id}/source` (Einstellung
+     * `jobs.reveal_for_edit`, ADR 0003 N1); der Runner nutzt {@see self::url()}.
+     */
+    public function urlText(): string
+    {
+        return $this->url->open();
+    }
+
     public function url(): ParsedUrl
     {
         return $this->parsed;

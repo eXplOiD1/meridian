@@ -1061,3 +1061,12 @@ Rückfall auf Abfragen; §5 „Befehl ausführen“ nur mit `jobs.edit_shell`, W
 
 **Hook (`rule-router.js`):** `Privileged.{0,5}true` und `tcp://` bei `MERIDIAN_DOCKER_PROXY` als Verstoß;
 `proc_open(` ohne `setsid` in `src/Runner/Shell` als Hinweis.
+
+## Nachtrag N1 (2026-10-10): Gespeichertes Skript im Editor anzeigen (`jobs.reveal_for_edit`)
+
+Wie ADR 0003 N1 (Entscheidung Alex, Standard aus): Bei `jobs.reveal_for_edit = on` liefert
+`GET /api/jobs/{id}/source` für Shell-Jobs `{job_id, type: "shell", script, env: [{name, value}]}` unmaskiert, nur mit
+`jobs.edit_shell` (gefährlich, also nur uneingeschränkt) für die gespeicherte Kategorie; Beobachter, Operatoren und
+eingeschränkte Admins nie. Damit entschlüsselt der Web-Prozess `payload_enc` von Shell-Jobs an genau dieser Stelle
+(`JobSourceReader`); E6 („nur der Shell-Worker liest es“) gilt sonst weiter. Der Web-Dienst mountet
+`meridian-secrets` (compose.yaml, `&common`). Skript und Umgebung bleiben „nur als Ganzes ersetzen“ (PUT).

@@ -16,7 +16,7 @@ final class JsonReply
     /**
      * @param array<mixed> $data
      */
-    public static function json(array $data, int $status = 200): JsonResponse
+    public static function json(#[\SensitiveParameter] array $data, int $status = 200): JsonResponse
     {
         $response = new JsonResponse(null, $status);
         $response->setEncodingOptions($response->getEncodingOptions() | JSON_INVALID_UTF8_SUBSTITUTE);
