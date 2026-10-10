@@ -8,6 +8,8 @@ use Meridian\Job\HttpJobConfig;
 use Meridian\Job\InvalidJobConfig;
 use Meridian\Job\StoreResponse;
 use Meridian\Runner\Heartbeat;
+use Meridian\Runner\LiveLog;
+use Meridian\Runner\LiveStream;
 use Meridian\Runner\JobType;
 use Meridian\Runner\Runner;
 use Meridian\Runner\RunRequest;
@@ -60,7 +62,7 @@ final class HttpRunner implements Runner
     }
 
     #[\Override]
-    public function run(RunRequest $request, Heartbeat $heartbeat, SecretMasker $masker): RunResult
+    public function run(RunRequest $request, Heartbeat $heartbeat, SecretMasker $masker, LiveLog $live): RunResult
     {
         $job = $this->jobs->load($request->jobId);
         if ($job === null || $job->type !== JobType::Http->value) {
@@ -105,7 +107,7 @@ final class HttpRunner implements Runner
         // http.display_host = hidden: auch die Laufausgabe nennt keinen Host (frisch je Lauf gelesen).
         $hideHost = $this->settings->hidesHost();
 
-        return $this->hops($spec, $payload, $job->categoryId, $timeout, $store, $notes, $heartbeat, $masker, $hideHost);
+        return $this->hops($spec, $payload, $job->categoryId, $timeout, $store, $notes, $heartbeat, $masker, $live, $hideHost);
     }
 
     /**
@@ -127,7 +129,7 @@ final class HttpRunner implements Runner
     /**
      * @param list<string> $notes
      */
-    private function hops(HttpJobConfig $spec, #[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat, SecretMasker $masker, bool $hideHost): RunResult
+    private function hops(HttpJobConfig $spec, #[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat, SecretMasker $masker, LiveLog $live, bool $hideHost): RunResult
     {
         $deadline = (int) hrtime(true) + $timeout * 1_000_000_000;
         $url = $payload->url();
@@ -158,6 +160,7 @@ final class HttpRunner implements Runner
             }
 
             $lines[] = '→ ' . $method . ' ' . ($hideHost ? UrlDisplay::hiddenOrigin($url->origin()) : $url->origin());
+            self::live($live, $masker, LiveStream::Sys, end($lines));
             $response = $this->transport->send(new TransportRequest($method, $pinned, $headers, $body, $remainingMs), $heartbeat);
 
             if ($response->error !== null) {
@@ -193,12 +196,13 @@ final class HttpRunner implements Runner
                     $spec->maxRedirects,
                     $next->origin() === $url->origin() ? 'gleicher Server' : 'anderer Server',
                 );
+                self::live($live, $masker, LiveStream::Sys, end($lines));
                 $url = $next;
 
                 continue;
             }
 
-            return $this->evaluate($spec, $response, $method, $lines, $notes, $store, $masker);
+            return $this->evaluate($spec, $response, $method, $lines, $notes, $store, $masker, $live);
         }
     }
 
@@ -206,7 +210,7 @@ final class HttpRunner implements Runner
      * @param list<string> $lines
      * @param list<string> $notes
      */
-    private function evaluate(HttpJobConfig $spec, #[\SensitiveParameter] TransportResponse $response, string $method, #[\SensitiveParameter] array $lines, array $notes, bool $store, SecretMasker $masker): RunResult
+    private function evaluate(HttpJobConfig $spec, #[\SensitiveParameter] TransportResponse $response, string $method, #[\SensitiveParameter] array $lines, array $notes, bool $store, SecretMasker $masker, LiveLog $live): RunResult
     {
         $lines[] = sprintf(
             '← %d · %s · %s',
@@ -214,11 +218,13 @@ final class HttpRunner implements Runner
             self::seconds($response->durationMs),
             $response->bodyLimitReached ? 'über 10 MiB' : self::bytes($response->bodyBytes),
         );
+        self::live($live, $masker, LiveStream::Sys, end($lines));
         if ($response->bodyLimitReached) {
             $notes[] = self::NOTE_BODY_LIMIT;
         }
         if ($store && $method !== 'HEAD') {
             $lines[] = self::responseText($response, $masker);
+            self::live($live, $masker, LiveStream::Out, end($lines));
         }
 
         if (self::expects($spec, $response->status)) {
@@ -233,6 +239,14 @@ final class HttpRunner implements Runner
         }
 
         return RunResult::failed(self::text($lines), self::note([$note, ...$notes]), null, $response->status, !$isRedirect);
+    }
+
+    /**
+     * Statuszeile live senden: erst maskieren (Masker des Laufs), dann senden (ADR 0004 E8).
+     */
+    private static function live(LiveLog $live, SecretMasker $masker, LiveStream $stream, #[\SensitiveParameter] string $line): void
+    {
+        $live->append($stream, $masker->mask($line) . "\n");
     }
 
     private static function expects(HttpJobConfig $spec, int $status): bool

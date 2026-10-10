@@ -22,7 +22,16 @@ final readonly class RunResult
         public ?int $exitCode,
         public ?int $httpStatus,
         public bool $retryable,
+        public ?int $outputBytes = null,
     ) {
+    }
+
+    /**
+     * Gelesene Rohbytes der Ausgabe (auch der nicht gespeicherten), für `runs.output_bytes` („N B ausgelassen“).
+     */
+    public function withOutputBytes(int $bytes): self
+    {
+        return new self($this->status, $this->output, $this->note, $this->exitCode, $this->httpStatus, $this->retryable, max(0, $bytes));
     }
 
     public static function ok(string $output = '', ?int $exitCode = null, ?int $httpStatus = null, ?string $note = null): self
