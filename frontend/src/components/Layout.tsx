@@ -1,6 +1,6 @@
 import { InsecureWarning } from './InsecureWarning';
 import type { ReactNode } from 'react';
-import { canManageCategories, canManageInternalTargets, canManageSettings, canManageUsers, canViewJobs, roleNames } from '../lib/permissions';
+import { canManageCategories, canManageInternalTargets, canManageSettings, canManageShellTargets, canManageUsers, canViewJobs, roleNames } from '../lib/permissions';
 import type { Route } from '../lib/useHashRoute';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { Profile } from '../types';
@@ -46,7 +46,7 @@ function entries(profile: Profile): NavEntry[] {
   if (canManageUsers(profile)) {
     list.push({ path: 'audit', label: 'Audit-Log', current: (r) => r.name === 'audit' });
   }
-  if (canManageSettings(profile) || canManageInternalTargets(profile)) {
+  if (canManageSettings(profile) || canManageInternalTargets(profile) || canManageShellTargets(profile)) {
     list.push({ path: 'einstellungen', label: 'Einstellungen', current: (r) => r.name === 'settings' });
   }
   list.push({ path: 'konto', label: 'Mein Konto', current: (r) => r.name === 'konto' });

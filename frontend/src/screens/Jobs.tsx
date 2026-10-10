@@ -4,6 +4,7 @@ import { RunBadge } from '../components/RunBadge';
 import { request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatShort } from '../lib/format';
+import { shellTargetLabel } from '../components/ShellSections';
 import { TargetText } from '../components/TargetText';
 import { hostOf, isHostHidden, presetName, STATE_LABEL, stateOf } from '../lib/jobs';
 import type { JobState } from '../lib/jobs';
@@ -32,7 +33,7 @@ function matches(job: JobSummary, status: StatusFilter, category: string, search
   if (needle === '') {
     return true;
   }
-  const haystack = [job.name, job.category?.name ?? '', job.http === null || isHostHidden(job.http.target) ? '' : hostOf(job.http.target), job.owner?.display_name ?? ''].join('\n').toLowerCase();
+  const haystack = [job.name, job.category?.name ?? '', job.http == null ? (job.shell?.target.name ?? '') : isHostHidden(job.http.target) ? '' : hostOf(job.http.target), job.owner?.display_name ?? ''].join('\n').toLowerCase();
   return haystack.includes(needle);
 }
 
@@ -167,7 +168,7 @@ export function Jobs({ profile }: { profile: Profile }) {
                           {job.name}
                         </a>
                         <span className="joblink__sub">
-                          {job.http !== null ? <TargetText target={job.http.target} /> : '–'}
+                          {job.http != null ? <TargetText target={job.http.target} /> : job.shell != null ? shellTargetLabel(job.shell.target.kind, job.shell.target.name) : '–'}
                           {job.category !== null ? ' · ' + job.category.name : ''}
                         </span>
                         {state !== 'scheduled' && <span className={'jobstate jobstate--' + state}>{STATE_LABEL[state]}</span>}

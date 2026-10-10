@@ -6,8 +6,8 @@ import { FormField } from '../components/FormField';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatTime } from '../lib/format';
-import { canManageInternalTargets, canManageSettings } from '../lib/permissions';
-import type { CategoryRef, InternalTarget, Profile, SettingChange, SettingEntry } from '../types';
+import { canManageInternalTargets, canManageSettings, canManageShellTargets } from '../lib/permissions';
+import type { CategoryRef, InternalTarget, Profile, SettingChange, SettingEntry, ShellTargetEntry } from '../types';
 
 /** Beschreibung je Einstellung. Der Server kennt dieselbe Allowlist und lehnt alles andere ab. */
 interface SettingSpec {
@@ -74,6 +74,16 @@ const SPECS: SettingSpec[] = [
         {entry.value === 'hidden' ? ' Aktuell ist „Immer verbergen“ aktiv.' : ''}
       </Alert>
     ),
+  },
+];
+
+const SHELL_SPECS: SettingSpec[] = [
+  {
+    key: 'shell.max_timeout_seconds',
+    title: 'Höchstes Zeitlimit eines Shell-Jobs',
+    lead: 'Obergrenze in Sekunden (1 bis 86400), die ein Shell-Job als Zeitlimit wählen darf. Gilt sofort für neue und bestehende Jobs: Ein Job mit höherem Wert läuft nur bis zu diesem Maximum. Standard: 3600 Sekunden.',
+    options: null,
+    numberLabel: 'Sekunden',
   },
 ];
 
@@ -185,7 +195,7 @@ function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry:
   );
 }
 
-function HttpSettings({ csrf }: { csrf: string }) {
+function SettingsGroup({ id, title, lead, specs, csrf }: { id: string; title: string; lead: string; specs: SettingSpec[]; csrf: string }) {
   const [entries, setEntries] = useState<SettingEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -212,17 +222,41 @@ function HttpSettings({ csrf }: { csrf: string }) {
   }, []);
 
   return (
-    <section className="card" aria-labelledby="settings-http">
-      <h2 id="settings-http">HTTP-Jobs</h2>
-      <p className="card__lead">Globale Grenzwerte für alle HTTP-Jobs. Änderungen gelten beim nächsten Lauf ohne Neustart und werden im Audit-Log festgehalten.</p>
+    <section className="card" aria-labelledby={id}>
+      <h2 id={id}>{title}</h2>
+      <p className="card__lead">{lead}</p>
       {error !== null && <Alert tone="err">{error}</Alert>}
       {entries === null && error === null && <p className="hint">Lädt …</p>}
       {entries !== null &&
-        SPECS.map((spec) => {
+        specs.map((spec) => {
           const entry = entries.find((candidate) => candidate.key === spec.key);
           return entry === undefined ? null : <SettingCard key={spec.key} spec={spec} entry={entry} csrf={csrf} onSaved={replace} />;
         })}
     </section>
+  );
+}
+
+function HttpSettings({ csrf }: { csrf: string }) {
+  return (
+    <SettingsGroup
+      id="settings-http"
+      title="HTTP-Jobs"
+      lead="Globale Grenzwerte für alle HTTP-Jobs. Änderungen gelten beim nächsten Lauf ohne Neustart und werden im Audit-Log festgehalten."
+      specs={SPECS}
+      csrf={csrf}
+    />
+  );
+}
+
+function ShellSettings({ csrf }: { csrf: string }) {
+  return (
+    <SettingsGroup
+      id="settings-shell"
+      title="Shell-Jobs"
+      lead="Globale Grenzwerte für alle Shell-Jobs. Änderungen gelten beim nächsten Lauf ohne Neustart und werden im Audit-Log festgehalten."
+      specs={SHELL_SPECS}
+      csrf={csrf}
+    />
   );
 }
 
@@ -440,17 +474,276 @@ function InternalTargets({ csrf }: { csrf: string }) {
   );
 }
 
+const EMPTY_SHELL_FORM = { kind: 'docker', name: '', categoryId: '', users: '', defaultUser: '', note: '' };
+
+function shellScopeLabel(target: ShellTargetEntry): string {
+  return target.category === null ? 'Global (alle Kategorien)' : 'Kategorie „' + target.category.name + '“';
+}
+
+/** Benutzerliste aus Kommas, Leerzeichen oder Zeilen; Leereinträge fallen weg, geprüft wird auf dem Server. */
+function splitUsers(text: string): string[] {
+  return text
+    .split(/[\s,]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
+}
+
+function ShellTargets({ csrf }: { csrf: string }) {
+  const [targets, setTargets] = useState<ShellTargetEntry[] | null>(null);
+  const [categories, setCategories] = useState<CategoryRef[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_SHELL_FORM);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load(): Promise<void> {
+      try {
+        const [list, cats] = await Promise.all([
+          request<{ targets: ShellTargetEntry[] }>('GET', '/api/settings/shell-targets'),
+          request<{ categories: CategoryRef[] }>('GET', '/api/categories?permission=jobs.view'),
+        ]);
+        if (!cancelled) {
+          setTargets(list.targets);
+          setCategories(cats.categories);
+        }
+      } catch (caught) {
+        if (!cancelled) {
+          setLoadError(errorMessage(caught));
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function set<K extends keyof typeof EMPTY_SHELL_FORM>(key: K, value: string): void {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  const docker = form.kind === 'docker';
+  const users = splitUsers(form.users);
+  const rootChosen = docker && (users.some((user) => user === 'root' || /^0(:|$)/.test(user)) || form.defaultUser.trim() === 'root' || /^0(:|$)/.test(form.defaultUser.trim()));
+
+  async function add(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setErrors({});
+    setFormError(null);
+    setNotice(null);
+    try {
+      const result = await request<{ target: ShellTargetEntry }>('POST', '/api/settings/shell-targets', {
+        csrf,
+        body: {
+          kind: form.kind,
+          name: form.name.trim(),
+          category_id: form.categoryId === '' ? null : Number.parseInt(form.categoryId, 10),
+          users: docker ? users : [],
+          default_user: docker && form.defaultUser.trim() !== '' ? form.defaultUser.trim() : null,
+          note: form.note.trim(),
+        },
+      });
+      setTargets((current) => [...(current ?? []), result.target]);
+      setForm({ ...EMPTY_SHELL_FORM, kind: form.kind });
+      setNotice('Ausführungsort angelegt. Er steht ab sofort im Job-Editor zur Wahl.');
+    } catch (caught) {
+      if (caught instanceof ApiError && Object.keys(caught.fields).length > 0) {
+        setErrors(caught.fields);
+        setFormError(caught.message);
+      } else {
+        setFormError(errorMessage(caught));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(target: ShellTargetEntry): Promise<void> {
+    setBusy(true);
+    setFormError(null);
+    setNotice(null);
+    try {
+      await request<null>('DELETE', '/api/settings/shell-targets/' + String(target.id), { csrf });
+      setTargets((current) => current?.filter((entry) => entry.id !== target.id) ?? current);
+      setNotice('Ausführungsort entfernt. Jobs, die ihn nutzen, schlagen ab dem nächsten Lauf fehl, bis ein anderer gewählt ist.');
+    } catch (caught) {
+      setFormError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card" aria-labelledby="settings-shell-targets">
+      <h2 id="settings-shell-targets">Ausführungsorte</h2>
+      <p className="card__lead">
+        Shell-Jobs laufen nie in Meridian selbst, sondern nur an einem hier freigegebenen Ort: in einem Docker-Container oder als Host-Profil. Eine Freigabe gilt global oder für genau eine Kategorie.
+      </p>
+      <Alert tone="warn">
+        Eine Freigabe erlaubt Administratoren mit dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle an diesem Ort. Der Container muss zusätzlich in MERIDIAN_SHELL_CONTAINERS stehen. Gib nur Orte frei, die dafür gedacht sind, und wähle
+        möglichst eine Kategorie.
+      </Alert>
+      <p className="hint">
+        <strong>root nur ausdrücklich:</strong> Trage root (oder die Benutzer-ID 0) nur ein, wenn es unbedingt nötig ist. Ohne diesen Eintrag kann kein Job als root laufen. Wird eine Kategorie gelöscht, entfallen ihre Freigaben, sie werden nie global.
+      </p>
+
+      {loadError !== null && <Alert tone="err">{loadError}</Alert>}
+      {notice !== null && <Alert tone="ok">{notice}</Alert>}
+      {targets === null && loadError === null && <p className="hint">Lädt …</p>}
+      {targets !== null && (
+        <div className="table-wrap">
+          <table className="table table--stack">
+            <caption className="visually-hidden">Freigegebene Ausführungsorte</caption>
+            <thead>
+              <tr>
+                <th scope="col">Art</th>
+                <th scope="col">Name</th>
+                <th scope="col">Gilt für</th>
+                <th scope="col">Benutzer (Standard)</th>
+                <th scope="col">Notiz</th>
+                <th scope="col">Angelegt</th>
+                <th scope="col">
+                  <span className="visually-hidden">Aktion</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {targets.map((target) => (
+                <tr key={target.id}>
+                  <td data-label="Art">{target.kind === 'docker' ? 'Container' : 'Host'}</td>
+                  <td data-label="Name" className="mono">
+                    {target.name}
+                  </td>
+                  <td data-label="Gilt für">{shellScopeLabel(target)}</td>
+                  <td data-label="Benutzer">
+                    {target.kind === 'host' ? (
+                      <span className="hint">fest (meridian-run)</span>
+                    ) : (
+                      <>
+                        <span className="mono">{target.users.join(', ')}</span>
+                        {target.default_user !== null && <span className="hint"> (Standard: {target.default_user})</span>}
+                        {target.allows_root && <span className="badge badge--danger"> root erlaubt</span>}
+                      </>
+                    )}
+                  </td>
+                  <td data-label="Notiz">{target.note === '' ? <span className="hint">–</span> : target.note}</td>
+                  <td data-label="Angelegt">
+                    {formatTime(target.created_at)}
+                    {target.created_by !== null && <span className="hint"> · {target.created_by.display_name}</span>}
+                  </td>
+                  <td>
+                    <Confirm
+                      label="Entfernen"
+                      accessibleName={'Ausführungsort ' + target.name + ' entfernen'}
+                      question="Ausführungsort entfernen?"
+                      confirmLabel="Ja, entfernen"
+                      busy={busy}
+                      onConfirm={() => void remove(target)}
+                    />
+                  </td>
+                </tr>
+              ))}
+              {targets.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="hint">
+                    Keine Ausführungsorte: Shell-Jobs lassen sich nicht anlegen.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <form className="form targets__form" onSubmit={(event) => void add(event)} aria-labelledby="settings-shell-targets-add">
+        <h3 id="settings-shell-targets-add">Ausführungsort hinzufügen</h3>
+        {formError !== null && <Alert tone="err">{formError}</Alert>}
+        <div className="grid-2">
+          <FormField label="Art" error={errors.kind}>
+            {(aria) => (
+              <select {...aria} className="input" name="shell-kind" value={form.kind} onChange={(e) => set('kind', e.target.value)}>
+                <option value="docker">Docker-Container</option>
+                <option value="host">Host-Profil</option>
+              </select>
+            )}
+          </FormField>
+          <FormField
+            label={docker ? 'Name des Containers' : 'Name des Host-Profils'}
+            error={errors.name}
+            hint={docker ? 'Genau der Containername, z. B. nextcloud.' : 'z. B. default'}
+          >
+            {(aria) => <input {...aria} className="input input--mono" name="shell-name" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.name} onChange={(e) => set('name', e.target.value)} />}
+          </FormField>
+        </div>
+        <div className="grid-2">
+          <FormField label="Gilt für" error={errors.category_id} hint="„Global“ erlaubt den Ort für Jobs in allen Kategorien.">
+            {(aria) => (
+              <select {...aria} className="input" name="shell-category" value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)}>
+                <option value="">Global (alle Kategorien)</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={String(category.id)}>
+                    Kategorie „{category.name}“
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          {docker ? (
+            <FormField label="Standardbenutzer" error={errors.default_user} hint="Muss in der Liste der erlaubten Benutzer stehen, z. B. www-data.">
+              {(aria) => (
+                <input {...aria} className="input input--mono" name="shell-default-user" autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.defaultUser} onChange={(e) => set('defaultUser', e.target.value)} />
+              )}
+            </FormField>
+          ) : (
+            <div className="field">
+              <span className="field__label">Benutzer</span>
+              <span className="hint">Host-Profile haben keine Benutzerliste; sie laufen als fester Benutzer meridian-run.</span>
+            </div>
+          )}
+        </div>
+        {docker && (
+          <FormField label="Erlaubte Benutzer" error={errors.users} hint="Durch Komma oder Leerzeichen getrennt, 1 bis 10 Einträge, Kleinbuchstaben oder numerische ID (z. B. www-data 1001).">
+            {(aria) => <input {...aria} className="input input--mono" name="shell-users" autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.users} onChange={(e) => set('users', e.target.value)} />}
+          </FormField>
+        )}
+        {rootChosen && (
+          <Alert tone="err">
+            <strong>root ist eingetragen.</strong> Jobs an diesem Ort können dann als root laufen und im Container alles ändern. Trage root nur ausdrücklich und nur ein, wenn es nötig ist.
+          </Alert>
+        )}
+        <FormField label="Notiz" error={errors.note} hint="Wofür ist der Ort freigegeben? (optional)">
+          {(aria) => <input {...aria} className="input" name="shell-note" maxLength={200} autoComplete="off" value={form.note} onChange={(e) => set('note', e.target.value)} />}
+        </FormField>
+        {errors.body !== undefined && <Alert tone="err">{errors.body}</Alert>}
+        <div className="row">
+          <button type="submit" className="btn btn--solid" disabled={busy || form.name.trim() === ''}>
+            {busy ? 'Speichert …' : 'Ausführungsort anlegen'}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 export function Settings({ profile }: { profile: Profile }) {
   const settings = canManageSettings(profile);
   const targets = canManageInternalTargets(profile);
-  // Nur Bedienkomfort: Der Server prüft beide Rechte bei jeder Anfrage selbst.
-  if (!settings && !targets) {
+  const shellTargets = canManageShellTargets(profile);
+  // Nur Bedienkomfort: Der Server prüft die Rechte bei jeder Anfrage selbst.
+  if (!settings && !targets && !shellTargets) {
     return <Alert tone="info">Für die Einstellungen fehlt dir das Recht. Sie sind Administratoren vorbehalten.</Alert>;
   }
   return (
     <div className="settings">
       {settings && <HttpSettings csrf={profile.csrf_token} />}
+      {settings && <ShellSettings csrf={profile.csrf_token} />}
       {targets && <InternalTargets csrf={profile.csrf_token} />}
+      {shellTargets && <ShellTargets csrf={profile.csrf_token} />}
     </div>
   );
 }
