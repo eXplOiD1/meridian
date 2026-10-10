@@ -77,10 +77,10 @@ Entwurf: `docs/decisions/0005-benutzer-und-rollen.md` (Abschnitte in Klammern). 
 | [x] | S2 `OneTimePassword` (Sealed), `AuthService::confirmPassword()`/`changeOwnPassword()`, Ablauf des Einmalpassworts, `/me` mit `password_change_required`, `SessionManager` mit Browser/IP und Einzel-Beenden (E6, E7, E10) | sicherheit |
 | [ ] | S3 Lesende Benutzer-API `GET /api/users`, `/api/users/{id}`, `/api/roles`, `UserPresenter`, `unlock` CSRF vor Recht (§4.2, §4.4) | backend |
 | [x] | S4 Schreibende Benutzer-API: anlegen (Einmalpasswort), Anzeigename, Zuweisungen ersetzen, deaktivieren/aktivieren, Soft-Delete, Audit, Grenzen (E3–E5, §4.3–§4.6) | backend |
-| [ ] | S5 Admin-Passwort-Reset, 2FA-Reset (Sitzungen enden, Audit), Sitzungen eines Benutzers beenden, jeweils mit Passwort-Bestätigung (E7, E8) | sicherheit |
+| [x] | S5 Admin-Passwort-Reset, 2FA-Reset (Sitzungen enden, Audit), Sitzungen eines Benutzers beenden, jeweils mit Passwort-Bestätigung (E7, E8) | sicherheit |
 | [x] | S6 Eigene Daten: `PUT /api/auth/profile`, `POST /api/auth/password`, Sitzungsübersicht/-beenden, Pflichtwechsel sperrt alles außer `me`/`password`/`logout` (E10) | backend |
 | [x] | S7 Kategorien-Verwaltung: `GET /api/categories/manage`, anlegen, umbenennen, löschen nur ohne Jobs (409), Freigaben per CASCADE weg, Zuweisungen werden „wirkungslos“, nie „alle“; CLI `category:rename`/`category:delete` (E9) | backend |
-| [ ] | S8 Gesamtsuite: Rollen-Matrix, IDOR, Rechteausweitung, letzter Admin (auch parallel), H1, Leak-Tests aller Ausgabestellen (§5), Roundtrip, Mutation | tester |
+| [x] | S8 Gesamtsuite: Rollen-Matrix, IDOR, Rechteausweitung, letzter Admin (auch parallel), H1, Leak-Tests aller Ausgabestellen (§5), Roundtrip, Mutation | tester |
 | [x] | U1 Menü „Benutzer & Rollen“ und „Kategorien“ nach Recht, Benutzerliste, Rechte-Matrix (nur lesend) (§7) | frontend |
 | [x] | U2 Benutzer anlegen/bearbeiten mit Zuweisungs-Editor, Einmalpasswort einmal anzeigen (§7) | frontend |
 | [x] | U3 Sicherheits- und Kontoaktionen (Passwort-/2FA-Reset, Sitzungen, Sperre, Deaktivieren, Löschen) mit `Confirm` + Passwortfeld (§7) | frontend |
