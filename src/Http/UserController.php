@@ -29,7 +29,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Benutzerverwaltung (docs/decisions/0005, §4.2): Benutzer und Rollen lesen, Benutzer anlegen, ändern, deaktivieren,
- * löschen. Passwort-/2FA-Reset und fremde Sitzungen beenden kommen mit S5.
+ * löschen, Passwort-/2FA-Reset (mit Passwort-Bestätigung) und alle Sitzungen eines Benutzers beenden.
  *
  * Ablauf jedes Endpunkts (mer-security §1): Sitzung (401) → bei ändernden Methoden CSRF/Herkunft (403) →
  * `AccessControl::require(users.manage)` ohne Kategorie (403; der Bereich ist global, es gibt keine Existenz zu
@@ -69,6 +69,9 @@ final class UserController
         $kernel->post('users_deactivate', '/api/users/{id}/deactivate', fn (#[\SensitiveParameter] Request $r): Response => $this->setActive($r, false), $id);
         $kernel->post('users_activate', '/api/users/{id}/activate', fn (#[\SensitiveParameter] Request $r): Response => $this->setActive($r, true), $id);
         $kernel->delete('users_delete', '/api/users/{id}', $this->delete(...), $id);
+        $kernel->post('users_password_reset', '/api/users/{id}/password-reset', $this->resetPassword(...), $id);
+        $kernel->post('users_2fa_reset', '/api/users/{id}/2fa-reset', $this->resetTwoFactor(...), $id);
+        $kernel->post('users_sessions_end', '/api/users/{id}/sessions/end', $this->endSessions(...), $id);
     }
 
     public function list(#[\SensitiveParameter] Request $request): Response
@@ -168,11 +171,65 @@ final class UserController
     {
         return $this->mutate($request, function (Actor $actor) use ($request): Response {
             // Ein DELETE ohne Körper ist ein Feldfehler (Passwort fehlt), kein Formatfehler.
-            $data = $request->getContent() === '' ? [] : self::body($request, [], ['current_password']);
+            $data = self::optionalBody($request, ['current_password']);
             $this->service->delete($actor, self::id($request), self::password($data));
 
             return JsonReply::noContent();
         });
+    }
+
+    /**
+     * 200 `{initial_password, expires_at}` — neben dem Anlegen die einzige Stelle, an der ein Einmalpasswort im Klartext
+     * erscheint. Körper `{current_password}`.
+     */
+    public function resetPassword(#[\SensitiveParameter] Request $request): Response
+    {
+        return $this->mutate($request, function (Actor $actor) use ($request): Response {
+            $data = self::optionalBody($request, ['current_password']);
+            $issued = $this->service->resetPassword($actor, self::id($request), self::password($data));
+
+            return JsonReply::json([
+                'initial_password' => $issued->password->reveal(),
+                'expires_at' => Timestamp::format($issued->expiresAt),
+            ]);
+        });
+    }
+
+    /** 200 `{user}`. Körper `{current_password}`. */
+    public function resetTwoFactor(#[\SensitiveParameter] Request $request): Response
+    {
+        return $this->mutate($request, function (Actor $actor) use ($request): Response {
+            $data = self::optionalBody($request, ['current_password']);
+
+            return JsonReply::json(['user' => $this->render($this->service->resetTwoFactor($actor, self::id($request), self::password($data)))]);
+        });
+    }
+
+    /** 200 `{ended, user}`. Körper leer oder `{}`. */
+    public function endSessions(#[\SensitiveParameter] Request $request): Response
+    {
+        return $this->mutate($request, function (Actor $actor) use ($request): Response {
+            self::optionalBody($request, []);
+            $ended = $this->service->endSessions($actor, self::id($request));
+            $user = $this->users->summary(self::id($request)) ?? throw UserRequestRefused::notFound();
+
+            return JsonReply::json(['ended' => $ended, 'user' => $this->render($user)]);
+        });
+    }
+
+    /**
+     * Wie {@see body()}, aber ein leerer Körper gilt als `{}` (fehlendes Passwort ist dann ein Feldfehler, kein
+     * Formatfehler).
+     *
+     * @param list<string> $optional
+     *
+     * @return array<mixed>
+     *
+     * @throws ValidationFailed
+     */
+    private static function optionalBody(#[\SensitiveParameter] Request $request, array $optional): array
+    {
+        return $request->getContent() === '' ? [] : self::body($request, [], $optional);
     }
 
     /**

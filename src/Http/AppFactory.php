@@ -75,7 +75,7 @@ final class AppFactory
         $validator = new JobValidator($categories, $settings, $clock, new AddressPolicy(new DbInternalTargetSource($db), $infrastructure), $config->timezone);
 
         $kernel = new Kernel($config, $masker);
-        (new AuthController($config, $auth, $sessionAuth, $csrf, $users, $clock, $twoFactor))->register($kernel);
+        (new AuthController($config, $auth, $sessionAuth, $csrf, $users, $clock, $twoFactor, $masker))->register($kernel);
         (new UiController($config->uiDir))->register($kernel);
         $roles = new RoleCatalog($db);
         $userAdmin = new UserAdminService(
@@ -89,6 +89,7 @@ final class AppFactory
             $hasher,
             $sessions,
             $clock,
+            $throttle,
         );
         (new AccountController($config, $sessionAuth, $csrf, $users, $sessions, $auth, $audit, $masker, $clock))->register($kernel);
         (new UserController($config, $sessionAuth, $csrf, $users, $access, $roles, $sessions, $throttle, new UserPresenter($masker), $userAdmin, new AssignmentValidator($roles)))->register($kernel);

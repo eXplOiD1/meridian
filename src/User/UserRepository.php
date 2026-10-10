@@ -108,13 +108,36 @@ final class UserRepository
     /**
      * Setzt den Hash eines Einmalpassworts (ADR 0005, E6): Pflichtwechsel an, Ablauf gesetzt. Bis zum Wechsel hat der
      * Benutzer keine Rechte ({@see grantsFor()}). Der Klartext kommt hier nie an, nur der Argon2id-Hash.
+     *
+     * @return bool ob eine Zeile geändert wurde (false bei gelöschtem oder unbekanntem Benutzer)
      */
-    public function setOneTimePasswordHash(int $userId, #[\SensitiveParameter] string $hash, \DateTimeImmutable $expiresAt): void
+    public function setOneTimePasswordHash(int $userId, #[\SensitiveParameter] string $hash, \DateTimeImmutable $expiresAt): bool
     {
-        $this->db->execute(
+        return 1 === $this->db->execute(
             'UPDATE users SET password_hash = :h, password_must_change = 1, password_expires_at = :e WHERE id = :id AND deleted_at IS NULL',
             ['h' => $hash, 'e' => Timestamp::format($expiresAt), 'id' => $userId],
         );
+    }
+
+    /**
+     * 2FA-Reset durch einen Administrator (ADR 0005, E8): Secret, Zähler und alle Wiederherstellungscodes eines nicht
+     * gelöschten Benutzers löschen; das Passwort bleibt. Öffnet keine Transaktion (anders als `TwoFactor::disable()`),
+     * der Aufrufer schließt das mit dem Beenden der Sitzungen und dem Audit-Eintrag in eine ein.
+     *
+     * @return bool false, wenn der Benutzer gelöscht oder unbekannt ist (nichts geändert)
+     */
+    public function clearTwoFactor(int $userId): bool
+    {
+        $changed = $this->db->execute(
+            'UPDATE users SET totp_secret_enc = NULL, totp_enabled = 0, totp_last_step = NULL WHERE id = :id AND deleted_at IS NULL',
+            ['id' => $userId],
+        );
+        if ($changed !== 1) {
+            return false;
+        }
+        $this->db->execute('DELETE FROM recovery_codes WHERE user_id = :u', ['u' => $userId]);
+
+        return true;
     }
 
     /**

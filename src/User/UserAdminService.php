@@ -7,6 +7,7 @@ namespace Meridian\User;
 use Meridian\Auth\AuditLog;
 use Meridian\Auth\AuthService;
 use Meridian\Auth\Clock;
+use Meridian\Auth\LoginThrottle;
 use Meridian\Auth\SessionManager;
 use Meridian\Auth\TooManyAttempts;
 use Meridian\Database\Connection;
@@ -28,6 +29,8 @@ final class UserAdminService
 {
     /** Neue Benutzer je Handelndem und Stunde (§4.6). */
     public const CREATE_LIMIT = 30;
+    /** Passwort-Resets und 2FA-Resets je Handelndem und Stunde, je Aktion gezählt (§4.6). */
+    public const RESET_LIMIT = 20;
     private const WINDOW_SECONDS = 3600;
 
     private const COUNT_SQL = 'SELECT COUNT(*) AS n FROM audit_log WHERE user_id = :u AND action = :a AND created_at > :since';
@@ -45,6 +48,7 @@ final class UserAdminService
         private readonly PasswordHasher $hasher,
         private readonly SessionManager $sessions,
         private readonly Clock $clock,
+        private readonly LoginThrottle $throttle,
     ) {
     }
 
@@ -219,6 +223,96 @@ final class UserAdminService
             $this->sessions->endAllForUser($target->id);
             $this->invariant->assertHeld();
             $this->audit->record($actor->user->id, 'user.deleted', 'user:' . $target->id . ' ' . $target->username);
+        });
+    }
+
+    /**
+     * Admin-Passwort-Reset (E6, E7, S5): neues Einmalpasswort mit Pflichtwechsel und Ablauf, **alle** Sitzungen des
+     * Ziels enden, die Sperre seines Benutzernamens wird aufgehoben, 2FA bleibt (B13). Verlangt das Passwort des
+     * Handelnden; nie am eigenen Konto (dafür „Mein Konto“). Der Klartext steht nur im Rückgabewert.
+     *
+     * @throws UserRequestRefused 404, 409 (gelöscht, selbst, letzter Admin), 403 (mayManage, Passwort falsch), 429
+     * @throws ValidationFailed   Passwort fehlt
+     * @throws TooManyAttempts    Passwort-Bestätigung gesperrt
+     */
+    public function resetPassword(Actor $actor, int $userId, #[\SensitiveParameter] ?string $currentPassword): IssuedPassword
+    {
+        $target = $this->load($userId);
+        $this->assertNotSelf($actor, $target);
+        $this->assertMayManage($actor, $userId);
+        $this->confirm($actor, $currentPassword);
+
+        // Das langsame Hashen vor der Transaktion: die Schreibsperre soll kurz bleiben.
+        $password = OneTimePassword::generate();
+        $hash = $this->hasher->hash($password->reveal());
+        $expiresAt = OneTimePassword::expiresAt($this->clock->now());
+
+        $this->db->immediate(function () use ($actor, $target, $hash, $expiresAt): void {
+            $this->assertWithinLimit($actor, 'user.password_reset', self::RESET_LIMIT, 'Zu viele Passwort-Resets in der letzten Stunde (höchstens ' . self::RESET_LIMIT . '). Später erneut versuchen.');
+            if (!$this->users->setOneTimePasswordHash($target->id, $hash, $expiresAt)) {
+                throw UserRequestRefused::deleted();
+            }
+            $this->sessions->endAllForUser($target->id);
+            $this->throttle->unlockUser($target->username);
+            // Mit dem Einmalpasswort hat das Ziel bis zum Wechsel keine Rechte: war es ein Admin, muss ein anderer bleiben.
+            $this->invariant->assertHeld();
+            $this->audit->record($actor->user->id, 'user.password_reset', 'user:' . $target->id . ' ' . $target->username);
+        });
+
+        return new IssuedPassword($password, $expiresAt);
+    }
+
+    /**
+     * 2FA-Reset durch einen Administrator (E8): Secret, Zähler und Wiederherstellungscodes löschen, alle Sitzungen des
+     * Ziels beenden, Sperre des Benutzernamens aufheben; das Passwort bleibt. Verlangt das Passwort des Handelnden; nie
+     * am eigenen Konto. Auch ohne eingerichtete 2FA erlaubt (räumt eine begonnene Einrichtung mit ab).
+     *
+     * @throws UserRequestRefused 404, 409 (gelöscht, selbst), 403 (mayManage, Passwort falsch), 429
+     * @throws ValidationFailed   Passwort fehlt
+     * @throws TooManyAttempts    Passwort-Bestätigung gesperrt
+     */
+    public function resetTwoFactor(Actor $actor, int $userId, #[\SensitiveParameter] ?string $currentPassword): UserSummary
+    {
+        $target = $this->load($userId);
+        $this->assertNotSelf($actor, $target);
+        $this->assertMayManage($actor, $userId);
+        $this->confirm($actor, $currentPassword);
+
+        return $this->db->immediate(function () use ($actor, $target): UserSummary {
+            $this->assertWithinLimit($actor, 'user.2fa_reset', self::RESET_LIMIT, 'Zu viele 2FA-Resets in der letzten Stunde (höchstens ' . self::RESET_LIMIT . '). Später erneut versuchen.');
+            if (!$this->users->clearTwoFactor($target->id)) {
+                throw UserRequestRefused::deleted();
+            }
+            $this->sessions->endAllForUser($target->id);
+            $this->throttle->unlockUser($target->username);
+            $this->audit->record($actor->user->id, 'user.2fa_reset', 'user:' . $target->id . ' ' . $target->username);
+
+            return $this->reload($target->id);
+        });
+    }
+
+    /**
+     * Beendet alle Sitzungen eines anderen Benutzers (§4.2). Kein Passwort nötig (lockert nichts), aber `mayManage`;
+     * nie am eigenen Konto (dafür „Mein Konto“ → andere Sitzungen beenden).
+     *
+     * @return int Anzahl beendeter Sitzungen
+     *
+     * @throws UserRequestRefused 404, 409 (gelöscht, selbst), 403
+     */
+    public function endSessions(Actor $actor, int $userId): int
+    {
+        $target = $this->load($userId);
+        $this->assertNotSelf($actor, $target);
+        $this->assertMayManage($actor, $userId);
+
+        return $this->db->immediate(function () use ($actor, $target): int {
+            if ($this->reload($target->id)->status === UserStatus::Deleted) {
+                throw UserRequestRefused::deleted();
+            }
+            $ended = $this->sessions->endAllForUser($target->id);
+            $this->audit->record($actor->user->id, 'user.sessions_ended', 'user:' . $target->id . ' ' . $target->username . ' (' . $ended . ' Sitzungen)');
+
+            return $ended;
         });
     }
 

@@ -14,6 +14,7 @@ use Meridian\Auth\TooManyAttempts;
 use Meridian\Auth\TwoFactor;
 use Meridian\Config;
 use Meridian\Security\Permission;
+use Meridian\Security\SecretMasker;
 use Meridian\User\UserAccount;
 use Meridian\User\UserRepository;
 use Symfony\Component\HttpFoundation\Cookie;
@@ -38,6 +39,7 @@ final class AuthController
         private readonly UserRepository $users,
         private readonly Clock $clock,
         private readonly TwoFactor $twoFactor,
+        private readonly SecretMasker $masker,
     ) {
     }
 
@@ -239,12 +241,13 @@ final class AuthController
             $roles[] = [
                 'role' => $grant->role,
                 'permissions' => array_map(static fn (Permission $p): string => $p->value, $grant->permissions),
-                'categories' => $grant->categories,
+                'categories' => $grant->categories === null ? null : array_map($this->masker->mask(...), $grant->categories),
             ];
         }
 
         return self::json([
-            'user' => ['id' => $user->id, 'username' => $user->username, 'display_name' => $user->displayName],
+            // Anzeigename ist freier Text des Benutzers: maskiert wie in jeder anderen Antwort (Regel 4).
+            'user' => ['id' => $user->id, 'username' => $user->username, 'display_name' => $this->masker->mask($user->displayName)],
             'roles' => $roles,
             'totp_enabled' => $this->twoFactor->isEnabled($user->id),
             'password_change_required' => $user->passwordMustChange,
