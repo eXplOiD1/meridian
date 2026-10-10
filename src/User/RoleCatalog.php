@@ -53,7 +53,9 @@ final class RoleCatalog
 
         $roles = [];
         foreach ($byId as $id => $role) {
-            $roles[] = new Role($id, $role['name'], $role['builtin'], $role['permissions'], $role['key'], $role['description']);
+            // In Katalog-Reihenfolge (Permission::cases()), wie in Antworten und Audit.
+            $permissions = array_values(array_filter(Permission::cases(), static fn (Permission $p): bool => in_array($p, $role['permissions'], true)));
+            $roles[] = new Role($id, $role['name'], $role['builtin'], $permissions, $role['key'], $role['description']);
         }
 
         return $roles;

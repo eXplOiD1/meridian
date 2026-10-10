@@ -16,12 +16,13 @@ use Meridian\Http\ValidationFailed;
  */
 final class AssignmentValidator
 {
-    public const MAX_ASSIGNMENTS = 3;
+    /** Zuweisungen je Benutzer (ADR 0006 F7; die Oberfläche liest die Grenze aus `GET /api/roles`). */
+    public const MAX_ASSIGNMENTS = 10;
     public const MAX_CATEGORIES = 100;
 
     private const KEYS = ['all_categories', 'category_ids', 'role_id'];
 
-    public const MESSAGE_LIST = 'Zuweisungen als Liste mit höchstens drei Einträgen angeben (je Rolle höchstens einer).';
+    public const MESSAGE_LIST = 'Zuweisungen als Liste mit höchstens zehn Einträgen angeben (je Rolle höchstens einer).';
     public const MESSAGE_SHAPE = 'Jede Zuweisung braucht genau die Felder role_id, all_categories und category_ids.';
     public const MESSAGE_ROLE = 'Rolle unbekannt. Eine Rolle aus GET /api/roles wählen.';
     public const MESSAGE_ROLE_TWICE = 'Jede Rolle höchstens einmal zuweisen.';
