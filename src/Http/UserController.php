@@ -91,7 +91,28 @@ final class UserController
             }
         }
 
-        return JsonReply::json(['users' => array_map($this->render(...), $this->users->summaries($status))]);
+        // Filter nach Rolle (ADR 0006 §5): eine Anfrage innerhalb des schon geprüften Bereichs, nur als ID-Text.
+        $roleId = null;
+        if (array_key_exists('role_id', $query)) {
+            if (!is_string($query['role_id']) || preg_match('/^[1-9][0-9]{0,17}$/', $query['role_id']) !== 1) {
+                return JsonReply::error(400, 'Ungültige Abfrage: role_id ist die ID einer Rolle.');
+            }
+            $roleId = (int) $query['role_id'];
+        }
+        $summaries = $this->users->summaries($status);
+        if ($roleId !== null) {
+            $summaries = array_values(array_filter($summaries, static function (UserSummary $user) use ($roleId): bool {
+                foreach ($user->assignments as $assignment) {
+                    if ($assignment->roleId === $roleId) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }));
+        }
+
+        return JsonReply::json(['users' => array_map($this->render(...), $summaries)]);
     }
 
     public function show(#[\SensitiveParameter] Request $request): Response

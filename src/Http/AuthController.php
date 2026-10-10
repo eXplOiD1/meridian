@@ -239,7 +239,8 @@ final class AuthController
         $roles = [];
         foreach ($this->users->grantsFor($user->id) as $grant) {
             $roles[] = [
-                'role' => $grant->role,
+                // Rollennamen sind seit ADR 0006 freier Text: maskiert wie jeder andere (Regel 4).
+                'role' => $this->masker->mask($grant->role),
                 'permissions' => array_map(static fn (Permission $p): string => $p->value, $grant->permissions),
                 'categories' => $grant->categories === null ? null : array_map($this->masker->mask(...), $grant->categories),
             ];

@@ -6,8 +6,10 @@ namespace Meridian\Http;
 
 use Meridian\Security\Permission;
 use Meridian\Security\SecretMasker;
+use Meridian\User\AssignmentValidator;
 use Meridian\User\AssignmentView;
 use Meridian\User\Role;
+use Meridian\User\RoleUsage;
 use Meridian\User\UserSummary;
 
 /**
@@ -48,31 +50,78 @@ final class UserPresenter
     /**
      * @param list<Role> $roles
      *
-     * @return array{roles: list<array<string, mixed>>, permissions: list<array<string, mixed>>}
+     * @return array{roles: list<array<string, mixed>>, permissions: list<array<string, mixed>>, max_assignments: int}
      */
     public function roles(array $roles): array
     {
-        $out = [];
-        foreach ($roles as $role) {
-            $out[] = [
-                'id' => $role->id,
-                'name' => $this->masker->mask($role->name),
-                'builtin' => $role->builtin,
-                // In der Reihenfolge des Katalogs, damit die Matrix stabil bleibt.
-                'permissions' => array_values(array_map(
-                    static fn (Permission $p): string => $p->value,
-                    array_filter(Permission::cases(), static fn (Permission $p): bool => in_array($p, $role->permissions, true)),
-                )),
-            ];
-        }
-
         return [
-            'roles' => $out,
-            'permissions' => array_map(
-                static fn (Permission $p): array => ['key' => $p->value, 'dangerous' => $p->isDangerous(), 'scoped' => $p->isCategoryScoped()],
-                Permission::cases(),
-            ),
+            'roles' => array_map($this->role(...), $roles),
+            'permissions' => self::catalog(),
+            'max_assignments' => AssignmentValidator::MAX_ASSIGNMENTS,
         ];
+    }
+
+    /**
+     * Rollenverwaltung (`GET /api/roles/manage`, ADR 0006 §5): je Rolle zusätzlich Zuweisungen und was der Handelnde darf.
+     *
+     * @param list<RoleUsage> $usage
+     *
+     * @return array{roles: list<array<string, mixed>>, permissions: list<array<string, mixed>>, max_roles: int}
+     */
+    public function managedRoles(array $usage, int $maxRoles): array
+    {
+        return [
+            'roles' => array_map($this->managedRole(...), $usage),
+            'permissions' => self::catalog(),
+            'max_roles' => $maxRoles,
+        ];
+    }
+
+    /**
+     * Feld-Allowlist in fester Reihenfolge (§5). Name und Beschreibung sind freier Text: maskiert.
+     *
+     * @return array<string, mixed>
+     */
+    public function managedRole(RoleUsage $usage): array
+    {
+        return $this->role($usage->role) + [
+            'permissions_editable' => $usage->permissionsEditable,
+            'deletable' => $usage->deletable(),
+            'assignments' => $usage->assignments,
+            'restricted_assignments' => $usage->restrictedAssignments,
+            'active_users' => $usage->activeUsers,
+            'held_by_me' => $usage->heldByActor,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function role(Role $role): array
+    {
+        return [
+            'id' => $role->id,
+            'name' => $this->masker->mask($role->name),
+            'description' => $role->description === null ? null : $this->masker->mask($role->description),
+            'builtin' => $role->isBuiltin(),
+            'builtin_key' => $role->builtinKey?->value,
+            // In der Reihenfolge des Katalogs, damit die Matrix stabil bleibt.
+            'permissions' => array_values(array_map(
+                static fn (Permission $p): string => $p->value,
+                array_filter(Permission::cases(), static fn (Permission $p): bool => in_array($p, $role->permissions, true)),
+            )),
+        ];
+    }
+
+    /**
+     * @return list<array{key: string, dangerous: bool, scoped: bool}>
+     */
+    private static function catalog(): array
+    {
+        return array_map(
+            static fn (Permission $p): array => ['key' => $p->value, 'dangerous' => $p->isDangerous(), 'scoped' => $p->isCategoryScoped()],
+            Permission::cases(),
+        );
     }
 
     /**
