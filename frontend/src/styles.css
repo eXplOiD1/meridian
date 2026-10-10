@@ -288,3 +288,37 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 /* Hinweis hinter einem verborgenen Host: gleiche Farbe wie der Umgebungstext, nicht Schiefer auf Tafelblau. */
 .hint--inline { font-family: var(--schrift-text); font-size: 12px; color: inherit; opacity: 0.8; }
 .login .alert p { margin: 6px 0 0; }
+
+/* --- Benutzer, Kategorien, Konto --------------------------------------------------------------- */
+.confirm--form { flex-direction: column; align-items: stretch; max-width: 460px; padding: 14px 16px; }
+.confirm__err { margin: 0; color: #7a1f12; font-weight: 600; font-size: 14px; }
+.otp { margin: 0; font-family: var(--schrift-mono); font-size: 26px; letter-spacing: 0.08em; background: var(--tafel-tief); color: var(--text-auf-tafel); border-radius: var(--radius); padding: 16px 18px; user-select: all; overflow-wrap: anywhere; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 16px; border-radius: var(--radius); border: 1px solid var(--linie-stark); font-weight: 600; text-decoration: none; color: var(--tafel); }
+.tabs a[aria-current='page'] { background: var(--tafel); color: #fff; border-color: var(--tafel); }
+.badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.badge--err { background: #fbeceb; color: #7a1f12; }
+.badge--danger { background: #fbeceb; color: #7a1f12; }
+.select { min-height: 48px; padding: 0 12px; border: 1px solid var(--linie-stark); border-radius: var(--radius); background: #fff; max-width: 100%; }
+.assign { border: 1px solid var(--linie); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 12px; background: var(--emaille); }
+.assign__head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.assign__cats { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.assign__cats legend { font-weight: 600; font-size: 14px; padding: 0; margin-bottom: 8px; }
+.matrix th, .matrix td { text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .yes { color: var(--ok); font-weight: 700; }
+.matrix .no { color: var(--schiefer); }
+.actions { display: grid; gap: 14px; }
+.actions__item { display: grid; gap: 6px; padding-top: 14px; border-top: 1px solid var(--linie); }
+.actions__item:first-child { border-top: 0; padding-top: 0; }
+.actions__item p { margin: 0; }
+.inline-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.inline-edit .input { max-width: 280px; min-height: 40px; }
+.ua { overflow-wrap: anywhere; max-width: 320px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.matrix tbody th { font-family: var(--schrift-text); letter-spacing: 0; font-size: 14px; color: var(--tafel); font-weight: 600; border-bottom: 1px solid #eceff1; }
+.matrix tbody th .badges { font-weight: 400; }
+.settings, .editor, .settings > .card, .grid-2 > .card { min-width: 0; max-width: 100%; }
+.matrix { min-width: 440px; }
+.matrix tbody th { min-width: 180px; }
+.table-wrap { position: relative; }

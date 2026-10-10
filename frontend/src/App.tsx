@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
-import { ApiError, request, SESSION_ENDED_EVENT } from './lib/api';
-import { canManageUsers } from './lib/permissions';
+import { ApiError, PASSWORD_CHANGE_EVENT, request, SESSION_ENDED_EVENT } from './lib/api';
+import { canManageCategories, canManageUsers } from './lib/permissions';
 import type { Route } from './lib/useHashRoute';
 import { navigate, useHashRoute } from './lib/useHashRoute';
 import { Account } from './screens/Account';
 import { Audit } from './screens/Audit';
+import { Categories } from './screens/Categories';
 import { JobDetail } from './screens/JobDetail';
 import { JobEdit } from './screens/JobEdit';
 import { Jobs } from './screens/Jobs';
 import { Login } from './screens/Login';
 import { Overview } from './screens/Overview';
+import { PasswordCard } from './screens/AccountExtras';
+import { UserEdit } from './screens/UserEdit';
+import { Roles, Users } from './screens/Users';
 import { Settings } from './screens/Settings';
 import type { Profile } from './types';
 
@@ -25,6 +29,11 @@ const HEADINGS: Record<Route['name'], { kicker: string; title: string }> = {
   'job-new': { kicker: 'Jobs', title: 'Neuer Job' },
   job: { kicker: 'Jobs', title: 'Job' },
   'job-edit': { kicker: 'Jobs', title: 'Job bearbeiten' },
+  users: { kicker: 'Zugang und Rechte', title: 'Benutzer & Rollen' },
+  roles: { kicker: 'Zugang und Rechte', title: 'Rollen und Rechte' },
+  'user-new': { kicker: 'Benutzer & Rollen', title: 'Benutzer anlegen' },
+  user: { kicker: 'Benutzer & Rollen', title: 'Benutzer' },
+  categories: { kicker: 'Zugang und Rechte', title: 'Kategorien' },
 };
 
 export function App() {
@@ -58,6 +67,15 @@ export function App() {
     return () => window.removeEventListener(SESSION_ENDED_EVENT, ended);
   }, []);
 
+  // Ein Aufruf wurde mit „Passwortwechsel nötig“ abgewiesen (z. B. Admin hat das Passwort zurückgesetzt): Profil neu laden.
+  useEffect(() => {
+    const required = (): void => {
+      void refresh();
+    };
+    window.addEventListener(PASSWORD_CHANGE_EVENT, required);
+    return () => window.removeEventListener(PASSWORD_CHANGE_EVENT, required);
+  }, [refresh]);
+
   const logout = useCallback(async (profile: Profile): Promise<void> => {
     try {
       await request('POST', '/api/auth/logout', { csrf: profile.csrf_token });
@@ -90,8 +108,23 @@ export function App() {
   }
 
   const { profile } = session;
+  // Pflichtwechsel nach Einmalpasswort: nur dieser Schritt und Abmelden, kein Menü, keine anderen Aufrufe.
+  if (profile.password_change_required === true) {
+    return (
+      <div className="center">
+        <div className="login__card">
+          <PasswordCard profile={profile} forced onChanged={refresh} />
+          <button type="button" className="btn btn--ghost" onClick={() => void logout(profile)}>
+            Abmelden
+          </button>
+        </div>
+      </div>
+    );
+  }
   // Nur Bedienkomfort: Die Seite „Audit-Log“ prüft der Server selbst; ohne Recht antwortet er mit 403.
-  const effective: Route = route.name === 'audit' && !canManageUsers(profile) ? { name: 'home' } : route;
+  const usersRoute = route.name === 'users' || route.name === 'roles' || route.name === 'user-new' || route.name === 'user' || route.name === 'audit';
+  const effective: Route =
+    (usersRoute && !canManageUsers(profile)) || (route.name === 'categories' && !canManageCategories(profile)) ? { name: 'home' } : route;
   const heading = HEADINGS[effective.name];
 
   return (
@@ -103,6 +136,11 @@ export function App() {
       {effective.name === 'jobs' && <Jobs profile={profile} />}
       {effective.name === 'job' && <JobDetail key={effective.id} profile={profile} id={effective.id} />}
       {effective.name === 'job-new' && <JobEdit profile={profile} id={null} />}
+      {effective.name === 'users' && <Users />}
+      {effective.name === 'roles' && <Roles />}
+      {effective.name === 'user-new' && <UserEdit key="new" profile={profile} id={null} />}
+      {effective.name === 'user' && <UserEdit key={effective.id} profile={profile} id={effective.id} />}
+      {effective.name === 'categories' && <Categories profile={profile} />}
       {effective.name === 'job-edit' && <JobEdit key={effective.id} profile={profile} id={effective.id} />}
     </Layout>
   );

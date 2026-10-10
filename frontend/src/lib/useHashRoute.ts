@@ -13,7 +13,12 @@ export type Route =
   | { name: 'jobs' }
   | { name: 'job-new' }
   | { name: 'job'; id: string }
-  | { name: 'job-edit'; id: string };
+  | { name: 'job-edit'; id: string }
+  | { name: 'users' }
+  | { name: 'roles' }
+  | { name: 'user-new' }
+  | { name: 'user'; id: string }
+  | { name: 'categories' };
 
 const ID = /^[1-9][0-9]{0,17}$/;
 
@@ -31,6 +36,23 @@ export function parseRoute(hash: string): Route {
   }
   if (parts.length === 1 && first === 'einstellungen') {
     return { name: 'settings' };
+  }
+  if (parts.length === 1 && first === 'kategorien') {
+    return { name: 'categories' };
+  }
+  if (first === 'benutzer') {
+    if (parts.length === 1) {
+      return { name: 'users' };
+    }
+    if (parts.length === 2 && second === 'rollen') {
+      return { name: 'roles' };
+    }
+    if (parts.length === 2 && second === 'neu') {
+      return { name: 'user-new' };
+    }
+    if (parts.length === 2 && second !== undefined && ID.test(second)) {
+      return { name: 'user', id: second };
+    }
   }
   if (first === 'jobs') {
     if (parts.length === 1) {

@@ -9,6 +9,8 @@ export interface Profile {
   user: { id: number; username: string; display_name: string };
   roles: RoleInfo[];
   totp_enabled: boolean;
+  /** Einmalpasswort noch nicht gewechselt: Der Server gibt dann keine Rechte, nur den Passwortwechsel. */
+  password_change_required?: boolean;
   csrf_token: string;
 }
 
@@ -152,4 +154,79 @@ export interface InternalTarget {
   note: string;
   created_at: string;
   created_by: { display_name: string } | null;
+}
+
+export type UserStatus = 'active' | 'inactive' | 'deleted';
+
+export interface AssignmentView {
+  role_id: number;
+  role: string;
+  all_categories: boolean;
+  categories: CategoryRef[];
+  /** false = Zuweisung ohne Kategorie (z. B. gelöscht): gewährt nichts. */
+  effective: boolean;
+}
+
+export interface UserRow {
+  id: number;
+  username: string;
+  display_name: string;
+  status: UserStatus;
+  totp_enabled: boolean;
+  password_change_required: boolean;
+  locked: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  session_count: number;
+  assignments: AssignmentView[];
+}
+
+/** Eine Zuweisung, wie sie gesendet wird. */
+export interface AssignmentInput {
+  role_id: number;
+  all_categories: boolean;
+  category_ids: number[];
+}
+
+export interface RoleDef {
+  id: number;
+  name: string;
+  builtin: boolean;
+  permissions: string[];
+}
+
+export interface PermissionDef {
+  key: string;
+  dangerous: boolean;
+  scoped: boolean;
+}
+
+export interface RoleCatalog {
+  roles: RoleDef[];
+  permissions: PermissionDef[];
+}
+
+export interface OneTimePasswordReply {
+  initial_password: string;
+  expires_at: string;
+}
+
+export interface CategoryUsage {
+  id: number;
+  name: string;
+  jobs: number;
+  assignments: number;
+  assignments_ineffective: number;
+  internal_targets: number;
+  deletable: boolean;
+}
+
+export interface SessionRow {
+  id: number;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+  current: boolean;
+  user_agent: string | null;
+  client_ip: string | null;
 }
