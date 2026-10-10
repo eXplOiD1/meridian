@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Meridian\Job;
 
 use Meridian\Runner\JobType;
+use Meridian\Runner\Shell\ShellJobConfig;
 use Meridian\Schedule\OverlapPolicy;
 
 /**
  * Ein Job, wie ihn lesende Endpunkte sehen. `payload_enc` wird nie geladen: die Web-API entschlüsselt nie
- * (docs/decisions/0003, E3). Die Kategorie stammt aus dem gespeicherten Datensatz.
+ * (docs/decisions/0003, E3, 0004 E6). Die Kategorie stammt aus dem gespeicherten Datensatz.
  */
 final readonly class JobRecord
 {
@@ -31,6 +32,8 @@ final readonly class JobRecord
         public bool $catchUp,
         /** null bei Shell-Jobs und bei unlesbarer `config_json`. */
         public ?HttpJobConfig $http,
+        /** null bei HTTP-Jobs und bei unlesbarer `config_json`. */
+        public ?ShellJobConfig $shell,
         public ?LastRun $lastRun,
         public bool $running,
         public string $createdAt,

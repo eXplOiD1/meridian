@@ -28,6 +28,8 @@ use Meridian\Network\InternalTargetStore;
 use Meridian\Runner\Http\AddressPolicy;
 use Meridian\Runner\Http\DbInternalTargetSource;
 use Meridian\Runner\Http\InfrastructureTargets;
+use Meridian\Runner\Shell\DbShellTargetSource;
+use Meridian\Runner\Shell\ShellTargetPolicy;
 use Meridian\Schedule\Planner;
 use Meridian\Schedule\SchedulerLease;
 use Meridian\Security\AccessControl;
@@ -35,6 +37,8 @@ use Meridian\Security\GrantPolicy;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretBox;
 use Meridian\Security\SecretMasker;
+use Meridian\Shell\ShellTargetController;
+use Meridian\Shell\ShellTargetStore;
 use Meridian\Settings\Settings;
 use Meridian\Settings\SettingsController;
 use Meridian\Settings\SettingsService;
@@ -76,7 +80,7 @@ final class AppFactory
         // dem Scheduler-Prozess und wird hier nie genommen.
         $planner = new Planner($db, $clock, new SchedulerLease($db, $clock, SchedulerLease::newOwnerId()));
         $infrastructure = InfrastructureTargets::fromConfig($config);
-        $validator = new JobValidator($categories, $settings, $clock, new AddressPolicy(new DbInternalTargetSource($db), $infrastructure), $config->timezone);
+        $validator = new JobValidator($categories, $settings, $clock, new AddressPolicy(new DbInternalTargetSource($db), $infrastructure), $config->timezone, new ShellTargetPolicy(new DbShellTargetSource($db)));
 
         $kernel = new Kernel($config, $masker);
         (new AuthController($config, $auth, $sessionAuth, $csrf, $users, $clock, $twoFactor, $masker))->register($kernel);
@@ -118,6 +122,8 @@ final class AppFactory
         (new RunLiveController($sessionAuth, $users, $access, $runs, new LiveStreamSlots($db, $clock, $config->liveStreams), $clock, $sse ?? new PhpSseChannel()))->register($kernel);
         // Freigaben interner Ziele (network.internal_targets, nur Admin).
         (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock, $infrastructure), $masker))->register($kernel);
+        // Ausführungsorte für Shell-Jobs (shell.targets, nur Admin) und die Auswahl im Job-Editor (jobs.edit_shell).
+        (new ShellTargetController($sessionAuth, $csrf, $users, $access, $audit, new ShellTargetStore($db, $clock), $masker))->register($kernel);
         // Kategorien-Verwaltung (categories.manage, nur Admin).
         (new CategoryController($sessionAuth, $csrf, $users, $access, new CategoryService($db, $audit, $clock), $masker))->register($kernel);
         // Globale Einstellungen (settings.manage, nur Admin).
