@@ -145,4 +145,16 @@ AND (:status IS NULL OR r.status = :status) ORDER BY r.id DESC LIMIT :limit';
 
         return $records;
     }
+
+    /**
+     * Gibt es einen lebenden Worker für diesen Job-Typ (`workers.seen_at` nach `$cutoff`)? Nur für den Hinweis bei
+     * wartenden Läufen; liefert nie Kennung, Host oder PID eines Workers (H2).
+     */
+    public function workerAlive(JobType $type, string $cutoff): bool
+    {
+        return $this->db->fetchOne(
+            'SELECT 1 AS alive FROM workers WHERE kind = :kind AND seen_at > :cutoff LIMIT 1',
+            ['kind' => $type->value, 'cutoff' => $cutoff],
+        ) !== null;
+    }
 }

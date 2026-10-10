@@ -39,6 +39,12 @@ use Meridian\Runner\Http\StoredHttpRunSettings;
 use Meridian\Runner\Http\SystemHostResolver;
 use Meridian\Runner\Http\TargetGuard;
 use Meridian\Runner\Heartbeat;
+use Meridian\Runner\Shell\DbExecRefSink;
+use Meridian\Runner\Shell\DbShellJobSource;
+use Meridian\Runner\Shell\DbShellTargetSource;
+use Meridian\Runner\Shell\ShellRunner;
+use Meridian\Runner\Shell\ShellTargetPolicy;
+use Meridian\Runner\Shell\StoredShellRunSettings;
 use Meridian\Runner\JobType;
 use Meridian\Runner\RunnerRegistry;
 use Meridian\Schedule\DbLiveLogFactory;
@@ -108,9 +114,17 @@ if (is_dir($config->dataDir)) {
                 new CurlTransport('Meridian/' . $config->version),
             ));
         }
-        // Shell: ShellRunner folgt mit Phase 4 S7; bis dahin endet ein Shell-Lauf mit Worker::NOTE_NO_RUNNER.
+        // Shell (ADR 0004 §5.3): nie ein lokaler Prozess im Worker (E2) — nur Docker-Exec über den Socket-Proxy
+        // (S8), Host-Agent folgt mit S11. Ohne Executor endet ein Lauf sofort mit fester Notiz.
         if ($type === JobType::Shell) {
-            KeyLoader::load($env);
+            $runners->register(JobType::Shell, new ShellRunner(
+                new DbShellJobSource($db),
+                new SecretBox(KeyLoader::load($env)),
+                new StoredShellRunSettings(new Settings($db, $clock)),
+                new ShellTargetPolicy(new DbShellTargetSource($db)),
+                [],
+                new DbExecRefSink($db),
+            ));
         }
 
         return $runners;
