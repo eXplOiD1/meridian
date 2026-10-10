@@ -228,8 +228,21 @@ export interface AssignmentInput {
 export interface RoleDef {
   id: number;
   name: string;
+  description: string | null;
   builtin: boolean;
+  /** 'admin' | 'operator' | 'observer' bei Standardrollen, sonst null. */
+  builtin_key: string | null;
   permissions: string[];
+}
+
+/** Rolle aus `GET /api/roles/manage`: zusätzlich Zuweisungen und was der Handelnde darf. */
+export interface ManagedRole extends RoleDef {
+  permissions_editable: boolean;
+  deletable: boolean;
+  assignments: number;
+  restricted_assignments: number;
+  active_users: number;
+  held_by_me: boolean;
 }
 
 export interface PermissionDef {
@@ -241,6 +254,13 @@ export interface PermissionDef {
 export interface RoleCatalog {
   roles: RoleDef[];
   permissions: PermissionDef[];
+  max_assignments?: number;
+}
+
+export interface ManagedRoles {
+  roles: ManagedRole[];
+  permissions: PermissionDef[];
+  max_roles: number;
 }
 
 export interface OneTimePasswordReply {

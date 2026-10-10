@@ -3,9 +3,9 @@ import { Alert } from '../components/Alert';
 import { request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatTime } from '../lib/format';
-import { permissionLabel } from '../lib/permissions';
+import { canManageRoles, canManageUsers, permissionLabel } from '../lib/permissions';
 import { hrefOf, navigate } from '../lib/useHashRoute';
-import type { RoleCatalog, UserRow, UserStatus } from '../types';
+import type { ManagedRoles, Profile, RoleCatalog, RoleDef, UserRow, UserStatus } from '../types';
 
 type Filter = UserStatus | 'all';
 
@@ -18,9 +18,10 @@ const FILTERS: { value: Filter; label: string }[] = [
 
 export const STATUS_LABEL: Record<UserStatus, string> = { active: 'aktiv', inactive: 'deaktiviert', deleted: 'gelöscht' };
 
-function Tabs({ current }: { current: 'users' | 'roles' }) {
+function Tabs({ current, profile }: { current: 'users' | 'roles'; profile: Profile }) {
   return (
     <nav className="tabs" aria-label="Benutzer und Rollen">
+      {canManageUsers(profile) && (
       <a
         href={hrefOf('benutzer')}
         aria-current={current === 'users' ? 'page' : undefined}
@@ -31,6 +32,7 @@ function Tabs({ current }: { current: 'users' | 'roles' }) {
       >
         Benutzer
       </a>
+      )}
       <a
         href={hrefOf('benutzer/rollen')}
         aria-current={current === 'roles' ? 'page' : undefined}
@@ -54,16 +56,32 @@ function assignmentText(user: UserRow): string {
     .join('; ');
 }
 
-export function Users() {
+export function Users({ profile, roleId }: { profile: Profile; roleId: string | null }) {
   const [filter, setFilter] = useState<Filter>('active');
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [roles, setRoles] = useState<RoleDef[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    request<RoleCatalog>('GET', '/api/roles')
+      .then((reply) => {
+        if (alive) {
+          setRoles(reply.roles);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
     setUsers(null);
     setError(null);
-    request<{ users: UserRow[] }>('GET', filter === 'all' ? '/api/users' : '/api/users?status=' + filter)
+    const query = [filter === 'all' ? null : 'status=' + filter, roleId === null ? null : 'role_id=' + roleId].filter((x): x is string => x !== null);
+    request<{ users: UserRow[] }>('GET', '/api/users' + (query.length === 0 ? '' : '?' + query.join('&')))
       .then((reply) => {
         if (alive) {
           setUsers(reply.users);
@@ -77,11 +95,11 @@ export function Users() {
     return () => {
       alive = false;
     };
-  }, [filter]);
+  }, [filter, roleId]);
 
   return (
     <div className="settings">
-      <Tabs current="users" />
+      <Tabs current="users" profile={profile} />
       <section className="card" aria-label="Benutzer">
         <div className="row">
           <h2>Benutzer</h2>
@@ -104,6 +122,22 @@ export function Users() {
             {FILTERS.map((entry) => (
               <option key={entry.value} value={entry.value}>
                 {entry.label}
+              </option>
+            ))}
+          </select>
+          <label className="field__label" htmlFor="user-role">
+            Rolle
+          </label>
+          <select
+            id="user-role"
+            className="select"
+            value={roleId ?? ''}
+            onChange={(event) => navigate(event.target.value === '' ? 'benutzer' : 'benutzer?rolle=' + event.target.value)}
+          >
+            <option value="">Alle Rollen</option>
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.name}
               </option>
             ))}
           </select>
@@ -160,7 +194,7 @@ export function Users() {
               {users !== null && users.length === 0 && (
                 <tr>
                   <td colSpan={6} className="hint">
-                    Keine Benutzer mit diesem Status.
+                    Keine Benutzer mit diesem Status und dieser Rolle.
                   </td>
                 </tr>
               )}
@@ -179,37 +213,120 @@ export function Users() {
   );
 }
 
-export function Roles() {
+export function Roles({ profile }: { profile: Profile }) {
+  const manage = canManageRoles(profile);
+  const [managed, setManaged] = useState<ManagedRoles | null>(null);
   const [catalog, setCatalog] = useState<RoleCatalog | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    request<RoleCatalog>('GET', '/api/roles')
-      .then((reply) => {
-        if (alive) {
-          setCatalog(reply);
-        }
-      })
-      .catch((caught: unknown) => {
-        if (alive) {
-          setError(errorMessage(caught));
-        }
-      });
+    const load = manage
+      ? request<ManagedRoles>('GET', '/api/roles/manage').then((reply) => {
+          if (alive) {
+            setManaged(reply);
+            setCatalog(reply);
+          }
+        })
+      : request<RoleCatalog>('GET', '/api/roles').then((reply) => {
+          if (alive) {
+            setCatalog(reply);
+          }
+        });
+    load.catch((caught: unknown) => {
+      if (alive) {
+        setError(errorMessage(caught));
+      }
+    });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [manage]);
+
+  const dangerousKeys = new Set((catalog?.permissions ?? []).filter((p) => p.dangerous).map((p) => p.key));
+  const dangerousCount = (role: RoleDef): number => role.permissions.filter((key) => dangerousKeys.has(key)).length;
 
   return (
     <div className="settings">
-      <Tabs current="roles" />
-      <section className="card" aria-label="Rechte-Matrix">
-        <h2>Rollen und Rechte</h2>
+      <Tabs current="roles" profile={profile} />
+      <section className="card" aria-label="Rollen">
+        <div className="row">
+          <h2>Rollen</h2>
+          {manage && (
+            <a
+              className="btn btn--solid"
+              href={hrefOf('benutzer/rollen/neu')}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate('benutzer/rollen/neu');
+              }}
+            >
+              Rolle anlegen
+            </a>
+          )}
+        </div>
         <p className="card__lead">
-          Die drei Rollen sind fest. Einem Benutzer lassen sich mehrere Rollen zuweisen, jeweils für alle oder für ausgewählte Kategorien. Gefährliche Rechte gelten nur für „alle Kategorien“.
+          Eine Rolle ist eine Zusammenstellung von Rechten. Einem Benutzer lassen sich mehrere Rollen zuweisen, jeweils für alle oder für ausgewählte Kategorien. Gefährliche Rechte gelten nur für „alle Kategorien“.
+          {!manage && ' Du kannst die Rollen ansehen, aber nicht ändern.'}
         </p>
         {error !== null && <Alert tone="err">{error}</Alert>}
+        {catalog !== null && (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col">Rolle</th>
+                  <th scope="col">Art</th>
+                  <th scope="col">Rechte</th>
+                  {managed !== null && <th scope="col">Zuweisungen</th>}
+                  {managed !== null && <th scope="col">Aktive Benutzer</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {(managed?.roles ?? catalog.roles).map((role) => {
+                  const rows = managed?.roles.find((m) => m.id === role.id);
+                  const danger = dangerousCount(role);
+                  return (
+                    <tr key={role.id}>
+                      <td>
+                        {manage ? (
+                          <a
+                            href={hrefOf('benutzer/rollen/' + String(role.id))}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              navigate('benutzer/rollen/' + String(role.id));
+                            }}
+                          >
+                            <strong>{role.name}</strong>
+                          </a>
+                        ) : (
+                          <strong>{role.name}</strong>
+                        )}
+                        {role.description !== null && <div className="hint">{role.description}</div>}
+                      </td>
+                      <td>
+                        <span className={role.builtin ? 'badge' : 'badge badge--ok'}>{role.builtin ? 'Standard' : 'Eigene'}</span>
+                      </td>
+                      <td>
+                        {String(role.permissions.length)}
+                        {danger > 0 && (
+                          <div className="badges">
+                            <span className="badge badge--danger">{String(danger)} gefährlich</span>
+                          </div>
+                        )}
+                      </td>
+                      {rows !== undefined && <td>{String(rows.assignments)}</td>}
+                      {rows !== undefined && <td>{String(rows.active_users)}</td>}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      <section className="card" aria-label="Rechte-Matrix">
+        <h2>Rechte-Matrix</h2>
         {catalog !== null && (
           <div className="table-wrap">
             <table className="table matrix">
