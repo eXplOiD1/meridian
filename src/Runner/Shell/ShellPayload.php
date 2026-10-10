@@ -15,8 +15,10 @@ use Meridian\Security\SecretMasker;
  * werden abgelehnt; ein künftiges Format wird beim Lesen umgedeutet, nie per SQL umgeschrieben.
  *
  * Die Werte liegen versiegelt ({@see Sealed}) und erscheinen in keiner Darstellung (var_dump, print_r,
- * var_export, debug_zval_dump); json_encode() liefert nur Flags, serialize() wirft. Die Web-API entschlüsselt
- * dieses Format nie; nur der Shell-Worker liest es, direkt vor dem Lauf.
+ * var_export, debug_zval_dump); json_encode() liefert nur Flags, serialize() wirft. Entschlüsselt wird dieses Format
+ * nur an zwei Stellen: vom Shell-Worker direkt vor dem Lauf und von `GET /api/jobs/{id}/source` (`JobSourceReader`,
+ * ADR 0004 N1), und dort nur bei `jobs.reveal_for_edit = on`, mit Recht `jobs.edit_shell`, Kategorie-Prüfung und
+ * Audit-Eintrag. Jede andere Web-Antwort enthält höchstens `has_*`-Flags.
  */
 final class ShellPayload implements \JsonSerializable
 {
