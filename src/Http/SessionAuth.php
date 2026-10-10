@@ -7,6 +7,7 @@ namespace Meridian\Http;
 use Meridian\Auth\PasswordChangeRequired;
 use Meridian\Auth\Session;
 use Meridian\Auth\SessionManager;
+use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -56,5 +57,16 @@ final class SessionAuth
         $token = $request->cookies->get($this->cookieName($request));
 
         return is_string($token) ? $this->sessions->resolve($token) : null;
+    }
+
+    /** Das Sitzungs-Cookie: HttpOnly, SameSite=Strict, Secure nur über HTTPS (Name mit `__Host-`-Präfix, siehe cookieName()). */
+    public function cookie(#[\SensitiveParameter] Request $request, #[\SensitiveParameter] string $token, \DateTimeImmutable $expires): Cookie
+    {
+        return Cookie::create($this->cookieName($request), $token, $expires, '/', null, $request->isSecure(), true, false, Cookie::SAMESITE_STRICT);
+    }
+
+    public function expiredCookie(#[\SensitiveParameter] Request $request): Cookie
+    {
+        return Cookie::create($this->cookieName($request), '', 1, '/', null, $request->isSecure(), true, false, Cookie::SAMESITE_STRICT);
     }
 }
