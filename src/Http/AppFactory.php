@@ -30,13 +30,17 @@ use Meridian\Runner\Http\InfrastructureTargets;
 use Meridian\Schedule\Planner;
 use Meridian\Schedule\SchedulerLease;
 use Meridian\Security\AccessControl;
+use Meridian\Security\GrantPolicy;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretBox;
 use Meridian\Security\SecretMasker;
 use Meridian\Settings\Settings;
 use Meridian\Settings\SettingsController;
 use Meridian\Settings\SettingsService;
+use Meridian\User\AdminInvariant;
+use Meridian\User\AssignmentValidator;
 use Meridian\User\RoleCatalog;
+use Meridian\User\UserAdminService;
 use Meridian\User\UserRepository;
 
 /**
@@ -73,7 +77,20 @@ final class AppFactory
         $kernel = new Kernel($config, $masker);
         (new AuthController($config, $auth, $sessionAuth, $csrf, $users, $clock, $twoFactor))->register($kernel);
         (new UiController($config->uiDir))->register($kernel);
-        (new UserController($sessionAuth, $csrf, $users, $access, new RoleCatalog($db), $sessions, $throttle, new UserPresenter($masker)))->register($kernel);
+        $roles = new RoleCatalog($db);
+        $userAdmin = new UserAdminService(
+            $db,
+            $users,
+            $roles,
+            new GrantPolicy($access),
+            new AdminInvariant($db, $users, $access),
+            $audit,
+            $auth,
+            $hasher,
+            $sessions,
+            $clock,
+        );
+        (new UserController($config, $sessionAuth, $csrf, $users, $access, $roles, $sessions, $throttle, new UserPresenter($masker), $userAdmin, new AssignmentValidator($roles)))->register($kernel);
         (new AdminController($sessionAuth, $csrf, $users, $access, $audit, $throttle, $masker))->register($kernel);
         (new JobController(
             $sessionAuth,
