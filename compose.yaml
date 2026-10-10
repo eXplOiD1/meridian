@@ -21,9 +21,9 @@
 #   - Proxy-Image festnageln: MERIDIAN_PROXY_IMAGE (Standard wollomatic/socket-proxy:1.13.1 ohne Digest). Empfohlen:
 #     Digest ermitteln (docker buildx imagetools inspect wollomatic/socket-proxy:1.13.1) und in der .env eintragen:
 #     MERIDIAN_PROXY_IMAGE=wollomatic/socket-proxy:1.13.1@sha256:<ermittelter Digest>   (nie :latest)
-#   - Shell-Jobs in Containern: Namen der erlaubten Container (zweite Schicht neben den Freigaben in Meridian)
-#     in MERIDIAN_SHELL_CONTAINERS eintragen, getrennt durch |, nur [A-Za-z0-9_-], z. B. meridian-sandbox|nextcloud.
-#     Standard: nur meridian-sandbox. Danach docker compose up -d (der Proxy liest die Liste beim Start).
+#   - Shell-Jobs in Containern: Container werden NUR in Meridian freigegeben (Einstellungen -> Ausführungsorte,
+#     Admin mit Recht shell.targets). In compose/.env ist dafür nichts einzutragen. Der Proxy lässt Exec für jeden
+#     gültigen Containernamen durch; Meridians eigene Container (meridian-*, außer meridian-sandbox) sperrt Meridian selbst.
 
 name: meridian
 
@@ -188,7 +188,6 @@ services:
     environment:
       <<: *env
       MERIDIAN_DOCKER_PROXY: unix:///run/meridian-docker/docker.sock
-      MERIDIAN_SHELL_CONTAINERS: ${MERIDIAN_SHELL_CONTAINERS:-meridian-sandbox}
     volumes:
       - meridian-data:/var/lib/meridian
       - meridian-secrets:/etc/meridian:ro
@@ -202,10 +201,11 @@ services:
         condition: service_started
 
   # Docker nur über diesen Proxy (nie /var/run/docker.sock in einem Meridian-Container). wollomatic prüft Methode UND
-  # Pfad: erlaubt sind nur _ping, version, Container-Info der erlaubten Namen, Exec anlegen/starten/abfragen.
+  # Pfad: erlaubt sind nur _ping, version, Container-Info und Exec anlegen/starten/abfragen für jeden syntaktisch gültigen
+  # Containernamen. Welcher Container wirklich genutzt werden darf, entscheidet Meridian (Freigabe in der Oberfläche).
   # containers/create, start, kill, rm usw. -> 403. Kein Netz, keine IP-Adresse: lauscht nur auf dem Unix-Socket im
   # Volume meridian-docker-proxy. Läuft als root ohne Capabilities (nötig, um den Socket zu lesen und zu schreiben).
-  # Die Regeln sind verankert (^...$ ergänzt der Proxy); Namen in MERIDIAN_SHELL_CONTAINERS nur aus [A-Za-z0-9_-].
+  # Die Regeln sind verankert (^...$ ergänzt der Proxy); Containername nur [A-Za-z0-9][A-Za-z0-9_.-]* (kein Slash).
   docker-proxy:
     image: ${MERIDIAN_PROXY_IMAGE:-wollomatic/socket-proxy:1.13.1}
     container_name: meridian-docker-proxy
@@ -226,9 +226,9 @@ services:
       - -loglevel=WARN
       - -watchdoginterval=300
       - -stoponwatchdog
-      - '-allowGET=((/v1\.[0-9]{2})?/_ping|/v1\.[0-9]{2}/(version|containers/(${MERIDIAN_SHELL_CONTAINERS:-meridian-sandbox})/json|exec/[0-9a-f]{64}/json))'
+      - '-allowGET=((/v1\.[0-9]{2})?/_ping|/v1\.[0-9]{2}/(version|containers/[A-Za-z0-9][A-Za-z0-9_.-]*/json|exec/[0-9a-f]{64}/json))'
       - '-allowHEAD=((/v1\.[0-9]{2})?/_ping)'
-      - '-allowPOST=(/v1\.[0-9]{2}/(containers/(${MERIDIAN_SHELL_CONTAINERS:-meridian-sandbox})/exec|exec/[0-9a-f]{64}/start))'
+      - '-allowPOST=(/v1\.[0-9]{2}/(containers/[A-Za-z0-9][A-Za-z0-9_.-]*/exec|exec/[0-9a-f]{64}/start))'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - meridian-docker-proxy:/run/proxy

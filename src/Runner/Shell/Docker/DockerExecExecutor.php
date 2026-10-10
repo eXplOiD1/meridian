@@ -9,6 +9,7 @@ use Meridian\Runner\Shell\ExecRef;
 use Meridian\Runner\Shell\Execution;
 use Meridian\Runner\Shell\Executor;
 use Meridian\Runner\Shell\ExecSpec;
+use Meridian\Runner\Shell\InfrastructureContainers;
 use Meridian\Runner\Shell\ShellTargetKind;
 
 /**
@@ -70,6 +71,10 @@ final class DockerExecExecutor implements Executor
             throw ExecFailed::invalidSpec();
         }
         $container = $spec->target->name;
+        // Zweite Schicht nach ShellTargetPolicy: der Proxy lässt jeden Namen durch, Meridians eigene Container nie.
+        if (InfrastructureContainers::isInfrastructure($container)) {
+            throw ExecFailed::infrastructure();
+        }
 
         $inspect = $this->proxy->json('GET', '/containers/' . $container . '/json');
         if ($inspect['status'] !== 200) {

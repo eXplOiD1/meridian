@@ -11,14 +11,15 @@ namespace Meridian\Runner\Shell;
 final class ExecFailed extends \RuntimeException
 {
     public const PROXY_UNREACHABLE = 'Docker-Proxy nicht erreichbar: Dienst docker-proxy prüfen (docker compose ps).';
-    public const PROXY_DENIED = 'Der Docker-Proxy lässt diesen Container nicht zu: Namen in MERIDIAN_SHELL_CONTAINERS (compose/.env) eintragen.';
+    public const PROXY_DENIED = 'Der Docker-Proxy hat die Anfrage abgelehnt: Container-Name und Docker-Proxy-Einstellungen prüfen (docker compose logs docker-proxy).';
     public const PROXY_ERROR = 'Der Docker-Proxy hat einen unerwarteten Fehler gemeldet: Dienste docker-proxy und Docker prüfen.';
-    public const CONTAINER_MISSING = 'Container nicht gefunden oder gestoppt.';
+    public const CONTAINER_MISSING = 'Container nicht gefunden oder läuft nicht: Der Container muss laufen und der Name muss exakt stimmen (docker ps).';
     public const CONNECTION_LOST = 'Verbindung zum Docker-Proxy abgebrochen.';
     public const PROTOCOL = 'Protokollfehler bei der Ausführung im Container: Lauf beendet. Hat der Container /bin/sh, head und cut?';
     public const HOST_NOT_SET_UP = 'Host-Ausführung nicht eingerichtet: meridian-shell.socket prüfen.';
     public const START_FAILED = 'Der Prozess konnte nicht gestartet werden.';
     public const NO_PROCESS_GROUP = 'Keine eigene Prozessgruppe (setsid): Lauf aus Sicherheitsgründen nicht gestartet.';
+    public const INFRASTRUCTURE = 'Meridians eigene Container sind als Ausführungsort gesperrt: Job auf einen anderen Container umstellen.';
     public const API_TOO_OLD = 'Docker-API zu alt (mindestens 1.41): Docker auf dem Server aktualisieren.';
     public const INVALID_SPEC = 'Ungültige Angaben zum Ausführungsort (Name, Benutzer oder Arbeitsverzeichnis): Job neu speichern.';
 
@@ -55,6 +56,11 @@ final class ExecFailed extends \RuntimeException
     public static function protocol(): self
     {
         return new self(self::PROTOCOL, false);
+    }
+
+    public static function infrastructure(): self
+    {
+        return new self(self::INFRASTRUCTURE, false);
     }
 
     public static function invalidSpec(): self

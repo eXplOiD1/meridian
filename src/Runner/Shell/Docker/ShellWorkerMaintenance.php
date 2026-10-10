@@ -9,8 +9,7 @@ use Meridian\Runner\Shell\ExecFailed;
 
 /**
  * Wartung im Shell-Worker-Kind (docs/decisions/0004 §5.2 Schritt 4, E10): beim Start und alle 60 s
- * `exec_ref`-Aufräumen ({@see ExecRefJanitor}); beim Start die Freigaben gegen `MERIDIAN_SHELL_CONTAINERS`
- * vergleichen; ist der Proxy nicht erreichbar, höchstens alle 5 min eine Warnung. Liefert nur feste Texte mit
+ * `exec_ref`-Aufräumen ({@see ExecRefJanitor}); beim Start den Proxy prüfen; ist er nicht erreichbar, höchstens alle 5 min eine Warnung. Liefert nur feste Texte mit
  * Containernamen und Anzahlen — nie `exec_ref`, nie Meldungen aus Docker oder curl.
  */
 final class ShellWorkerMaintenance
@@ -24,7 +23,6 @@ final class ShellWorkerMaintenance
     public function __construct(
         private readonly Connection $db,
         private readonly ?DockerProxyClient $proxy,
-        private readonly ?string $proxyAllowlist,
     ) {
     }
 
@@ -38,9 +36,6 @@ final class ShellWorkerMaintenance
         }
         $lines = [];
         if ($first) {
-            $rows = $this->db->fetchAll("SELECT DISTINCT name FROM shell_targets WHERE kind = 'docker' ORDER BY name");
-            $names = array_column($rows, 'name');
-            $lines = DockerStartupCheck::warnings($names, $this->proxyAllowlist);
             try {
                 $this->proxy->apiPrefix();
             } catch (ExecFailed $e) {

@@ -137,7 +137,7 @@ worker:run --type=shell (Aufseher) ─┬─ worker:run --type=shell --child
   `proc_open([PHP_BINARY, '<app>/bin/meridian', 'worker:run', '--type=…', '--child'], …, env: <Allowlist>)` und
   startet abgestürzte Kinder mit wachsendem Abstand neu (1, 2, 4 … 30 s). Umgebung der Kinder genau: `PATH`, `TZ`,
   `LANG`, `MERIDIAN_ENV`, `MERIDIAN_DATA_DIR`, `MERIDIAN_KEY_FILE` (Pfad, kein Geheimnis), `MERIDIAN_TIMEZONE`,
-  `MERIDIAN_DOCKER_PROXY`, `MERIDIAN_SHELL_CONTAINERS`, `MERIDIAN_SHELL_HOST_SOCKETS` — nie
+  `MERIDIAN_DOCKER_PROXY`, `MERIDIAN_SHELL_HOST_SOCKETS` — nie
   `MERIDIAN_ADMIN_PASSWORD*` o. ä. Der Aufseher lädt keinen Schlüssel.
 - **Getrennte Prozesse je Typ**, weil sie verschiedene Rechte brauchen (E10): Der HTTP-Worker hat Netz, aber keinen
   Proxy-Socket; der Shell-Worker hat den Proxy-Socket, aber **kein Netz** (`network_mode: none` bzw.
@@ -279,11 +279,11 @@ getrennte Container, der Shell-Worker hat kein Netz).
   `POST /containers/create` (mit `Privileged`, Host-Mounts) und `start`/`kill`/`rm` = Root auf dem NAS. wollomatic
   prüft Methode **und Pfad** per regulärem Ausdruck (`^…$` wird ergänzt), lauscht auf Wunsch auf einem Unix-Socket
   (`-proxysocketendpoint`, TCP dann aus) und läuft mit `read_only`, `cap_drop: ALL`.
-- **Erlaubt** (alles andere 403), jeweils als **eine** äußere Gruppe:
+- **Erlaubt** (alles andere 403), jeweils als **eine** äußere Gruppe (Stand vor N2; die Namensgruppe ist seitdem `[A-Za-z0-9][A-Za-z0-9_.-]*`, siehe compose.yaml):
   - `GET` `((/v1\.[0-9]{2})?/_ping|/v1\.[0-9]{2}/(version|containers/(${MERIDIAN_SHELL_CONTAINERS})/json|exec/[0-9a-f]{64}/json))`
   - `HEAD` `((/v1\.[0-9]{2})?/_ping)`
   - `POST` `(/v1\.[0-9]{2}/(containers/(${MERIDIAN_SHELL_CONTAINERS})/exec|exec/[0-9a-f]{64}/start))`
-- `MERIDIAN_SHELL_CONTAINERS` (Compose-Variable, z. B. `meridian-sandbox|nextcloud|paperless`) ist die **zweite
+- **Überholt durch Nachtrag N2** (Proxy-Regeln erlauben jeden gültigen Namen, `MERIDIAN_SHELL_CONTAINERS` entfällt): `MERIDIAN_SHELL_CONTAINERS` (Compose-Variable, z. B. `meridian-sandbox|nextcloud|paperless`) ist die **zweite
   Schicht** der Container-Allowlist, gepflegt vom Betreiber in der `.env`. Namen nur aus `[A-Za-z0-9_-]` (ein Punkt
   wäre im regulären Ausdruck ein Joker). Meridians Allowlist (`shell_targets`) ist die erste Schicht; was der Proxy
   nicht zulässt, scheitert mit 403 → Notiz „Der Docker-Proxy lässt diesen Container nicht zu: Namen in
@@ -1076,3 +1076,26 @@ Wie ADR 0003 N1 (Entscheidung Alex, Standard aus): Bei `jobs.reveal_for_edit = o
 eingeschränkte Admins nie. Damit entschlüsselt der Web-Prozess `payload_enc` von Shell-Jobs an genau dieser Stelle
 (`JobSourceReader`); E6 („nur der Shell-Worker liest es“) gilt sonst weiter. Der Web-Dienst mountet
 `meridian-secrets` (compose.yaml, `&common`). Skript und Umgebung bleiben „nur als Ganzes ersetzen“ (PUT).
+
+## Nachtrag N2 (2026-10-10): Container-Freigabe nur in der Oberfläche (ersetzt §5.5/§7.1/E10 zu `MERIDIAN_SHELL_CONTAINERS`)
+
+Entscheidung Alex: Einen Container für Shell-Jobs freizugeben darf **nur einmal** nötig sein, in Meridian unter
+Einstellungen → Ausführungsorte (`shell.targets`, Audit). `MERIDIAN_SHELL_CONTAINERS` entfällt vollständig (compose,
+`.env`-Doku, README, Kind-Umgebung, Start-Warnung); sonst würde das System statisch.
+
+- **Proxy:** Die Pfad-Allowlist erlaubt `containers/{name}/json` (GET) und `containers/{name}/exec` (POST) für jeden
+  Namen `[A-Za-z0-9][A-Za-z0-9_.-]*` (ohne `/`). Alles andere bleibt wie in E10: kein `create`/`start`/`kill`/`rm`,
+  Exec-IDs 64 hex, nur Unix-Socket.
+- **Allowlist ist jetzt die Datenbank:** `ShellTargetPolicy` prüft `shell_targets` bei jedem Lauf serverseitig
+  (Kategorie aus der DB); Namen werden streng validiert (ablehnen, nie zurechtschneiden; Punkt erlaubt wie bei Docker).
+- **Infrastruktur gesperrt:** `InfrastructureContainers` lehnt Meridians eigene Container ab — `web`, `scheduler`,
+  `worker-http`, `worker-shell`, `docker-proxy`, `meridian` und alles mit dem Präfix `meridian-` außer
+  `meridian-sandbox` — beim Anlegen/Ändern (`ShellTargetStore::validate()`, 422), in `ShellTargetPolicy::check()` (Job
+  speichern und jeder Lauf, Notiz „gesperrt“, nicht wiederholbar) und noch einmal in `DockerExecExecutor::start()`.
+  (`InfrastructureTargets` betrifft HTTP-Ziele nach IP/Port und taugt dafür nicht.)
+- **Restrisiko:** Ein kompromittierter `worker-shell` könnte über den Proxy in **jedem** Container Exec anlegen
+  (der Proxy sieht keine Körper). Gemildert: Der Worker hat `network_mode: none` und erreicht nur den Proxy-Socket;
+  die serverseitige Sperre schützt Meridians Infrastruktur nur, solange der Worker-Code unverändert läuft. Wer den
+  Worker übernimmt, hat ohnehin Schlüssel und Datenbank (E10).
+- **Meldungen:** 404/Container gestoppt → „Container nicht gefunden oder läuft nicht: Der Container muss laufen und
+  der Name muss exakt stimmen“; 403 → Proxy hat die Anfrage abgelehnt (Name und Proxy-Einstellungen prüfen).

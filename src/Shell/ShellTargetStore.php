@@ -9,6 +9,7 @@ use Meridian\Auth\Clock;
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
 use Meridian\Runner\Shell\DbShellTargetSource;
+use Meridian\Runner\Shell\InfrastructureContainers;
 use Meridian\Runner\Shell\ShellRules;
 use Meridian\Runner\Shell\ShellTarget;
 use Meridian\Runner\Shell\ShellTargetKind;
@@ -50,8 +51,11 @@ final class ShellTargetStore
         }
         if (!$kindEnum->isValidName($name)) {
             throw new InvalidShellTarget('name', $kindEnum === ShellTargetKind::Docker
-                ? 'Container-Name: 1–128 Zeichen aus Buchstaben, Ziffern, Unterstrich und Bindestrich, nicht mit einem Sonderzeichen beginnend (kein Punkt).'
+                ? 'Container-Name: 1–128 Zeichen aus Buchstaben, Ziffern, Unterstrich, Punkt und Bindestrich, mit einem Buchstaben oder einer Ziffer beginnend. Der Name muss genau stimmen.'
                 : 'Profilname: 1–32 Zeichen aus Kleinbuchstaben, Ziffern und Bindestrich, mit einem Buchstaben beginnend.');
+        }
+        if ($kindEnum === ShellTargetKind::Docker && InfrastructureContainers::isInfrastructure($name)) {
+            throw new InvalidShellTarget('name', InfrastructureContainers::MESSAGE);
         }
         if ($categoryId !== null && !$this->categoryExists($categoryId)) {
             throw new InvalidShellTarget('category_id', 'Kategorie unbekannt. Eine bestehende Kategorie wählen oder leer lassen (gilt dann global).');
@@ -252,7 +256,8 @@ final class ShellTargetStore
             ['category' => $categoryId],
         ) as $row) {
             $record = self::record($row);
-            if ($record !== null) {
+            // Alte Freigaben für Meridians eigene Container (vor der Sperre angelegt) nie zur Auswahl anbieten.
+            if ($record !== null && !($record->target->kind === ShellTargetKind::Docker && InfrastructureContainers::isInfrastructure($record->target->name))) {
                 $records[] = $record;
             }
         }

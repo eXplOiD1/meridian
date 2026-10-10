@@ -25,7 +25,7 @@ final class WorkerSupervisor
     /** HTTP-Worker: Namen des Docker-Proxys, die nie erreichbar sein dürfen (InfrastructureTargets). */
     public const CHILD_ENV_HTTP = ['MERIDIAN_DOCKER_PROXY_HOSTS'];
     /** Shell-Worker: Proxy-Socket, Container- und Host-Allowlist (zweite Schicht, keine Geheimnisse). */
-    public const CHILD_ENV_SHELL = ['MERIDIAN_DOCKER_PROXY', 'MERIDIAN_SHELL_CONTAINERS', 'MERIDIAN_SHELL_HOST_SOCKETS'];
+    public const CHILD_ENV_SHELL = ['MERIDIAN_DOCKER_PROXY', 'MERIDIAN_SHELL_HOST_SOCKETS'];
 
     /**
      * @var list<array{process: resource|null, pid: int, started: float, restartAt: float, backoff: int}>
