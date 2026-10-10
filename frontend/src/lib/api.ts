@@ -6,6 +6,9 @@
 /** Wird ausgelöst, wenn der Server eine bestehende Sitzung nicht mehr annimmt (abgelaufen, beendet). */
 export const SESSION_ENDED_EVENT = 'meridian:session-ended';
 
+/** Der Server verlangt zuerst ein eigenes Passwort (Pflichtwechsel): Profil neu laden, dann zeigt die App nur diesen Schritt. */
+export const PASSWORD_CHANGE_EVENT = 'meridian:password-change-required';
+
 export class ApiError extends Error {
   readonly status: number;
   readonly retryAfter: number | null;
@@ -81,6 +84,9 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path
     // 401 bei Anmeldung und Profilabfrage ist normal (falsches Passwort, nicht angemeldet); überall sonst ist die Sitzung weg.
     if (response.status === 401 && path !== '/api/auth/login' && path !== '/api/auth/me') {
       window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
+    }
+    if (response.status === 403 && isRecord(data) && data.password_change_required === true) {
+      window.dispatchEvent(new Event(PASSWORD_CHANGE_EVENT));
     }
     const message = isRecord(data) && typeof data.error === 'string' ? data.error : 'Unerwarteter Fehler (' + String(response.status) + ').';
     const retry = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);

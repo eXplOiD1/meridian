@@ -7,6 +7,7 @@ import { ApiError, request } from '../lib/api';
 import { groupSecret, retryHint } from '../lib/format';
 import { roleNames } from '../lib/permissions';
 import type { Profile } from '../types';
+import { DisplayNameCard, PasswordCard, SessionsCard } from './AccountExtras';
 
 interface AccountProps {
   profile: Profile;
@@ -141,6 +142,7 @@ export function Account({ profile, onChanged }: AccountProps) {
   }
 
   return (
+    <div className="settings">
     <div className="grid-2">
       <section className="card" aria-label="Konto">
         <h2>Konto</h2>
@@ -221,5 +223,12 @@ export function Account({ profile, onChanged }: AccountProps) {
         )}
       </section>
     </div>
+    <div className="grid-2">
+      <DisplayNameCard profile={profile} onChanged={onChanged} />
+      <PasswordCard profile={profile} onChanged={onChanged} />
+    </div>
+    <SessionsCard profile={profile} />
+    </div>
   );
 }
+

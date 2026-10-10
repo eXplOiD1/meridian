@@ -9,6 +9,27 @@ export function canManageUsers(profile: Profile): boolean {
   return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('users.manage'));
 }
 
+export function canManageCategories(profile: Profile): boolean {
+  return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('categories.manage'));
+}
+
+/** Deutsche Bezeichnungen der Rechte (Schlüssel und „gefährlich“ kommen vom Server, GET /api/roles). */
+export const PERMISSION_LABELS: Record<string, string> = {
+  'jobs.view': 'Jobs ansehen',
+  'jobs.run': 'Jobs ausführen',
+  'jobs.edit_http': 'HTTP-Jobs bearbeiten',
+  'jobs.edit_shell': 'Shell-Jobs bearbeiten',
+  'status_pages.edit': 'Statusseiten bearbeiten',
+  'users.manage': 'Benutzer verwalten, Audit-Log, Sperren aufheben',
+  'categories.manage': 'Kategorien verwalten',
+  'network.internal_targets': 'Interne Ziele freigeben',
+  'settings.manage': 'Einstellungen ändern',
+};
+
+export function permissionLabel(key: string): string {
+  return PERMISSION_LABELS[key] ?? key;
+}
+
 /** Gefährliche Rechte gelten nur uneingeschränkt (alle Kategorien ausdrücklich). */
 export function canManageSettings(profile: Profile): boolean {
   return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('settings.manage'));

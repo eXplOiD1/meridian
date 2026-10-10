@@ -81,11 +81,11 @@ Entwurf: `docs/decisions/0005-benutzer-und-rollen.md` (Abschnitte in Klammern). 
 | [x] | S6 Eigene Daten: `PUT /api/auth/profile`, `POST /api/auth/password`, Sitzungsübersicht/-beenden, Pflichtwechsel sperrt alles außer `me`/`password`/`logout` (E10) | backend |
 | [x] | S7 Kategorien-Verwaltung: `GET /api/categories/manage`, anlegen, umbenennen, löschen nur ohne Jobs (409), Freigaben per CASCADE weg, Zuweisungen werden „wirkungslos“, nie „alle“; CLI `category:rename`/`category:delete` (E9) | backend |
 | [ ] | S8 Gesamtsuite: Rollen-Matrix, IDOR, Rechteausweitung, letzter Admin (auch parallel), H1, Leak-Tests aller Ausgabestellen (§5), Roundtrip, Mutation | tester |
-| [ ] | U1 Menü „Benutzer & Rollen“ und „Kategorien“ nach Recht, Benutzerliste, Rechte-Matrix (nur lesend) (§7) | frontend |
-| [ ] | U2 Benutzer anlegen/bearbeiten mit Zuweisungs-Editor, Einmalpasswort einmal anzeigen (§7) | frontend |
-| [ ] | U3 Sicherheits- und Kontoaktionen (Passwort-/2FA-Reset, Sitzungen, Sperre, Deaktivieren, Löschen) mit `Confirm` + Passwortfeld (§7) | frontend |
-| [ ] | U4 Kategorien-Seite mit Folgen-Vorschau (§7) | frontend |
-| [ ] | U5 Mein Konto (Anzeigename, Passwort, Sitzungen), Screen „Passwort festlegen“ (§7) | frontend |
+| [x] | U1 Menü „Benutzer & Rollen“ und „Kategorien“ nach Recht, Benutzerliste, Rechte-Matrix (nur lesend) (§7) | frontend |
+| [x] | U2 Benutzer anlegen/bearbeiten mit Zuweisungs-Editor, Einmalpasswort einmal anzeigen (§7) | frontend |
+| [x] | U3 Sicherheits- und Kontoaktionen (Passwort-/2FA-Reset, Sitzungen, Sperre, Deaktivieren, Löschen) mit `Confirm` + Passwortfeld (§7) | frontend |
+| [x] | U4 Kategorien-Seite mit Folgen-Vorschau (§7) | frontend |
+| [x] | U5 Mein Konto (Anzeigename, Passwort, Sitzungen), Screen „Passwort festlegen“ (§7) | frontend |
 | [ ] | Regeländerungen aus §10 in `CLAUDE.md`, Skills und Hook eintragen | Koordinator |
 | [ ] | Review Phase 4a | sicherheit |
 
