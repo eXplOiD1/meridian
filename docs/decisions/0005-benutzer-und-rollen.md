@@ -31,6 +31,9 @@ Skills und Hook: §10.
 
 ### E1 – Drei feste Rollen, mehrere Zuweisungen je Benutzer, keine eigenen Rollen im MVP (B1)
 
+> **Abgelöst (10.10.2026)** durch `0006-eigene-rollen.md` (Wunsch Alex: Rechte anpassbar, neue Rollen). Zuweisungen
+> mit Geltungsbereich bleiben wie hier beschrieben.
+
 - Rollen bleiben **Admin, Operator, Beobachter** mit den Rechten aus den Migrationen. Rollen und ihre Rechte sind im
   MVP **nicht** über API oder Oberfläche änderbar; die Oberfläche zeigt sie als Rechte-Matrix nur lesend.
 - Ein Benutzer hat eine **Liste von Zuweisungen** (Rolle + Geltungsbereich), z. B. „Operator für NAS und Web“ plus
