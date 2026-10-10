@@ -76,6 +76,7 @@ final class JobController
         $kernel->get('jobs_limits', '/api/jobs/limits', $this->limits(...));
         $kernel->get('jobs_show', '/api/jobs/{id}', $this->show(...), $id);
         $kernel->get('jobs_runs', '/api/jobs/{id}/runs', $this->history(...), $id);
+        $kernel->get('runs_list', '/api/runs', $this->recentRuns(...));
         $kernel->get('runs_show', '/api/runs/{id}', $this->runDetail(...), $id);
         $kernel->get('runs_log', '/api/runs/{id}/log', $this->runLog(...), $id);
         $kernel->post('runs_cancel', '/api/runs/{id}/cancel', $this->cancelRun(...), $id);
@@ -255,6 +256,37 @@ final class JobController
         }
         [, $grants] = $auth;
 
+        [$limit, $before, $status] = self::pageParams($request);
+
+        $scope = $this->access->scope($grants, Permission::ViewJobs);
+        $job = $this->jobs->findVisible(self::id($request), $scope);
+        if ($job === null) {
+            return JsonReply::error(404, 'Job nicht gefunden.');
+        }
+        $this->access->require($grants, Permission::ViewJobs, $job->categoryName);
+
+        $records = $this->runs->history($job->id, $scope, $limit, $before, $status);
+        $more = count($records) > $limit;
+        $page = array_slice($records, 0, $limit);
+        $out = [];
+        $display = $this->settings->httpDisplay();
+        foreach ($page as $run) {
+            $out[] = $this->presenter->run($run, false, $display);
+        }
+
+        return JsonReply::json([
+            'runs' => $out,
+            'next_before_id' => $more && $page !== [] ? $page[count($page) - 1]->id : null,
+        ]);
+    }
+
+    /**
+     * `limit`, `before_id` und `status` der Verlaufsabfragen; wirft {@see ValidationFailed} (422).
+     *
+     * @return array{int, ?int, ?RunStatus}
+     */
+    private static function pageParams(Request $request): array
+    {
         $query = $request->query->all();
         $errors = [];
         $limit = self::DEFAULT_RUN_LIMIT;
@@ -284,20 +316,41 @@ final class JobController
             throw new ValidationFailed($errors);
         }
 
-        $scope = $this->access->scope($grants, Permission::ViewJobs);
-        $job = $this->jobs->findVisible(self::id($request), $scope);
-        if ($job === null) {
-            return JsonReply::error(404, 'Job nicht gefunden.');
-        }
-        $this->access->require($grants, Permission::ViewJobs, $job->categoryName);
+        return [$limit, $before, $status];
 
-        $records = $this->runs->history($job->id, $scope, $limit, $before, $status);
+    }
+
+    /**
+     * `GET /api/runs`: Verlauf über alle für den Benutzer sichtbaren Jobs (nur mit Sicht `jobs.view`, auf die
+     * erlaubten Kategorien gekappt wie der Verlauf eines Jobs), neueste zuerst, optional `status`, `job_id`.
+     */
+    public function recentRuns(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+        [$limit, $before, $status] = self::pageParams($request);
+        $jobId = null;
+        $raw = $request->query->all()['job_id'] ?? null;
+        if ($raw !== null) {
+            $jobId = self::positiveInt($raw);
+            if ($jobId === null) {
+                throw new ValidationFailed(['job_id' => 'Job: positive ganze Zahl.']);
+            }
+        }
+        $scope = $this->access->scope($grants, Permission::ViewJobs);
+        if ($scope->isEmpty()) {
+            throw new AccessDenied(Permission::ViewJobs);
+        }
+        $records = $this->runs->recent($scope, $limit, $before, $status, $jobId);
         $more = count($records) > $limit;
         $page = array_slice($records, 0, $limit);
-        $out = [];
         $display = $this->settings->httpDisplay();
+        $out = [];
         foreach ($page as $run) {
-            $out[] = $this->presenter->run($run, false, $display);
+            $out[] = $this->presenter->runWithJob($run, $display);
         }
 
         return JsonReply::json([

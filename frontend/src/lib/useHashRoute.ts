@@ -11,6 +11,7 @@ export type Route =
   | { name: 'konto' }
   | { name: 'settings' }
   | { name: 'jobs' }
+  | { name: 'history' }
   | { name: 'job-new' }
   | { name: 'job'; id: string }
   | { name: 'job-edit'; id: string }
@@ -40,6 +41,9 @@ export function parseRoute(hash: string): Route {
   }
   if (parts.length === 1 && first === 'einstellungen') {
     return { name: 'settings' };
+  }
+  if (parts.length === 1 && first === 'verlauf') {
+    return { name: 'history' };
   }
   if (parts.length === 1 && first === 'kategorien') {
     return { name: 'categories' };

@@ -122,7 +122,7 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 | [x] | Scheibe 1 (vorgezogen): Rahmen mit Seitenleiste, Anmeldung mit 2FA, Mein Konto mit 2FA-Einrichtung und QR-Code, Audit-Log, Sperre aufheben, Übersicht mit leerer Abfahrtstafel | frontend |
 | [ ] | Übersicht mit Abfahrtstafel und Taktband | frontend |
 | [ ] | Jobliste mit Filtern, Job-Editor mit Zeitplan-Vorschau | frontend |
-| [ ] | Verlauf mit Live-Log | frontend |
+| [~] | Verlauf: Seite `#/verlauf` über `GET /api/runs` (alle sichtbaren Jobs, Status-Filter, Seiten); offen: Lauf-Details/Live-Log direkt aus der Liste (bisher Link zum Job) | frontend |
 | [ ] | Benutzer und Rollen mit Rechte-Matrix | frontend |
 | [ ] | API-Endpunkte für alle Screens mit Rechte-Tests | backend |
 | [x] | **Rollen und Rechte anpassbar (Wunsch Alex):** Entwurf `docs/decisions/0006-eigene-rollen.md` (löst 0005 E1/B1 ab). F1–F9 von Alex entschieden (§9.1, 10.10.2026). Reihenfolge R1 → R2 → R3 → (R4 ∥ R5) → R6 | architekt |

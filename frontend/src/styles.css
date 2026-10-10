@@ -97,6 +97,7 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .btn--on-dark:hover:not(:disabled) { background: var(--tafel-hell); color: #fff; }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
+.field--inline { flex-direction: row; align-items: center; gap: 10px; }
 .field__label { font-weight: 600; font-size: 14px; }
 .field__hint { font-size: 13px; color: var(--schiefer); }
 .input {

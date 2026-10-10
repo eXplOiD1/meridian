@@ -33,10 +33,8 @@ function entries(profile: Profile): NavEntry[] {
   } else {
     list.push({ path: null, label: 'Jobs', hint: 'bald' });
   }
-  list.push(
-    { path: null, label: 'Verlauf', hint: 'bald' },
-    { path: null, label: 'Statusseiten', hint: 'bald' },
-  );
+  list.push(canViewJobs(profile) ? { path: 'verlauf', label: 'Verlauf', current: (r) => r.name === 'history' } : { path: null, label: 'Verlauf', hint: 'bald' });
+  list.push({ path: null, label: 'Statusseiten', hint: 'bald' });
   if (canSeeUsersArea(profile)) {
     list.push({
       path: canManageUsers(profile) ? 'benutzer' : 'benutzer/rollen',
