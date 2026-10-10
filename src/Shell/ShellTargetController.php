@@ -23,12 +23,13 @@ use Symfony\Component\HttpFoundation\Response;
  *
  *   GET    /api/settings/shell-targets
  *   POST   /api/settings/shell-targets          {kind, name, category_id, users, default_user, note}
+ *   PUT    /api/settings/shell-targets/{id}     {kind (unveränderlich), name, category_id, users, default_user, note}
  *   DELETE /api/settings/shell-targets/{id}
  *   GET    /api/shell/targets?category_id=      (Auswahl im Job-Editor)
  *
  * Die drei ersten nur mit `shell.targets` (gefährlich: nur uneingeschränkt, nie für eine auf Kategorien beschränkte
- * Rolle), die Auswahl nur mit `jobs.edit_shell` (ebenso). Ablauf: Sitzung (401) → bei POST/DELETE CSRF und Herkunft
- * (403) → Recht (403) → Eingabe (422) → Aktion → Audit `shell.target_added`/`_removed`. Texte der Antwort laufen
+ * Rolle), die Auswahl nur mit `jobs.edit_shell` (ebenso). Ablauf: Sitzung (401) → bei POST/PUT/DELETE CSRF und Herkunft
+ * (403) → Recht (403) → Eingabe (422) → unbekannte ID (404) → Aktion → Audit `shell.target_added`/`_updated`/`_removed`. Texte der Antwort laufen
  * durch den Masker.
  */
 final class ShellTargetController
@@ -52,6 +53,7 @@ final class ShellTargetController
     {
         $kernel->get('shell_targets_list', '/api/settings/shell-targets', $this->list(...));
         $kernel->post('shell_targets_add', '/api/settings/shell-targets', $this->add(...));
+        $kernel->put('shell_targets_update', '/api/settings/shell-targets/{id}', $this->update(...), ['id' => '[1-9][0-9]{0,17}']);
         $kernel->delete('shell_targets_remove', '/api/settings/shell-targets/{id}', $this->remove(...), ['id' => '[1-9][0-9]{0,17}']);
         $kernel->get('shell_targets_usable', '/api/shell/targets', $this->usable(...));
     }
@@ -87,6 +89,32 @@ final class ShellTargetController
         }
 
         return JsonReply::json(['target' => $this->present($record)], 201);
+    }
+
+    public function update(#[\SensitiveParameter] Request $request): Response
+    {
+        $session = $this->sessionAuth->authenticate($request);
+        if ($session === null) {
+            return JsonReply::error(401, 'Nicht angemeldet.');
+        }
+        if (!$this->csrf->check($request, $session->token)) {
+            return JsonReply::csrfFailed();
+        }
+        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
+
+        [$kind, $name, $categoryId, $users, $default, $note] = self::input($request);
+        $id = $request->attributes->getString('id');
+        try {
+            $input = $this->store->validate($kind, $name, $categoryId, $users, $default, $note);
+            $result = preg_match('/^[1-9][0-9]{0,17}$/D', $id) === 1 ? $this->store->update((int) $id, $input, $session->userId, $this->audit) : null;
+        } catch (InvalidShellTarget $e) {
+            throw ValidationFailed::field($e->field, $e->getMessage());
+        }
+        if ($result === null) {
+            return JsonReply::error(404, 'Ausführungsort nicht gefunden.');
+        }
+
+        return JsonReply::json(['target' => $this->present($result['record']), 'affected_jobs' => $result['affected_jobs']]);
     }
 
     public function remove(#[\SensitiveParameter] Request $request): Response

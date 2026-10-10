@@ -497,6 +497,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<ShellTargetEntry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -530,24 +531,56 @@ function ShellTargets({ csrf }: { csrf: string }) {
   const users = splitUsers(form.users);
   const rootChosen = docker && (users.some((user) => user === 'root' || /^0(:|$)/.test(user)) || form.defaultUser.trim() === 'root' || /^0(:|$)/.test(form.defaultUser.trim()));
 
-  async function add(event: FormEvent): Promise<void> {
+  function startEdit(target: ShellTargetEntry): void {
+    setEditing(target);
+    setErrors({});
+    setFormError(null);
+    setNotice(null);
+    setForm({
+      kind: target.kind,
+      name: target.name,
+      categoryId: target.category === null ? '' : String(target.category.id),
+      users: target.users.join(', '),
+      defaultUser: target.default_user ?? '',
+      note: target.note,
+    });
+  }
+
+  function cancelEdit(): void {
+    setEditing(null);
+    setErrors({});
+    setFormError(null);
+    setForm(EMPTY_SHELL_FORM);
+  }
+
+  async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
     setBusy(true);
     setErrors({});
     setFormError(null);
     setNotice(null);
+    const body = {
+      kind: form.kind,
+      name: form.name.trim(),
+      category_id: form.categoryId === '' ? null : Number.parseInt(form.categoryId, 10),
+      users: docker ? users : [],
+      default_user: docker && form.defaultUser.trim() !== '' ? form.defaultUser.trim() : null,
+      note: form.note.trim(),
+    };
     try {
-      const result = await request<{ target: ShellTargetEntry }>('POST', '/api/settings/shell-targets', {
-        csrf,
-        body: {
-          kind: form.kind,
-          name: form.name.trim(),
-          category_id: form.categoryId === '' ? null : Number.parseInt(form.categoryId, 10),
-          users: docker ? users : [],
-          default_user: docker && form.defaultUser.trim() !== '' ? form.defaultUser.trim() : null,
-          note: form.note.trim(),
-        },
-      });
+      if (editing !== null) {
+        const result = await request<{ target: ShellTargetEntry; affected_jobs: number }>('PUT', '/api/settings/shell-targets/' + String(editing.id), { csrf, body });
+        setTargets((current) => current?.map((entry) => (entry.id === result.target.id ? result.target : entry)) ?? current);
+        setEditing(null);
+        setForm(EMPTY_SHELL_FORM);
+        setNotice(
+          'Ausführungsort geändert. ' +
+            String(result.affected_jobs) +
+            ' Job(s) verwendeten den bisherigen Ort; zeigt ein Job nicht mehr auf einen freigegebenen Ort oder Benutzer, schlägt er ab dem nächsten Lauf fehl, bis er angepasst ist.',
+        );
+        return;
+      }
+      const result = await request<{ target: ShellTargetEntry }>('POST', '/api/settings/shell-targets', { csrf, body });
       setTargets((current) => [...(current ?? []), result.target]);
       setForm({ ...EMPTY_SHELL_FORM, kind: form.kind });
       setNotice('Ausführungsort angelegt. Er steht ab sofort im Job-Editor zur Wahl.');
@@ -570,6 +603,9 @@ function ShellTargets({ csrf }: { csrf: string }) {
     try {
       await request<null>('DELETE', '/api/settings/shell-targets/' + String(target.id), { csrf });
       setTargets((current) => current?.filter((entry) => entry.id !== target.id) ?? current);
+      if (editing?.id === target.id) {
+        cancelEdit();
+      }
       setNotice('Ausführungsort entfernt. Jobs, die ihn nutzen, schlagen ab dem nächsten Lauf fehl, bis ein anderer gewählt ist.');
     } catch (caught) {
       setFormError(errorMessage(caught));
@@ -637,6 +673,9 @@ function ShellTargets({ csrf }: { csrf: string }) {
                     {target.created_by !== null && <span className="hint"> · {target.created_by.display_name}</span>}
                   </td>
                   <td>
+                    <button type="button" className="btn btn--ghost" disabled={busy} aria-label={'Ausführungsort ' + target.name + ' bearbeiten'} onClick={() => startEdit(target)}>
+                      Bearbeiten
+                    </button>{' '}
                     <Confirm
                       label="Entfernen"
                       accessibleName={'Ausführungsort ' + target.name + ' entfernen'}
@@ -660,13 +699,18 @@ function ShellTargets({ csrf }: { csrf: string }) {
         </div>
       )}
 
-      <form className="form targets__form" onSubmit={(event) => void add(event)} aria-labelledby="settings-shell-targets-add">
-        <h3 id="settings-shell-targets-add">Ausführungsort hinzufügen</h3>
+      <form className="form targets__form" onSubmit={(event) => void save(event)} aria-labelledby="settings-shell-targets-add">
+        <h3 id="settings-shell-targets-add">{editing === null ? 'Ausführungsort hinzufügen' : 'Ausführungsort bearbeiten'}</h3>
+        {editing !== null && (
+          <p className="hint">
+            Die Art lässt sich nicht ändern. Jobs, die auf den bisherigen Namen, Geltungsbereich oder Benutzer zeigen, werden ab dem nächsten Lauf abgelehnt, bis sie angepasst sind.
+          </p>
+        )}
         {formError !== null && <Alert tone="err">{formError}</Alert>}
         <div className="grid-2">
           <FormField label="Art" error={errors.kind}>
             {(aria) => (
-              <select {...aria} className="input" name="shell-kind" value={form.kind} onChange={(e) => set('kind', e.target.value)}>
+              <select {...aria} className="input" name="shell-kind" value={form.kind} disabled={editing !== null} onChange={(e) => set('kind', e.target.value)}>
                 <option value="docker">Docker-Container</option>
                 <option value="host">Host-Profil</option>
               </select>
@@ -722,8 +766,13 @@ function ShellTargets({ csrf }: { csrf: string }) {
         {errors.body !== undefined && <Alert tone="err">{errors.body}</Alert>}
         <div className="row">
           <button type="submit" className="btn btn--solid" disabled={busy || form.name.trim() === ''}>
-            {busy ? 'Speichert …' : 'Ausführungsort anlegen'}
+            {busy ? 'Speichert …' : editing === null ? 'Ausführungsort anlegen' : 'Änderung speichern'}
           </button>
+          {editing !== null && (
+            <button type="button" className="btn btn--ghost" disabled={busy} onClick={cancelEdit}>
+              Abbrechen
+            </button>
+          )}
         </div>
       </form>
     </section>
