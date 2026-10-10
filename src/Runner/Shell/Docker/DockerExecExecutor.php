@@ -80,6 +80,13 @@ final class DockerExecExecutor implements Executor
         if ($inspect['status'] !== 200) {
             throw DockerProxyClient::statusFailure($inspect['status']);
         }
+        // Docker löst auch ID und ID-Präfix auf: Meridians Container über seine ID ansprechen darf nicht klappen.
+        // Geprüft wird deshalb der Name, den Docker selbst meldet; fehlt er, wird abgelehnt.
+        $resolved = $inspect['json']['Name'] ?? null;
+        $resolved = is_string($resolved) ? ltrim($resolved, '/') : '';
+        if ($resolved === '' || InfrastructureContainers::isInfrastructure($resolved)) {
+            throw ExecFailed::infrastructure();
+        }
         $state = $inspect['json']['State'] ?? null;
         if (!is_array($state) || ($state['Running'] ?? false) !== true) {
             throw ExecFailed::containerMissing();
