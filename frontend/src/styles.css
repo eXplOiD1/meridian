@@ -322,3 +322,17 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .matrix { min-width: 440px; }
 .matrix tbody th { min-width: 180px; }
 .table-wrap { position: relative; }
+
+/* Skript-Eingabe und Live-Log (Phase 4) */
+.input--script { min-height: 220px; white-space: pre; overflow: auto; tab-size: 2; }
+.runlog { display: grid; gap: 10px; min-width: 0; }
+.runlog__bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.runlog__spacer { flex: 1 1 auto; }
+.runlog__follow { min-height: 36px; }
+.livetag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--schrift-kopf); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tafel); }
+.runlog__out { min-height: 120px; max-height: 480px; }
+.runlog__out:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+.runlog__err { color: var(--fehler-hell); }
+.runlog__sys { color: var(--text-gedaempft-auf-tafel); font-style: italic; }
+.runlog__tag { color: var(--tafel); background: var(--fehler-hell); border-radius: 3px; padding: 0 4px; margin-right: 6px; font-size: 11px; font-weight: 700; user-select: none; }
+.runlog__tag--sys { background: var(--text-gedaempft-auf-tafel); }

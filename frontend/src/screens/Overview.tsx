@@ -3,6 +3,7 @@ import { Alert } from '../components/Alert';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatNext } from '../lib/format';
+import { shellTargetLabel } from '../components/ShellSections';
 import { TargetText } from '../components/TargetText';
 import { STATE_LABEL, stateOf } from '../lib/jobs';
 import { canViewJobs } from '../lib/permissions';
@@ -116,7 +117,7 @@ export function Overview({ profile }: { profile: Profile }) {
                         </a>
                       </td>
                       <td>{job.category?.name ?? '–'}</td>
-                      <td className="board__host">{job.http === null ? '–' : <TargetText target={job.http.target} />}</td>
+                      <td className="board__host">{job.http != null ? <TargetText target={job.http.target} /> : job.shell != null ? shellTargetLabel(job.shell.target.kind, job.shell.target.name) : '–'}</td>
                       <td>
                         <span className={'board__state board__state--' + state + (state === 'running' ? ' pulse' : '')}>{STATE_LABEL[state]}</span>
                       </td>

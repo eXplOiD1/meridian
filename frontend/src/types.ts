@@ -68,7 +68,27 @@ export interface JobSummary {
   can: { edit: boolean; run: boolean };
   created_at: string;
   updated_at: string;
-  http: { target: string } | null;
+  /** Fehlt bei Shell-Jobs. */
+  http?: { target: string } | null;
+  /** Nur bei Shell-Jobs: Ausführungsort (Art + Name), nie Skript oder Umgebung. */
+  shell?: { target: ShellTargetRef } | null;
+}
+
+export interface ShellTargetRef {
+  kind: 'docker' | 'host';
+  name: string;
+}
+
+export interface ShellDetail {
+  target: ShellTargetRef;
+  interpreter: 'sh' | 'bash';
+  user: string | null;
+  workdir: string | null;
+  timeout_seconds: number;
+  /** Skript und Umgebung kommen nie zurück: nur „gesetzt“ und die Anzahl. */
+  has_script: boolean;
+  has_env: boolean;
+  env_count: number;
 }
 
 export interface HttpDetail {
@@ -92,8 +112,10 @@ export interface HttpDetail {
   has_body?: boolean;
 }
 
-export interface JobDetail extends Omit<JobSummary, 'http'> {
-  http: HttpDetail | null;
+export interface JobDetail extends Omit<JobSummary, 'http' | 'shell'> {
+  /** Fehlt bei Shell-Jobs. */
+  http?: HttpDetail | null;
+  shell?: ShellDetail | null;
 }
 
 export interface JobList {
@@ -116,6 +138,12 @@ export interface Run {
   /** Nur im Lauf-Detail. Immer als Text darstellen. */
   output?: string | null;
   started_by: { id: number; display_name: string } | null;
+  exit_code?: number | null;
+  cancel_requested_at?: string | null;
+  cancelled_by?: { id: number; display_name: string } | null;
+  output_bytes?: number | null;
+  /** true, solange das Live-Log des Laufs noch vorhanden ist. */
+  live?: boolean;
 }
 
 export interface RunPage {
@@ -125,6 +153,7 @@ export interface RunPage {
 
 export interface JobLimits {
   max_timeout_seconds: number;
+  shell_max_timeout_seconds?: number;
   response_storage: 'off' | 'on' | 'never';
 }
 
@@ -229,4 +258,39 @@ export interface SessionRow {
   current: boolean;
   user_agent: string | null;
   client_ip: string | null;
+}
+
+/** Auswahl im Job-Editor (GET /api/shell/targets). */
+export interface ShellTargetOption {
+  kind: 'docker' | 'host';
+  name: string;
+  users: string[];
+  default_user: string | null;
+  allows_root: boolean;
+}
+
+/** Verwaltete Freigabe (GET /api/settings/shell-targets). */
+export interface ShellTargetEntry {
+  id: number;
+  kind: 'docker' | 'host';
+  name: string;
+  category: CategoryRef | null;
+  users: string[];
+  default_user: string | null;
+  allows_root: boolean;
+  note: string;
+  created_at: string;
+  created_by: { display_name: string } | null;
+}
+
+export interface LogChunk {
+  seq: number;
+  stream: 'out' | 'err' | 'sys';
+  text: string;
+}
+
+export interface LogPage {
+  chunks: LogChunk[];
+  status: RunStatus;
+  done: boolean;
 }

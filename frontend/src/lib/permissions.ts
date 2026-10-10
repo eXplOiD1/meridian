@@ -24,6 +24,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'categories.manage': 'Kategorien verwalten',
   'network.internal_targets': 'Interne Ziele freigeben',
   'settings.manage': 'Einstellungen ändern',
+  'shell.targets': 'Ausführungsorte für Shell-Jobs verwalten',
 };
 
 export function permissionLabel(key: string): string {
@@ -61,6 +62,15 @@ export function canViewJobs(profile: Profile): boolean {
 
 export function canEditHttp(profile: Profile, category?: string | null): boolean {
   return has(profile, 'jobs.edit_http', category);
+}
+
+/** Shell-Jobs anlegen und ändern: gefährlich, nur uneingeschränkt (alle Kategorien ausdrücklich). */
+export function canEditShell(profile: Profile): boolean {
+  return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('jobs.edit_shell'));
+}
+
+export function canManageShellTargets(profile: Profile): boolean {
+  return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('shell.targets'));
 }
 
 export function canRun(profile: Profile, category?: string | null): boolean {

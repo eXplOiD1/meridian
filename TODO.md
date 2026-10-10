@@ -108,9 +108,9 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 | [ ] | S10 Proxy für HTTP-Jobs unerreichbar (E11): Abgleich mit `InfrastructureTargets` (Ports 2375/2376 und Proxy-Namen nie freigebbar), `MERIDIAN_DOCKER_PROXY` nur `unix://`. Tests: Freigabe `10.0.0.0/8` öffnet `:2375` nicht, Freigabe mit Port 2375 → 422, `tcp://` → Start abgelehnt. Ersetzt den bisherigen Punkt „Adressen des docker-socket-proxy in `AddressPolicy` fest sperren“ | sicherheit |
 | [ ] | S11 Host-Ausführung für systemd (E3, §5.6): `bin/meridian-shell-agent`, `HostSocketExecutor`, `meridian-shell.socket`/`@.service` als `meridian-run`. Darf nach Phase 9 rutschen (O3). Tests: kein Zugriff auf Daten/Schlüssel, Protokoll-Fuzz, Verbindungsabbruch beendet die Gruppe | sicherheit |
 | [ ] | S12 Gesamt-Leak- und Prozess-Suite `tests/Integration/Phase4` (§10): Geheimnis in Skript, Umgebung und Ausgabe erscheint an keiner Ausgabestelle aus §12 | tester |
-| [ ] | U1 Job-Editor für Shell (§8): Ausführungsort, Interpreter, Benutzer (Warnung bei `root`), Arbeitsverzeichnis, Skript und Umgebung nur schreibend, „Skript ersetzen“ | frontend |
-| [ ] | U2 Live-Log-Ansicht mit EventSource und Rückfall auf Abfragen, Ausgabe als Text, „Lauf abbrechen“ mit `Confirm` (§8) | frontend |
-| [ ] | U3 Einstellungen: Karte „Shell-Jobs“ (Maximum Zeitlimit) und „Ausführungsorte“ (§8) | frontend |
+| [x] | U1 Job-Editor für Shell (§8): Ausführungsort, Interpreter, Benutzer (Warnung bei `root`), Arbeitsverzeichnis, Skript und Umgebung nur schreibend, „Skript ersetzen“ | frontend |
+| [x] | U2 Live-Log-Ansicht mit EventSource und Rückfall auf Abfragen, Ausgabe als Text, „Lauf abbrechen“ mit `Confirm` (§8) | frontend |
+| [x] | U3 Einstellungen: Karte „Shell-Jobs“ (Maximum Zeitlimit) und „Ausführungsorte“ (§8) | frontend |
 | [ ] | Regeländerungen aus §13 in `CLAUDE.md`, Skills und Hook eintragen | Koordinator |
 | [ ] | Review Phase 4 (Proxy-Allowlist, Kind-Umgebungen, Strom-Maskierung, SSE-Autorisierung) | sicherheit |
 

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { RunBadge } from '../components/RunBadge';
+import { RunLog } from '../components/RunLog';
+import { shellTargetLabel } from '../components/ShellSections';
 import { TargetText } from '../components/TargetText';
 import { request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
@@ -13,34 +15,35 @@ import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { JobDetail as Job, Profile, Run, RunPage } from '../types';
 
 const PAGE_SIZE = 20;
-const POLL_MS = 2000;
-const EXTRA_WAIT_S = 60;
 
 interface Tracked {
   runId: number;
   kind: 'manual' | 'test';
-  /** Wartezeit in Sekunden, nach der die Abfrage aufgibt (Zeitlimit + 60 s). */
-  giveUpAfter: number;
 }
 
 /** Lauf-Ausgabe immer als Text: React setzt sie als Textknoten, nie als HTML. */
 function RunDetail({ run, heading }: { run: Run; heading: string }) {
+  const truncated = run.output != null && run.output.includes('[… ausgelassen');
   return (
     <div className="rundetail" aria-label={heading}>
       <div className="rundetail__head">
         <RunBadge status={run.status} />
         <span className="muted">
           {TRIGGER_LABEL[run.trigger]} · Versuch {run.attempt}
-          {run.http_status !== null ? ' · HTTP ' + String(run.http_status) : ''} · {formatDuration(run.duration_ms)}
+          {run.http_status !== null ? ' · HTTP ' + String(run.http_status) : ''}
+          {run.exit_code != null ? ' · Exit-Code ' + String(run.exit_code) : ''} · {formatDuration(run.duration_ms)}
         </span>
       </div>
       <div className="muted">
         Gestartet: {run.started_at === null ? '–' : formatTime(run.started_at)}
         {run.started_by !== null ? ' von ' + run.started_by.display_name : ''}
       </div>
+      {run.cancelled_by != null && <p className="rundetail__note">Abgebrochen von {run.cancelled_by.display_name}.</p>}
+      {run.cancelled_by == null && run.cancel_requested_at != null && <p className="rundetail__note">Abbruch angefordert.</p>}
       {run.note !== null && run.note !== '' && <p className="rundetail__note">{run.note}</p>}
       <div className="field__label">Ausgabe</div>
       {run.output === undefined || run.output === null || run.output === '' ? <p className="hint">Keine Ausgabe gespeichert.</p> : <pre className="runout">{run.output}</pre>}
+      {truncated && <p className="hint">Die Ausgabe war zu lang: gezeigt werden Anfang und Ende, die Mitte wurde ausgelassen.</p>}
     </div>
   );
 }
@@ -57,7 +60,6 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
   const [selected, setSelected] = useState<Run | null>(null);
   const [tracked, setTracked] = useState<Tracked | null>(null);
   const [tracking, setTracking] = useState<Run | null>(null);
-  const [gaveUp, setGaveUp] = useState(false);
 
   const loadJob = useCallback(async (): Promise<void> => {
     try {
@@ -94,56 +96,10 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
   useEffect(() => {
     const pending = takePendingRun(id);
     if (pending !== null) {
-      setTracked({ runId: pending.runId, kind: pending.kind, giveUpAfter: 360 });
+      setTracked({ runId: pending.runId, kind: pending.kind });
       setNotice('Der Testlauf wurde eingereiht und startet im nächsten Takt (wenige Sekunden).');
     }
   }, [id]);
-
-  // Ergebnis eines ausgelösten Laufs abfragen: alle 2 s, bis er abgeschlossen ist oder die Wartezeit um ist.
-  useEffect(() => {
-    if (tracked === null) {
-      return undefined;
-    }
-    let cancelled = false;
-    let timer = 0;
-    const startedAt = Date.now();
-    setTracking(null);
-    setGaveUp(false);
-    async function poll(): Promise<void> {
-      try {
-        const data = await request<{ run: Run }>('GET', '/api/runs/' + String(tracked?.runId));
-        if (cancelled) {
-          return;
-        }
-        setTracking(data.run);
-        if (isFinished(data.run.status)) {
-          setTracked(null);
-          void loadHistory(null, false);
-          void loadJob();
-          return;
-        }
-      } catch (caught) {
-        if (!cancelled) {
-          setActionError(errorMessage(caught));
-          setTracked(null);
-          return;
-        }
-      }
-      if (!cancelled && (Date.now() - startedAt) / 1000 > (tracked?.giveUpAfter ?? 0)) {
-        setGaveUp(true);
-        setTracked(null);
-        return;
-      }
-      if (!cancelled) {
-        timer = window.setTimeout(() => void poll(), POLL_MS);
-      }
-    }
-    void poll();
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [tracked, loadHistory, loadJob]);
 
   async function start(kind: 'manual' | 'test'): Promise<void> {
     if (job === null) {
@@ -153,10 +109,11 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
     setActionError(null);
     setNotice(null);
     setSelected(null);
+    setTracking(null);
     try {
       const runId = await triggerRun(kind, id, profile.csrf_token);
-      const limit = job.http?.timeout_seconds ?? 30;
-      setTracked({ runId, kind, giveUpAfter: limit + EXTRA_WAIT_S + 10 });
+      setTracking(null);
+      setTracked({ runId, kind });
       setNotice(kind === 'test' ? 'Der Testlauf wurde eingereiht und startet im nächsten Takt (wenige Sekunden).' : 'Der Lauf wurde eingereiht und startet im nächsten Takt (wenige Sekunden).');
     } catch (caught) {
       setActionError(errorMessage(caught));
@@ -202,6 +159,19 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
     }
   }
 
+  function onTrackedFinished(run: Run): void {
+    setTracking(run);
+    setTracked(null);
+    void loadHistory(null, false);
+    void loadJob();
+  }
+
+  function onSelectedFinished(run: Run): void {
+    setSelected(run);
+    void loadHistory(null, false);
+    void loadJob();
+  }
+
   if (loadError !== null) {
     return (
       <>
@@ -218,7 +188,7 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
 
   const state = stateOf(job);
   const preset = presetName(job.cron);
-  const http = job.http;
+  const http = job.http ?? null;
   const waiting = tracked !== null;
 
   return (
@@ -289,6 +259,23 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
               <dd>{http.timeout_seconds} s · erwartet {http.expected_status} · Weiterleitungen: {http.max_redirects}</dd>
             </>
           )}
+          {job.shell != null && (
+            <>
+              <dt>Ausführungsort</dt>
+              <dd>
+                {shellTargetLabel(job.shell.target.kind, job.shell.target.name)}
+                {job.shell.target.kind === 'docker' ? ' · Benutzer: ' + (job.shell.user ?? 'Standard') : ''}
+                {job.shell.workdir != null ? ' · Verzeichnis: ' + job.shell.workdir : ''}
+              </dd>
+              <dt>Befehl</dt>
+              <dd>
+                {job.shell.interpreter} · {job.shell.has_script ? 'Skript gesetzt (Inhalt verborgen)' : 'kein Skript'}
+                {job.shell.has_env ? ' · Umgebungsvariablen: ' + String(job.shell.env_count) : ''}
+              </dd>
+              <dt>Zeitlimit</dt>
+              <dd>{job.shell.timeout_seconds} s</dd>
+            </>
+          )}
           <dt>Bei Überlappung</dt>
           <dd>
             {overlapLabel(job.overlap_policy)} · Wiederholungen: {job.retry_count}
@@ -297,17 +284,11 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
         </dl>
       </section>
 
-      {(tracking !== null || waiting || gaveUp) && (
+      {(tracking !== null || waiting) && (
         <section className="card" aria-label="Ausgelöster Lauf" aria-live="polite">
           <h2>{tracking?.trigger === 'test' || tracked?.kind === 'test' ? 'Testlauf' : 'Lauf'}</h2>
           {(tracking?.trigger === 'test' || tracked?.kind === 'test') && <p className="card__lead">Ein Testlauf zählt nicht in die Statistik und gilt nicht als „letzter Lauf“.</p>}
-          {tracking === null && waiting && <p className="hint">Wartet auf den nächsten Takt …</p>}
-          {tracking !== null && !isFinished(tracking.status) && (
-            <p className="hint">
-              <RunBadge status={tracking.status} /> – Ergebnis wird alle 2 Sekunden abgefragt.
-            </p>
-          )}
-          {gaveUp && <Alert tone="warn">Der Lauf läuft noch – später im Verlauf nachsehen.</Alert>}
+          {tracked !== null && <RunLog key={tracked.runId} runId={tracked.runId} csrf={profile.csrf_token} canCancel={job.can.run} onFinished={onTrackedFinished} />}
           {tracking !== null && isFinished(tracking.status) && <RunDetail run={tracking} heading="Ergebnis" />}
         </section>
       )}
@@ -325,13 +306,13 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
                   <th scope="col">Zeit</th>
                   <th scope="col">Status</th>
                   <th scope="col">Auslöser</th>
-                  <th scope="col">HTTP</th>
+                  <th scope="col">{job.type === 'shell' ? 'Exit-Code' : 'HTTP'}</th>
                   <th scope="col">Dauer</th>
                 </tr>
               </thead>
               <tbody>
                 {runs.map((run) => (
-                  <tr key={run.id} className={selected?.id === run.id ? 'is-selected' : undefined}>
+                  <tr key={run.id} data-run-id={run.id} className={selected?.id === run.id ? 'is-selected' : undefined}>
                     <td>
                       <button type="button" className="linkbtn" aria-expanded={selected?.id === run.id} onClick={() => void select(run)}>
                         {formatTime(run.started_at ?? run.scheduled_for ?? '')}
@@ -341,7 +322,7 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
                       <RunBadge status={run.status} />
                     </td>
                     <td>{TRIGGER_LABEL[run.trigger]}</td>
-                    <td>{run.http_status ?? '–'}</td>
+                    <td>{job.type === 'shell' ? (run.exit_code ?? '–') : (run.http_status ?? '–')}</td>
                     <td>{formatDuration(run.duration_ms)}</td>
                   </tr>
                 ))}
@@ -356,7 +337,10 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
             </button>
           </div>
         )}
-        {selected !== null && <RunDetail run={selected} heading="Lauf-Details" />}
+        {selected !== null && !isFinished(selected.status) && (
+          <RunLog key={selected.id} runId={selected.id} csrf={profile.csrf_token} canCancel={job.can.run} onFinished={onSelectedFinished} />
+        )}
+        {selected !== null && isFinished(selected.status) && <RunDetail run={selected} heading="Lauf-Details" />}
       </section>
     </>
   );
