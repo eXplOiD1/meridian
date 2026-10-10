@@ -6,6 +6,7 @@ namespace Meridian\Http;
 
 use Meridian\Job\JobPermissions;
 use Meridian\Job\JobRecord;
+use Meridian\Job\LiveChunk;
 use Meridian\Job\LastRun;
 use Meridian\Job\RunRecord;
 use Meridian\Runner\Http\UrlDisplay;
@@ -108,6 +109,12 @@ final class JobPresenter
             $data['output'] = $run->output === null ? null : $this->text($display->hidesHost() ? UrlDisplay::hideHostInRunOutput($run->output) : $run->output);
         }
         $data['started_by'] = $run->startedById === null ? null : ['id' => $run->startedById, 'display_name' => $this->text($run->startedByName ?? '')];
+        // Phase 4 (ADR 0004 §4.2). Nie `worker`, `heartbeat_at`, `exec_ref` (H2).
+        $data['exit_code'] = $run->exitCode;
+        $data['cancel_requested_at'] = $run->cancelRequestedAt;
+        $data['cancelled_by'] = $run->cancelledById === null ? null : ['id' => $run->cancelledById, 'display_name' => $this->text($run->cancelledByName ?? '')];
+        $data['output_bytes'] = $run->outputBytes;
+        $data['live'] = $run->live;
 
         return $data;
     }
@@ -165,6 +172,16 @@ final class JobPresenter
             'duration_ms' => $run->durationMs,
             'http_status' => $run->httpStatus,
         ];
+    }
+
+    /**
+     * Ein Stück des Live-Logs: beim Schreiben maskiert, hier **erneut** (Muster), als Text.
+     *
+     * @return array{seq: int, stream: string, text: string}
+     */
+    public function chunk(LiveChunk $chunk): array
+    {
+        return ['seq' => $chunk->seq, 'stream' => $chunk->stream->value, 'text' => $this->text($chunk->text)];
     }
 
     private function text(string $value): string

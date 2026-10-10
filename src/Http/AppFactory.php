@@ -20,6 +20,7 @@ use Meridian\Job\CategoryRepository;
 use Meridian\Job\JobRepository;
 use Meridian\Job\JobService;
 use Meridian\Job\JobValidator;
+use Meridian\Job\RunCancelService;
 use Meridian\Job\RunRepository;
 use Meridian\Job\RunService;
 use Meridian\Network\InternalTargetController;
@@ -94,19 +95,21 @@ final class AppFactory
         (new AccountController($config, $sessionAuth, $csrf, $users, $sessions, $auth, $audit, $masker, $clock))->register($kernel);
         (new UserController($config, $sessionAuth, $csrf, $users, $access, $roles, $sessions, $throttle, new UserPresenter($masker), $userAdmin, new AssignmentValidator($roles)))->register($kernel);
         (new AdminController($sessionAuth, $csrf, $users, $access, $audit, $throttle, $masker))->register($kernel);
+        $runs = new RunRepository($db);
         (new JobController(
             $sessionAuth,
             $csrf,
             $users,
             $access,
             $jobs,
-            new RunRepository($db),
+            $runs,
             $categories,
             $settings,
             $clock,
             new JobPresenter($access, $masker),
             new JobService($db, $jobs, $validator, $access, $audit, $planner),
             new RunService($db, $jobs, $access, $audit, $clock),
+            new RunCancelService($db, $runs, $access, $audit, $clock),
         ))->register($kernel);
         // Freigaben interner Ziele (network.internal_targets, nur Admin).
         (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock, $infrastructure), $masker))->register($kernel);

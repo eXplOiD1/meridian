@@ -9,8 +9,8 @@ use Meridian\Schedule\RunStatus;
 use Meridian\Schedule\RunTrigger;
 
 /**
- * Ein Lauf, wie ihn lesende Endpunkte sehen: nur Felder der Allowlist. `worker` und `heartbeat_at` (H2) werden
- * nie geladen. `output` ist nur im Detail gesetzt (bei der Verlaufsliste null).
+ * Ein Lauf, wie ihn lesende Endpunkte sehen: nur Felder der Allowlist. `worker`, `heartbeat_at` und `exec_ref` (H2)
+ * werden nie geladen. `output` ist nur im Detail gesetzt (bei der Verlaufsliste null).
  */
 final readonly class RunRecord
 {
@@ -32,6 +32,16 @@ final readonly class RunRecord
         /** Kategorie und Typ des Jobs: für die Rechteprüfung, nicht für die Antwort. */
         public ?string $categoryName,
         public JobType $jobType,
+        public ?int $exitCode = null,
+        public ?string $cancelRequestedAt = null,
+        public ?int $cancelledById = null,
+        public ?string $cancelledByName = null,
+        /** Gelesene Rohbytes der Ausgabe (auch der nicht gespeicherten). */
+        public ?int $outputBytes = null,
+        /** Es gibt Stücke im Live-Log (`run_log_chunks`). */
+        public bool $live = false,
+        /** Name des Jobs: nur für den Audit-Eintrag, nicht für die Antwort. */
+        public string $jobName = '',
     ) {
     }
 }

@@ -12,6 +12,9 @@ use Meridian\Job\JobRepository;
 use Meridian\Job\JobService;
 use Meridian\Job\JobValidator;
 use Meridian\Job\JobSort;
+use Meridian\Job\CancelOutcome;
+use Meridian\Job\LiveChunk;
+use Meridian\Job\RunCancelService;
 use Meridian\Job\RunNotQueued;
 use Meridian\Job\RunRefusal;
 use Meridian\Job\RunRepository;
@@ -57,6 +60,7 @@ final class JobController
         private readonly JobPresenter $presenter,
         private readonly JobService $service,
         private readonly RunService $runService,
+        private readonly RunCancelService $cancelService,
     ) {
     }
 
@@ -68,6 +72,8 @@ final class JobController
         $kernel->get('jobs_show', '/api/jobs/{id}', $this->show(...), $id);
         $kernel->get('jobs_runs', '/api/jobs/{id}/runs', $this->history(...), $id);
         $kernel->get('runs_show', '/api/runs/{id}', $this->runDetail(...), $id);
+        $kernel->get('runs_log', '/api/runs/{id}/log', $this->runLog(...), $id);
+        $kernel->post('runs_cancel', '/api/runs/{id}/cancel', $this->cancelRun(...), $id);
         $kernel->get('schedule_preview', '/api/schedule/preview', $this->preview(...));
         $kernel->get('categories_list', '/api/categories', $this->categoryList(...));
         $kernel->post('jobs_create', '/api/jobs', $this->create(...));
@@ -310,6 +316,94 @@ final class JobController
         $this->access->require($grants, Permission::ViewJobs, $run->categoryName);
 
         return JsonReply::json(['run' => $this->presenter->run($run, true, $this->settings->httpDisplay())]);
+    }
+
+    /**
+     * `POST /api/runs/{id}/cancel` (ADR 0004 E7): 200 = wartender Lauf abgebrochen, 202 = Abbruch angefordert (auch
+     * wiederholt), 409 = schon beendet, 404 = nicht sichtbar, 403 = kein `jobs.run` in der Kategorie des Jobs.
+     */
+    public function cancelRun(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        $outcome = $this->cancelService->cancel($session->userId, $grants, self::id($request));
+        if ($outcome === null) {
+            return JsonReply::error(404, 'Lauf nicht gefunden.');
+        }
+        if ($outcome === CancelOutcome::AlreadyFinished) {
+            return JsonReply::error(409, 'Der Lauf ist bereits beendet und kann nicht mehr abgebrochen werden.');
+        }
+        $run = $this->runs->findVisible(self::id($request), $this->access->scope($grants, Permission::ViewJobs), withOutput: false);
+        if ($run === null) {
+            return JsonReply::error(404, 'Lauf nicht gefunden.');
+        }
+
+        return JsonReply::json(
+            ['run' => $this->presenter->run($run, false, $this->settings->httpDisplay())],
+            $outcome === CancelOutcome::Requested ? 202 : 200,
+        );
+    }
+
+    /**
+     * `GET /api/runs/{id}/log?after=<seq>&limit=1..200` (ADR 0004 §6.2): Abfrage-Rückfall für das Live-Log. Stücke
+     * erneut maskiert; `done` = Lauf beendet und keine weiteren Stücke.
+     */
+    public function runLog(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+        // Herkunft (ADR 0004 §6.1 Schritt 2): ein Browser schickt bei fremder Herkunft „cross-site“/„same-site“.
+        $site = $request->headers->get('Sec-Fetch-Site');
+        if ($site !== null && $site !== 'same-origin') {
+            return JsonReply::error(403, 'Anfrage von fremder Herkunft abgelehnt. Die Seite neu laden.');
+        }
+
+        $query = $request->query->all();
+        $errors = [];
+        $after = 0;
+        if (array_key_exists('after', $query)) {
+            $parsed = is_string($query['after']) && preg_match('/^(0|[1-9][0-9]{0,17})$/D', $query['after']) === 1 ? (int) $query['after'] : null;
+            if ($parsed === null) {
+                $errors['after'] = 'Fortsetzen ab: ganze Zahl ab 0 (letzte erhaltene Nummer).';
+            } else {
+                $after = $parsed;
+            }
+        }
+        $limit = LiveChunk::MAX_LIMIT;
+        if (array_key_exists('limit', $query)) {
+            $parsed = self::positiveInt($query['limit']);
+            if ($parsed === null || $parsed > LiveChunk::MAX_LIMIT) {
+                $errors['limit'] = 'Anzahl: ganze Zahl von 1 bis ' . LiveChunk::MAX_LIMIT . '.';
+            } else {
+                $limit = $parsed;
+            }
+        }
+        if ($errors !== []) {
+            throw new ValidationFailed($errors);
+        }
+
+        $run = $this->runs->findVisible(self::id($request), $this->access->scope($grants, Permission::ViewJobs), withOutput: false);
+        if ($run === null) {
+            return JsonReply::error(404, 'Lauf nicht gefunden.');
+        }
+        // Ein Lauf erbt die Kategorie seines Jobs.
+        $this->access->require($grants, Permission::ViewJobs, $run->categoryName);
+
+        $chunks = $this->runs->chunksAfter($run->id, $after, $limit);
+        $finished = $run->status !== RunStatus::Queued && $run->status !== RunStatus::Running;
+
+        return JsonReply::json([
+            'chunks' => array_map($this->presenter->chunk(...), $chunks),
+            'status' => $run->status->value,
+            'done' => $finished && count($chunks) < $limit,
+        ]);
     }
 
     public function preview(#[\SensitiveParameter] Request $request): Response
