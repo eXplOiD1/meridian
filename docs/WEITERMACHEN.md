@@ -34,9 +34,17 @@ Die Suiten liegen lokal unter `tests/` (gitignored), u. a. `tests/Integration/Ph
 - Jobs im internen Netz: Einstellungen → „Freigaben interner Ziele“ oder `docker exec -it meridian-web php bin/meridian http:internal-targets add …`.
 - Kategorien: `category:create|rename|delete`. Einstellungen: `settings:get|set`.
 
+## Eigene Rollen (Phase 5, Entwurf 10.10.2026)
+- Entwurf `docs/decisions/0006-eigene-rollen.md`, Scheiben R1–R6 in `TODO.md` (Phase 5). Admin-Rolle bleibt fest (alle Rechte),
+  Operator/Beobachter: Rechte änderbar, Name fest; neues gefährliches Recht `roles.manage` nur für Admin.
+- Ab Migration 0013 Standardrollen nur über `roles.builtin_key` ansprechen (nie über den Namen); neues Recht → Trigger
+  `role_permissions_known` in seiner Migration neu anlegen.
+- Offen für Alex: F1–F9 (§9), bis dahin gelten die Empfehlungen.
+
 ## Offene Entscheidungen von Alex (bis dahin gelten die Empfehlungen aus den ADRs)
+- ADR 0006 F1–F9 (eigene Rollen: Standardrollen, `roles.manage`, Löschen nur ohne Zuweisungen, eigene Rolle nicht änderbar, Grenzen).
 - ADR 0004 O1–O12 (u. a. Proxy-Image `wollomatic/socket-proxy`, Host-Ausführung für systemd erst Phase 9, Sandbox-Container, Skript nicht wieder lesbar).
-- ADR 0005 B1–B14 (u. a. feste Rollen, Soft-Delete, Einmalpasswort 7 Tage, eigenes Passwort bei gefährlichen Aktionen).
+- ADR 0005 B2–B14 (B1 „feste Rollen“ abgelöst durch 0006; u. a. Soft-Delete, Einmalpasswort 7 Tage, eigenes Passwort bei gefährlichen Aktionen).
 - Compose-Betrieb: Scheduler erreicht Meridian über `web:8080`/Host-Port; optional `MERIDIAN_SELF_HOSTS` (0003 E17).
 - Sieht ein Host mit Geheimnis in der Subdomain (z. B. pipedream) → `http.display_host = hidden` einstellbar.
 
