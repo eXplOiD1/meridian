@@ -59,12 +59,14 @@ use Meridian\Schedule\SchedulerLease;
 use Meridian\Schedule\StaleRuns;
 use Meridian\Schedule\Worker;
 use Meridian\Schedule\WorkerIdentity;
+use Meridian\Security\AccessControl;
 use Meridian\Security\KeyLoader;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretBox;
 use Meridian\Security\SecretMasker;
 use Meridian\Settings\Settings;
 use Meridian\Settings\SettingsService;
+use Meridian\User\AdminInvariant;
 use Meridian\User\PasswordReset;
 use Meridian\User\UserRepository;
 use Symfony\Component\Console\Application;
@@ -81,8 +83,8 @@ $app->add(new KeyGenerateCommand());
 // Befehle mit Datenbank nur, wenn das Datenverzeichnis existiert.
 if (is_dir($config->dataDir)) {
     $db = Connection::open($config->databasePath());
-    $app->add(new MigrateCommand(new Migrator($db, dirname(__DIR__) . '/migrations'), new DisplayUrlUpgrade($db)));
     $users = new UserRepository($db, new PasswordHasher());
+    $app->add(new MigrateCommand(new Migrator($db, dirname(__DIR__) . '/migrations'), new DisplayUrlUpgrade($db), new AdminInvariant($db, $users, new AccessControl()), $users));
     $audit = new AuditLog($db, new SystemClock(), new SecretMasker());
     $app->add(new UserCreateCommand($users, $audit));
     $app->add(new AdminBootstrapCommand($users, $env, $audit));

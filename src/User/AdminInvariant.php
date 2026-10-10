@@ -17,6 +17,11 @@ use Meridian\Security\Permission;
  * Admin im Sinn der Invariante: aktiver, nicht gelöschter Benutzer, für den **jedes** Recht ohne Kategorie erlaubt ist
  * (`AccessControl::can($grants, $p, null)` für alle `Permission::cases()`), gelesen über `UserRepository::grantsFor()`
  * — dieselbe Quelle wie jede Anfrage. Wer noch ein Einmalpasswort hat, zählt deshalb nicht.
+ *
+ * Gilt auch für Rollenänderungen (ADR 0006 E4.5): Rechte einer Rolle setzen oder eine Rolle löschen ruft `assertHeld()`
+ * in derselben Transaktion — etwa wenn eine eigene Rolle mit allen Rechten der einzige Admin-Weg ist. Kommt per
+ * Migration ein neues Recht dazu, sind Inhaber eigener Rollen mit „allen“ Rechten keine Admins mehr (E2); `migrate`
+ * warnt dann über {@see countAdmins()}.
  */
 final class AdminInvariant
 {
@@ -60,7 +65,17 @@ final class AdminInvariant
 
     public function isAdmin(int $userId): bool
     {
-        $grants = $this->users->grantsFor($userId);
+        return $this->grantsAll($this->users->grantsFor($userId));
+    }
+
+    /**
+     * Gewähren diese (frisch geladenen) Rechte **jedes** Recht des Katalogs ohne Kategorie? Dieselbe Regel wie
+     * {@see isAdmin()}, für einen schon geladenen Handelnden (ADR 0006 F5: Ausnahme für volle Admins).
+     *
+     * @param list<\Meridian\Security\RoleGrant> $grants
+     */
+    public function grantsAll(array $grants): bool
+    {
         if ($grants === []) {
             return false;
         }

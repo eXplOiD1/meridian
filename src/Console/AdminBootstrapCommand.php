@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Meridian\Console;
 
 use Meridian\Auth\AuditLog;
+use Meridian\User\BuiltinRole;
 use Meridian\User\UserRepository;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -66,7 +67,7 @@ final class AdminBootstrapCommand extends Command
 
         $displayName = trim($this->env['MERIDIAN_ADMIN_NAME'] ?? '');
         try {
-            $id = $this->users->create($username, $displayName === '' ? $username : $displayName, $password, 'Admin');
+            $id = $this->users->create($username, $displayName === '' ? $username : $displayName, $password, BuiltinRole::Admin);
         } catch (\InvalidArgumentException $e) {
             $output->writeln('<error>' . $e->getMessage() . '</error>');
 

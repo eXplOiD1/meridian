@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Meridian\Security;
 
 /**
- * Schutz gegen Rechteausweitung bei der Benutzerverwaltung (ADR 0005, E4).
+ * Schutz gegen Rechteausweitung bei der Benutzer- und Rollenverwaltung (ADR 0005 E4, ADR 0006 E4).
  *
  * Beide Prüfungen bauen nur auf {@see AccessControl::can()} auf, nie auf Rollennamen: so gelten sie auch für
  * spätere eigene Rollen. Standard ist verboten — was sich nicht als „hat der Handelnde selbst“ nachweisen lässt,
@@ -64,6 +64,40 @@ final class GrantPolicy
         }
 
         return true;
+    }
+
+    /**
+     * Darf der Handelnde eine Rolle von $old auf $new setzen (ADR 0006 E4.1)? **Jedes** Recht in alt ∪ neu muss er
+     * uneingeschränkt haben (`can($actorGrants, $p, null)`) — auch für das Entfernen, denn eine Rollenänderung wirkt an
+     * allen Inhabern in jeder Kategorie. Gilt für Anlegen (alt = ∅), Rechte setzen, Umbenennen (alt = neu) und Löschen
+     * (neu = ∅). Nur auf can() aufgebaut, nie auf Rollennamen.
+     *
+     * @param list<RoleGrant>  $actorGrants frisch geladene Rechte des Handelnden
+     * @param list<Permission> $old
+     * @param list<Permission> $new
+     */
+    public function mayDefineRole(array $actorGrants, array $old, array $new): bool
+    {
+        foreach ([...$old, ...$new] as $permission) {
+            if (!$this->access->can($actorGrants, $permission, null)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Verlangt `roles.manage` ohne Kategorie. Die Rollenverwaltung prüft das am Anfang jeder Schreibtransaktion noch
+     * einmal mit frisch geladenen Rechten (E4.6).
+     *
+     * @param list<RoleGrant> $actorGrants
+     *
+     * @throws AccessDenied
+     */
+    public function requireRoleManager(array $actorGrants): void
+    {
+        $this->access->require($actorGrants, Permission::ManageRoles);
     }
 
     /**

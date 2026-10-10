@@ -50,15 +50,23 @@ final class UserRepository
     ) {
     }
 
-    public function create(string $username, string $displayName, #[\SensitiveParameter] string $password, string $role): int
+    /**
+     * Legt einen Benutzer mit eigenem Passwort und **einer** uneingeschränkten Zuweisung an (CLI, Ersteinrichtung).
+     *
+     * @param string|BuiltinRole $role Standardrolle über ihre Kennung (ADR 0006 E1) oder ein Rollenname ohne Rücksicht
+     *                                 auf Schreibung (auch eigene Rollen, `user:create --role=`)
+     */
+    public function create(string $username, string $displayName, #[\SensitiveParameter] string $password, string|BuiltinRole $role): int
     {
         if (preg_match('/^[a-z0-9._-]{2,64}$/i', $username) !== 1) {
             throw new \InvalidArgumentException('Benutzername: 2 bis 64 Zeichen, nur Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich.');
         }
 
-        $roleRow = $this->db->fetchOne('SELECT id FROM roles WHERE name = :name', ['name' => $role]);
+        $roleRow = $role instanceof BuiltinRole
+            ? $this->db->fetchOne('SELECT id FROM roles WHERE builtin_key = :k', ['k' => $role->value])
+            : $this->db->fetchOne('SELECT id FROM roles WHERE name = :name COLLATE NOCASE', ['name' => $role]);
         if ($roleRow === null || !isset($roleRow['id']) || !is_int($roleRow['id'])) {
-            throw new \InvalidArgumentException('Unbekannte Rolle.');
+            throw new \InvalidArgumentException('Unbekannte Rolle. Vorhandene Rollen zeigt die Oberfläche unter „Benutzer & Rollen“.');
         }
         $roleId = $roleRow['id'];
         $hash = $this->hasher->hash($password);

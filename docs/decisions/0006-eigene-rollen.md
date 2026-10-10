@@ -1,8 +1,8 @@
 # 0006 – Eigene Rollen und anpassbare Rechte (Phase 5)
 
-Status: **Entwurf** (architekt, 10.10.2026). Auftrag Alex: „Rechte sollen anpassbar sein und es muss möglich sein, neue
-Rollen hinzuzufügen.“ Löst ADR 0005 E1/B1 (drei feste Rollen) ab; alle übrigen Entscheidungen aus 0005 gelten weiter.
-Offene Punkte stehen mit Empfehlung in §9 (F1–F9). Bis Alex entscheidet, gilt jeweils die Empfehlung.
+Status: **Angenommen** (Entwurf architekt 10.10.2026, F1–F9 von Alex entschieden am 10.10.2026, siehe §9.1). Auftrag
+Alex: „Rechte sollen anpassbar sein und es muss möglich sein, neue Rollen hinzuzufügen.“ Löst ADR 0005 E1/B1 (drei feste
+Rollen) ab; alle übrigen Entscheidungen aus 0005 gelten weiter. Wo §9.1 von E1–E7 abweicht, gilt §9.1.
 
 Dieser Entwurf ändert keinen Produktcode. Migration und Interfaces stehen hier als Skizze; die Datei unter
 `migrations/` legt erst R1 an (der `Migrator` spielt alles dort sofort ein).
@@ -362,9 +362,9 @@ Reihenfolge: R1 → R2 → R3 → (R4 ∥ R5) → R6. Aufwand gesamt etwa 2,5–
 
 ---
 
-## 9. Offene Entscheidungen für Alex
+## 9. Entscheidungen für Alex
 
-Bis zur Entscheidung gilt die Empfehlung (fett).
+Entschieden am 10.10.2026, siehe §9.1 (die Tabelle bleibt als Herleitung).
 
 | # | Frage | Optionen | Empfehlung |
 |---|---|---|---|
@@ -377,6 +377,20 @@ Bis zur Entscheidung gilt die Empfehlung (fett).
 | F7 | Grenzen | Zuweisungen je Benutzer 3 → 10, Rollen ≤ 50 · andere Werte | **10 Zuweisungen, 50 Rollen, 60 Änderungen je Stunde** |
 | F8 | Rollenänderung, wenn ein Inhaber mehr Rechte hat als der Handelnde | ablehnen · erlauben | **Ablehnen (403)** – sonst Umweg um „niemand verwaltet jemanden mit mehr Rechten“ |
 | F9 | Beschreibung je Rolle | ja (optional, ≤ 200) · nein | **Ja** |
+
+### 9.1 Entscheidungen Alex (10.10.2026)
+
+| # | Entscheidung | Umsetzung |
+|---|---|---|
+| F1 | Operator/Beobachter: **nur Rechte änderbar**, Name fest, nicht löschbar | Name und Beschreibung der Standardrollen fest (Code 422 am Feld, Trigger `roles_builtin_fixed` auch für `description`); Löschen 409 + Trigger |
+| F2 | Admin-Rolle **ganz fest**, immer alle Rechte | Rechte setzen 409, Löschen 409, Name/Beschreibung 422; Trigger `role_permissions_admin_kept` |
+| F3 | (Alex überlässt es dem Architekten/der Sicherheit) **neues gefährliches Recht `roles.manage`**, per Migration nur an Admin | `Permission::ManageRoles`; `users.manage` wird nicht mitbenutzt |
+| F4 | Rolle mit Zuweisungen löschen → **409** | `{error, assignments: n}`, kein Umhängen |
+| F5 | Eigene Rolle: Rechte ändern und Löschen **verboten**, Name/Beschreibung erlaubt. **Ausnahme:** wer die Admin-Rolle uneingeschränkt („Alle Kategorien“) innehat und damit alle Rechte besitzt, darf auch die Rechte einer **anderen** ihm zugewiesenen Rolle ändern | Die Admin-Rolle selbst bleibt fest (F2), `AdminInvariant::assertHeld()` gilt weiter. Löschen einer eigenen Rolle scheitert ohnehin an F4 |
+| F6 | Passwort-Bestätigung nur, wenn ein gefährliches Recht dazukommt oder wegfällt — **genau einmal je Speichervorgang** | Eine Bestätigung vor der Transaktion für alle Rechteänderungen der Anfrage (nie je Recht); die ganze Anfrage schreibt atomar in **einer** `immediate()`-Transaktion |
+| F7 | Grenzen: **10** Zuweisungen je Benutzer (bisher 3), **50** Rollen, **60** Rollenänderungen je Handelndem und Stunde | `AssignmentValidator::MAX_ASSIGNMENTS = 10`, `RoleAdminService::MAX_ROLES`, `CHANGE_LIMIT` |
+| F8 | Änderung mit **403** ablehnen, wenn ein Inhaber mehr Rechte hat als der Handelnde | Für **jede** schreibende Rollenaktion (auch Umbenennen) `mayManage` je Inhaber; zusätzlich `mayDefineRole` (alt ∪ neu, beim Umbenennen alt) |
+| F9 | Beschreibung je Rolle, optional, ≤ 200 Zeichen | Nur eigene Rollen (F1/F2); `null` = keine, leerer Text → 422 |
 
 ---
 
