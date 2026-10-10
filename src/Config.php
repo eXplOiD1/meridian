@@ -89,6 +89,13 @@ final readonly class Config
             $proxyHosts = array_values(array_unique([...self::DEFAULT_DOCKER_PROXY_HOSTS, ...$proxyHosts]));
         }
 
+        // Der Docker-Proxy ist nur über einen Unix-Socket erreichbar (ADR 0004 E10/E11): tcp://, http:// u. a. enden
+        // schon beim Start von Web, Planer und Worker, nie als Netzwerkziel, das ein HTTP-Job treffen könnte.
+        $dockerProxy = $env['MERIDIAN_DOCKER_PROXY'] ?? '';
+        if ($dockerProxy !== '' && preg_match('#^unix:///[^\s]+$#D', $dockerProxy) !== 1) {
+            throw new \InvalidArgumentException('MERIDIAN_DOCKER_PROXY: nur ein Unix-Socket ist erlaubt (unix:///pfad/zum/docker.sock).');
+        }
+
         $liveStreams = self::DEFAULT_LIVE_STREAMS;
         $liveText = trim($env['MERIDIAN_LIVE_STREAMS'] ?? '');
         if ($liveText !== '') {
