@@ -35,6 +35,14 @@ final readonly class RunResult
         return new self(RunStatus::Failed, $output, $note, $exitCode, $httpStatus, $retryable);
     }
 
+    /**
+     * Abgebrochen (Benutzer, Worker wird beendet). Nie wiederholbar (ADR 0004 §5.1).
+     */
+    public static function aborted(string $output, string $note): self
+    {
+        return new self(RunStatus::Aborted, $output, $note, null, null, false);
+    }
+
     public static function timeout(string $output = '', ?string $note = null, ?int $httpStatus = null): self
     {
         return new self(RunStatus::Timeout, $output, $note, null, $httpStatus, true);

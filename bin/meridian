@@ -22,6 +22,7 @@ use Meridian\Console\SettingsSetCommand;
 use Meridian\Console\UnlockCommand;
 use Meridian\Console\UserPasswordCommand;
 use Meridian\Console\UserCreateCommand;
+use Meridian\Console\WorkerRunCommand;
 use Meridian\Database\Connection;
 use Meridian\Database\Migrator;
 use Meridian\Job\DisplayUrlUpgrade;
@@ -35,13 +36,17 @@ use Meridian\Runner\Http\InfrastructureTargets;
 use Meridian\Runner\Http\StoredHttpRunSettings;
 use Meridian\Runner\Http\SystemHostResolver;
 use Meridian\Runner\Http\TargetGuard;
+use Meridian\Runner\Heartbeat;
 use Meridian\Runner\JobType;
 use Meridian\Runner\RunnerRegistry;
 use Meridian\Schedule\DbRunAuthorizer;
+use Meridian\Schedule\LeaseHeartbeat;
 use Meridian\Schedule\Planner;
 use Meridian\Schedule\Scheduler;
 use Meridian\Schedule\SchedulerLease;
+use Meridian\Schedule\StaleRuns;
 use Meridian\Schedule\Worker;
+use Meridian\Schedule\WorkerIdentity;
 use Meridian\Security\KeyLoader;
 use Meridian\Security\PasswordHasher;
 use Meridian\Security\SecretBox;
@@ -80,27 +85,54 @@ if (is_dir($config->dataDir)) {
     $settingsService = new SettingsService($db, $audit, new SystemClock());
     $app->add(new SettingsGetCommand($settingsService));
     $app->add(new SettingsSetCommand($settingsService));
-    // Scheduler: eine Besitzer-ID pro Prozess; Runner kommen mit Phase 3 (HTTP) und 4 (Shell). Den Masker
-    // erzeugt der Worker je Lauf (H4); H1 prüft ausgelöste Läufe beim Übernehmen mit frischen Rechten.
+    // Planer (scheduler:run): eine Besitzer-ID pro Prozess, plant nur und braucht keinen Schlüssel (ADR 0004 E5).
+    // Ausgeführt wird in worker:run --type=http|shell; den Masker erzeugt der Worker je Lauf (H4), H1 prüft
+    // ausgelöste Läufe beim Übernehmen mit frischen Rechten. Den Schlüssel lädt nur ein Worker-Kind beim Start.
     $clock = new SystemClock();
     $lease = new SchedulerLease($db, $clock, SchedulerLease::newOwnerId());
-    $runners = new RunnerRegistry();
-    $scheduler = new Scheduler(
-        $lease,
-        new Planner($db, $clock, $lease),
-        new Worker($db, $clock, $lease, $runners, new DbRunAuthorizer($db, $users)),
-    );
-    // Der Schlüssel wird erst geladen, wenn scheduler:run ausgeführt wird (andere Befehle brauchen ihn nicht);
-    // ohne lesbaren Schlüssel endet der Befehl mit Exit 1 und der Meldung von KeyLoader.
-    $app->add(new SchedulerRunCommand($scheduler, static function () use ($env, $db, $runners, $config, $clock): void {
-        $runners->register(JobType::Http, new HttpRunner(
-            new DbHttpJobSource($db),
-            new SecretBox(KeyLoader::load($env)),
-            new StoredHttpRunSettings(new Settings($db, $clock)),
-            new TargetGuard(new SystemHostResolver(), new AddressPolicy(new DbInternalTargetSource($db), InfrastructureTargets::fromConfig($config))),
-            new CurlTransport('Meridian/' . $config->version),
-        ));
-    }));
+    $planner = new Planner($db, $clock, $lease);
+    $staleRuns = new StaleRuns($db, $clock, $lease);
+    $authorizer = new DbRunAuthorizer($db, $users);
+    $runnersFor = static function (JobType $type) use ($env, $db, $config, $clock): RunnerRegistry {
+        $runners = new RunnerRegistry();
+        if ($type === JobType::Http) {
+            $runners->register(JobType::Http, new HttpRunner(
+                new DbHttpJobSource($db),
+                new SecretBox(KeyLoader::load($env)),
+                new StoredHttpRunSettings(new Settings($db, $clock)),
+                new TargetGuard(new SystemHostResolver(), new AddressPolicy(new DbInternalTargetSource($db), InfrastructureTargets::fromConfig($config))),
+                new CurlTransport('Meridian/' . $config->version),
+            ));
+        }
+        // Shell: ShellRunner folgt mit Phase 4 S7; bis dahin endet ein Shell-Lauf mit Worker::NOTE_NO_RUNNER.
+        if ($type === JobType::Shell) {
+            KeyLoader::load($env);
+        }
+
+        return $runners;
+    };
+    // --inline-worker (Entwicklung/Übergang): HTTP-Läufe im Takt, Herzschlag verlängert zusätzlich die Sperre.
+    $app->add(new SchedulerRunCommand(
+        new Scheduler($lease, $planner, $staleRuns),
+        static function () use ($db, $clock, $lease, $planner, $staleRuns, $authorizer, $runnersFor): Scheduler {
+            $worker = new Worker(
+                $db,
+                $clock,
+                new WorkerIdentity($lease->owner(), JobType::Http),
+                [JobType::Http],
+                $runnersFor(JobType::Http),
+                $authorizer,
+                static fn (Heartbeat $heartbeat): Heartbeat => new LeaseHeartbeat($heartbeat, $lease, $clock),
+            );
+
+            return new Scheduler($lease, $planner, $staleRuns, $worker);
+        },
+    ));
+    $app->add(new WorkerRunCommand(
+        static fn (JobType $type): Worker => new Worker($db, $clock, WorkerIdentity::generate($type), [$type], $runnersFor($type), $authorizer),
+        $env,
+        __FILE__,
+    ));
 }
 
 exit($app->run());

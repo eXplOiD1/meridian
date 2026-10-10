@@ -12,17 +12,21 @@ use Meridian\Runner\JobType;
 use Meridian\Runner\RunnerRegistry;
 use Meridian\Runner\RunRequest;
 use Meridian\Runner\RunResult;
+use Meridian\Runner\StopReason;
 use Meridian\Security\SecretMasker;
 
 /**
- * Worker: übernimmt fällige Läufe atomar, führt sie über den Runner des Job-Typs aus und speichert das
- * Ergebnis maskiert. Legt Wiederholungen mit wachsendem Abstand an.
+ * Worker (ADR 0004 E5): übernimmt fällige Läufe seiner Job-Typen atomar, führt sie über den Runner des Typs aus und
+ * speichert das Ergebnis maskiert. Legt Wiederholungen mit wachsendem Abstand an. Kennt seine Kennung
+ * ({@see WorkerIdentity}) und Typen, **nie** die Scheduler-Sperre: hängende Läufe beendet der Planer ({@see StaleRuns}).
  *
- *  - Übernehmen nur per `UPDATE … WHERE status = 'queued'` mit rowCount() === 1, unter der Sperre.
+ *  - Übernehmen ohne Sperre per `UPDATE … WHERE status = 'queued'` mit rowCount() === 1 in `immediate()`; die
+ *    Überlappungsprüfung steht in derselben Transaktion (SQLite serialisiert sie: zwei Worker starten nie beide einen
+ *    zweiten Lauf desselben Jobs).
  *  - Läufe deaktivierter Jobs werden nicht ausgeführt („skipped“ mit Notiz) — außer Testläufen (E4).
  *  - Manuelle Läufe, Testläufe und Wiederholungen mit auslösendem Benutzer prüfen beim Übernehmen erneut, ob
  *    dieser Benutzer den Job noch starten darf (H1, {@see RunAuthorizer}); sonst „skipped“.
- *  - Hängende Läufe eines früheren Prozesses werden „aborted“, nie neu gestartet.
+ *  - Abbruch durch Benutzer oder Beenden des Workers → „aborted“ mit fester Notiz, nie wiederholt.
  *  - Jeder Lauf bekommt einen eigenen SecretMasker (H4); Ausgabe und Notiz: erst damit maskieren, dann kürzen,
  *    dann speichern. Der Masker wird danach verworfen.
  */
@@ -43,6 +47,8 @@ final class Worker
     public const NOTE_JOB_INVALID = 'Abgebrochen: Der Job ist gelöscht oder hat einen unbekannten Typ.';
     public const NOTE_STALE = 'Abgebrochen: Kein Lebenszeichen des ausführenden Prozesses mehr (z. B. Neustart oder Absturz). Der Lauf wird nicht automatisch wiederholt.';
     public const NOTE_FINISH_FAILED = 'Fehlgeschlagen: Das Ergebnis konnte nicht gespeichert werden.';
+    public const NOTE_CANCELLED = 'Abgebrochen durch Benutzer.';
+    public const NOTE_WORKER_STOPPED = 'Abgebrochen: Der Worker wurde beendet (Neustart oder Update). Der Lauf wird nicht automatisch wiederholt.';
 
     /** Versuche, das Ergebnis zu speichern (z. B. bei kurz gesperrter Datenbank), bevor der Ersatzeintrag greift. */
     public const FINISH_ATTEMPTS = 3;
@@ -50,33 +56,53 @@ final class Worker
 
     private const TRUNCATED = "\n[gekürzt]";
 
+    /** @var non-empty-list<JobType> */
+    private readonly array $types;
+
+    /** JSON-Liste der Typen für `json_each()` (nur Enum-Werte). */
+    private readonly string $typesJson;
+
+    /**
+     * @param non-empty-list<JobType>                $types       Job-Typen, die dieser Worker übernimmt
+     * @param (\Closure(Heartbeat): Heartbeat)|null $wrapHeartbeat nur `--inline-worker`: {@see LeaseHeartbeat}
+     */
     public function __construct(
         private readonly Connection $db,
         private readonly Clock $clock,
-        private readonly SchedulerLease $lease,
+        private readonly WorkerIdentity $me,
+        array $types,
         private readonly RunnerRegistry $runners,
         private readonly RunAuthorizer $authorizer,
+        private readonly ?\Closure $wrapHeartbeat = null,
     ) {
+        $this->types = array_values(array_unique($types, SORT_REGULAR));
+        $this->typesJson = json_encode(array_map(static fn (JobType $t): string => $t->value, $this->types), JSON_THROW_ON_ERROR);
+    }
+
+    public function identity(): WorkerIdentity
+    {
+        return $this->me;
     }
 
     /**
-     * Arbeitet fällige Läufe ab.
+     * Arbeitet fällige Läufe der eigenen Typen ab, höchstens `$maxRuns` ausgeführte Läufe je Aufruf (ein Worker-Kind
+     * ruft mit 1 auf; übersprungene zählen nicht).
      *
-     * @param callable(): bool $stopRequested true → keinen weiteren Lauf anfangen (SIGTERM)
+     * @param callable(): bool $stopRequested true → keinen weiteren Lauf anfangen und den laufenden abbrechen (SIGTERM)
      *
      * @return list<RunEvent>
      */
-    public function work(callable $stopRequested): array
+    public function work(callable $stopRequested, int $maxRuns = self::MAX_RUNS_PER_TICK): array
     {
         $candidates = $this->db->fetchAll(
-            "SELECT id FROM runs WHERE status = 'queued' AND (scheduled_for IS NULL OR scheduled_for <= :now) ORDER BY scheduled_for IS NOT NULL, scheduled_for, id LIMIT 20",
-            ['now' => Timestamp::format($this->clock->now())],
+            "SELECT r.id FROM runs r JOIN jobs j ON j.id = r.job_id WHERE r.status = 'queued' AND (r.scheduled_for IS NULL OR r.scheduled_for <= :now) AND j.type IN (SELECT value FROM json_each(:types)) ORDER BY r.scheduled_for IS NOT NULL, r.scheduled_for, r.id LIMIT 20",
+            ['now' => Timestamp::format($this->clock->now()), 'types' => $this->typesJson],
         );
 
         $events = [];
+        $executed = 0;
         foreach ($candidates as $row) {
-            // Vor jedem Lauf: Stopp? Sperre noch da (und verlängert)?
-            if ($stopRequested() || !$this->lease->acquire()) {
+            if ($executed >= $maxRuns || $stopRequested()) {
                 break;
             }
             $runId = $row['id'] ?? null;
@@ -91,22 +117,50 @@ final class Worker
             if ($claim === null) {
                 continue;
             }
-            $events[] = $this->execute($claim);
+            $events[] = $this->execute($claim, $stopRequested);
+            ++$executed;
         }
 
         return $events;
     }
 
     /**
-     * Übernimmt einen wartenden Lauf. Gibt den Auftrag zurück, ein Ereignis (Lauf wurde stattdessen
-     * übersprungen/abgebrochen) oder null (nicht übernommen: schon vergeben, wartet noch, keine Sperre).
+     * Trägt diesen Worker in `workers` ein bzw. frischt `seen_at` auf (alle 10 s). Fähigkeiten ohne Geheimnisse.
+     *
+     * @param array<string, bool|int|string|list<string>> $caps
+     */
+    public function announce(array $caps = []): void
+    {
+        $now = Timestamp::format($this->clock->now());
+        $host = gethostname();
+        $pid = getmypid();
+        $this->db->execute(
+            'INSERT INTO workers (id, kind, host, pid, caps_json, started_at, seen_at) VALUES (:id, :kind, :host, :pid, :caps, :now, :now)
+             ON CONFLICT (id) DO UPDATE SET seen_at = excluded.seen_at',
+            [
+                'id' => $this->me->id,
+                'kind' => $this->me->kind->value,
+                'host' => $host === false ? 'host' : substr($host, 0, 64),
+                'pid' => $pid === false ? 0 : $pid,
+                'caps' => json_encode($caps === [] ? new \stdClass() : $caps, JSON_THROW_ON_ERROR),
+                'now' => $now,
+            ],
+        );
+    }
+
+    /** Beim Beenden: eigene Zeile in `workers` löschen. */
+    public function retire(): void
+    {
+        $this->db->execute('DELETE FROM workers WHERE id = :id', ['id' => $this->me->id]);
+    }
+
+    /**
+     * Übernimmt einen wartenden Lauf eines eigenen Typs. Gibt den Auftrag zurück, ein Ereignis (Lauf wurde
+     * stattdessen übersprungen/abgebrochen) oder null (nicht übernommen: schon vergeben, wartet noch, fremder Typ).
      */
     public function claim(int $runId): RunRequest|RunEvent|null
     {
         return $this->db->immediate(function () use ($runId): RunRequest|RunEvent|null {
-            if (!$this->lease->isHeld()) {
-                return null;
-            }
             $now = Timestamp::format($this->clock->now());
             $row = $this->db->fetchOne(
                 "SELECT r.id, r.job_id, r.trigger, r.attempt, r.started_by, j.id AS job_exists, j.type, j.is_enabled, j.overlap_policy FROM runs r LEFT JOIN jobs j ON j.id = r.job_id WHERE r.id = :id AND r.status = 'queued'",
@@ -122,6 +176,10 @@ final class Worker
 
             if ($row['job_exists'] === null || $type === null || $trigger === null) {
                 return $this->closeQueued($runId, $jobId, RunStatus::Aborted, self::NOTE_JOB_INVALID, $now);
+            }
+            if (!in_array($type, $this->types, true)) {
+                // Fremder Typ: übernimmt ein anderer Worker (z. B. Shell nur im Shell-Worker ohne Netz).
+                return null;
             }
             // Testläufe auch für deaktivierte Jobs („Speichern und testen“, E4); alles andere nur für aktive.
             if ($row['is_enabled'] !== 1 && $trigger !== RunTrigger::Test) {
@@ -143,7 +201,7 @@ final class Worker
 
             $claimed = $this->db->execute(
                 "UPDATE runs SET status = 'running', started_at = :now, heartbeat_at = :now, worker = :me WHERE id = :id AND status = 'queued'",
-                ['now' => $now, 'me' => $this->lease->owner(), 'id' => $runId],
+                ['now' => $now, 'me' => $this->me->id, 'id' => $runId],
             );
             if ($claimed !== 1) {
                 return null;
@@ -174,12 +232,17 @@ final class Worker
 
     /**
      * Führt einen übernommenen Lauf aus und speichert das Ergebnis. Der Runner hält den Lauf über den
-     * Herzschlag am Leben (und verlängert damit die Sperre).
+     * Herzschlag am Leben; der Herzschlag meldet Abbruch durch Benutzer, Beenden des Workers oder „hängend“.
+     *
+     * @param (callable(): bool)|null $stopRequested true → Worker wird beendet, laufenden Lauf abbrechen
      */
-    public function execute(RunRequest $request): RunEvent
+    public function execute(RunRequest $request, ?callable $stopRequested = null): RunEvent
     {
         $started = $this->clock->now();
-        $heartbeat = new RunHeartbeat($this->db, $this->clock, $this->lease, $request->runId);
+        $heartbeat = new RunHeartbeat($this->db, $this->clock, $this->me->id, $request->runId, $stopRequested === null ? null : \Closure::fromCallable($stopRequested));
+        if ($this->wrapHeartbeat !== null) {
+            $heartbeat = ($this->wrapHeartbeat)($heartbeat);
+        }
         // H4: ein Masker nur für diesen Lauf. Geheimnisse eines Laufs bleiben nie für den nächsten registriert.
         $masker = new SecretMasker();
         $runner = $this->runners->for($request->type);
@@ -195,48 +258,22 @@ final class Worker
             }
         }
 
+        // Abbruch durch Benutzer oder Beenden des Workers: immer „aborted“ mit fester Notiz, nie wiederholt — egal,
+        // was der Runner daraus gemacht hat. „Stale“: der Lauf gehört nicht mehr diesem Worker, das Speichern unten
+        // trifft keine Zeile mehr.
+        $result = match ($heartbeat->stopReason()) {
+            StopReason::Cancelled => RunResult::aborted($result->output, self::NOTE_CANCELLED),
+            StopReason::WorkerStopping => RunResult::aborted($result->output, self::NOTE_WORKER_STOPPED),
+            StopReason::Stale, null => $result,
+        };
+
         return $this->finish($request, $result, $started, $masker);
-    }
-
-    /**
-     * Markiert Läufe als abgebrochen, die noch als „running“ gelten, deren Herzschlag aber älter als die
-     * Sperrdauer ist — egal welcher Prozess sie gestartet hat (auch eigene, deren Abschluss nicht gespeichert
-     * werden konnte). Ein Lauf mit frischem Herzschlag lebt und bleibt unangetastet. Aufruf in jedem Takt.
-     *
-     * @return list<RunEvent>
-     */
-    public function abortStale(): array
-    {
-        return $this->db->immediate(function (): array {
-            if (!$this->lease->isHeld()) {
-                return [];
-            }
-            $stale = $this->db->fetchAll(
-                "SELECT id, job_id FROM runs WHERE status = 'running' AND COALESCE(heartbeat_at, started_at, '') <= :cutoff ORDER BY id",
-                ['cutoff' => Timestamp::format($this->clock->now()->modify('-' . SchedulerLease::TTL_SECONDS . ' seconds'))],
-            );
-            $events = [];
-            foreach ($stale as $row) {
-                if (!is_int($row['id']) || !is_int($row['job_id'])) {
-                    continue;
-                }
-                $changed = $this->db->execute(
-                    "UPDATE runs SET status = 'aborted', finished_at = :now, note = :note WHERE id = :id AND status = 'running' AND COALESCE(heartbeat_at, started_at, '') <= :cutoff",
-                    ['now' => Timestamp::format($this->clock->now()), 'note' => self::NOTE_STALE, 'id' => $row['id'], 'cutoff' => Timestamp::format($this->clock->now()->modify('-' . SchedulerLease::TTL_SECONDS . ' seconds'))],
-                );
-                if ($changed === 1) {
-                    $events[] = new RunEvent($row['job_id'], $row['id'], RunStatus::Aborted);
-                }
-            }
-
-            return $events;
-        });
     }
 
     /**
      * Speichert das Ergebnis, bei Fehlern (z. B. SQLITE_BUSY) mit begrenzten Wiederholungen. Gelingt es nicht,
      * wird der Lauf mit fester Notiz als „failed“ beendet; scheitert auch das, bleibt er „running“, sein
-     * Herzschlag veraltet und {@see abortStale()} beendet ihn nach Ablauf der Sperrdauer.
+     * Herzschlag veraltet und der Planer ({@see StaleRuns}) beendet ihn nach Ablauf der Sperrdauer.
      */
     private function finish(RunRequest $request, RunResult $result, \DateTimeImmutable $started, SecretMasker $masker): RunEvent
     {
@@ -253,7 +290,7 @@ final class Worker
 
         $changed = $this->db->execute(
             "UPDATE runs SET status = 'failed', finished_at = :now, note = :note WHERE id = :id AND status = 'running' AND worker = :me",
-            ['now' => Timestamp::format($this->clock->now()), 'note' => self::NOTE_FINISH_FAILED, 'id' => $request->runId, 'me' => $this->lease->owner()],
+            ['now' => Timestamp::format($this->clock->now()), 'note' => self::NOTE_FINISH_FAILED, 'id' => $request->runId, 'me' => $this->me->id],
         );
 
         return new RunEvent($request->jobId, $request->runId, $changed === 1 ? RunStatus::Failed : RunStatus::Aborted);
@@ -278,7 +315,7 @@ final class Worker
                     'output' => $output,
                     'note' => $note,
                     'id' => $request->runId,
-                    'me' => $this->lease->owner(),
+                    'me' => $this->me->id,
                 ],
             );
             // Die Notiz des Planers (z. B. „Nachgeholt …“) bleibt erhalten, die des Ergebnisses wird angehängt.
