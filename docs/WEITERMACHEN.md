@@ -56,3 +56,7 @@ Die Suiten liegen lokal unter `tests/` (gitignored), u. a. `tests/Integration/Ph
 - `Australia/Lord_Howe` weicht im Zeitplan ab. Optionale Härtung: v1-Anzeige-URLs ohne `=` komplett schwärzen.
 - Tests, `.claude/` und `CLAUDE.md` sind gitignored und liegen nur lokal (ZIP an Alex nach jedem Abschluss).
 - Agenten dürfen nie `git stash`/`git checkout` auf ungestagte Dateien anwenden.
+
+## Stand Feierabend (11.10.2026)
+Phase 4 abgeschlossen (Review durch Koordinator, Fund Container-ID-Umgehung behoben, Skript lief auf dem NAS im Container). Eigene Rollen R1–R3, R5 fertig (R4 Gesamtsuite und R6 Review offen). Job-Editor mit Reitern und Zeitplan-Baukasten, Quelltext-Abruf auch über HTTP, Verlauf `#/verlauf` (`GET /api/runs`).
+Als Nächstes: (1) Taktband der Übersicht (Vorlage aus dem Klickdummy nötig) oder Lauf-Details/Live-Log im Verlauf, (2) Rest Zeitplan/Reiter („Zeitplan läuft ab“ braucht Backend), (3) R4, Review Phase 5, (4) Phase 6: Benachrichtigungen mit eigenem SMTP-Versand (Host, Port, STARTTLS/SSL, Passwort verschlüsselt, Testmail) und ntfy; PHPMailer nur nach Freigabe von Alex, (5) S11 Host-Agent darf nach Phase 9. Offen bei Alex: NAS-Test Skript im Editor und neue Reiter, PHPStan max unter PHP 8.4/CI.
