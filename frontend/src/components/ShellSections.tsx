@@ -105,10 +105,12 @@ interface Props {
   revealed?: boolean;
   onStartReplacing: () => void;
   onCancelReplacing: () => void;
+  /** 'general': Ausführungsort und Skript; 'advanced': Umgebungsvariablen. */
+  part: 'general' | 'advanced';
 }
 
 /** Die Karten „Ausführungsort“ und „Skript“ des Job-Editors für Shell-Jobs. */
-export function ShellSections({ form, onChange, targets, targetsError, errors, saved, replacing, draft, setDraft, nextKey, revealed = false, onStartReplacing, onCancelReplacing }: Props) {
+export function ShellSections({ form, onChange, targets, targetsError, errors, saved, replacing, draft, setDraft, nextKey, revealed = false, onStartReplacing, onCancelReplacing, part }: Props) {
   const list = targets ?? [];
   const selected = list.find((option) => targetKey(option.kind, option.name) === form.target) ?? null;
   const parsed = splitTarget(form.target);
@@ -126,6 +128,66 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
     // onChange ist stabil genug; nur auf Auswahl und Benutzer reagieren.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.kind, selected?.name, form.user]);
+
+  if (part === 'advanced') {
+    return (
+      <section className="card" aria-label="Umgebungsvariablen">
+        <h2>Umgebungsvariablen</h2>
+        {!replacing ? (
+          <div className="stored">
+            <div className="stored__facts">
+              <span>{saved?.has_env === true ? 'Umgebungsvariablen: ' + String(saved.env_count) + ' (Namen und Werte verborgen)' : 'Umgebungsvariablen: keine'}</span>
+            </div>
+            <p className="hint">Skript und Umgebungsvariablen werden nur zusammen ersetzt. Wähle dazu im Reiter „Allgemein“ „Skript ersetzen“.</p>
+          </div>
+        ) : (
+          <div className="replace">
+              <fieldset className="headers">
+                <legend className="field__label">Umgebungsvariablen</legend>
+                <p className="hint">
+                  Geheimnisse gehören in Umgebungsvariablen (mindestens 4 Zeichen, sonst kann Meridian sie in der Ausgabe nicht verbergen). Werte werden verschlüsselt gespeichert und nie wieder angezeigt.
+                </p>
+                {draft.env.map((row, index) => (
+                  <div key={row.key} className="row headers__row">
+                    <input
+                      className="input input--mono-plain"
+                      aria-label={'Variable ' + String(index + 1) + ' Name'}
+                      placeholder="NAME"
+                      autoComplete="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      value={row.name}
+                      onChange={(e) => setDraft((current) => ({ ...current, env: current.env.map((r) => (r.key === row.key ? { ...r, name: e.target.value } : r)) }))}
+                    />
+                    <input
+                      className="input input--mono-plain"
+                      type={revealed ? 'text' : 'password'}
+                      aria-label={'Variable ' + String(index + 1) + ' Wert'}
+                      placeholder="Wert"
+                      autoComplete="new-password"
+                      spellCheck={false}
+                      value={row.value}
+                      onChange={(e) => setDraft((current) => ({ ...current, env: current.env.map((r) => (r.key === row.key ? { ...r, value: e.target.value } : r)) }))}
+                    />
+                    <button type="button" className="btn btn--ghost btn--small" onClick={() => setDraft((current) => ({ ...current, env: current.env.filter((r) => r.key !== row.key) }))}>
+                      Entfernen
+                    </button>
+                  </div>
+                ))}
+                {envErrors.map(([key, message]) => (
+                  <div key={key} className="field__error">
+                    {message}
+                  </div>
+                ))}
+                <button type="button" className="btn btn--ghost btn--small" onClick={() => setDraft((current) => ({ ...current, env: [...current.env, { key: nextKey(), name: '', value: '' }] }))}>
+                  Variable hinzufügen
+                </button>
+              </fieldset>
+          </div>
+        )}
+      </section>
+    );
+  }
 
   return (
     <>
@@ -264,47 +326,6 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
               )}
             </FormField>
 
-            <fieldset className="headers">
-              <legend className="field__label">Umgebungsvariablen</legend>
-              <p className="hint">
-                Geheimnisse gehören in Umgebungsvariablen (mindestens 4 Zeichen, sonst kann Meridian sie in der Ausgabe nicht verbergen). Werte werden verschlüsselt gespeichert und nie wieder angezeigt.
-              </p>
-              {draft.env.map((row, index) => (
-                <div key={row.key} className="row headers__row">
-                  <input
-                    className="input input--mono-plain"
-                    aria-label={'Variable ' + String(index + 1) + ' Name'}
-                    placeholder="NAME"
-                    autoComplete="off"
-                    autoCapitalize="off"
-                    spellCheck={false}
-                    value={row.name}
-                    onChange={(e) => setDraft((current) => ({ ...current, env: current.env.map((r) => (r.key === row.key ? { ...r, name: e.target.value } : r)) }))}
-                  />
-                  <input
-                    className="input input--mono-plain"
-                    type={revealed ? 'text' : 'password'}
-                    aria-label={'Variable ' + String(index + 1) + ' Wert'}
-                    placeholder="Wert"
-                    autoComplete="new-password"
-                    spellCheck={false}
-                    value={row.value}
-                    onChange={(e) => setDraft((current) => ({ ...current, env: current.env.map((r) => (r.key === row.key ? { ...r, value: e.target.value } : r)) }))}
-                  />
-                  <button type="button" className="btn btn--ghost btn--small" onClick={() => setDraft((current) => ({ ...current, env: current.env.filter((r) => r.key !== row.key) }))}>
-                    Entfernen
-                  </button>
-                </div>
-              ))}
-              {envErrors.map(([key, message]) => (
-                <div key={key} className="field__error">
-                  {message}
-                </div>
-              ))}
-              <button type="button" className="btn btn--ghost btn--small" onClick={() => setDraft((current) => ({ ...current, env: [...current.env, { key: nextKey(), name: '', value: '' }] }))}>
-                Variable hinzufügen
-              </button>
-            </fieldset>
 
             {saved !== null && (
               <div className="row">

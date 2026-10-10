@@ -336,3 +336,30 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .runlog__sys { color: var(--text-gedaempft-auf-tafel); font-style: italic; }
 .runlog__tag { color: var(--tafel); background: var(--fehler-hell); border-radius: 3px; padding: 0 4px; margin-right: 6px; font-size: 11px; font-weight: 700; user-select: none; }
 .runlog__tag--sys { background: var(--text-gedaempft-auf-tafel); }
+
+/* --- Reiter im Job-Editor, Zeitplan-Baukasten -------------------------------------------------- */
+.etabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 2px solid var(--tafel); padding-bottom: 0; }
+.etab { min-height: 44px; padding: 0 18px; border: 1px solid var(--linie-stark); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; background: #fff; color: var(--tafel); font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+.etab:hover:not(:disabled) { background: #e6eae4; }
+.etab[aria-selected='true'] { background: var(--tafel); border-color: var(--tafel); color: #fff; }
+.etab:disabled { color: var(--schiefer); cursor: default; }
+.etab__soon { font-size: 12px; font-weight: 600; color: var(--schiefer); }
+.etab__err { width: 10px; height: 10px; border-radius: 50%; background: var(--fehler); border: 2px solid #fff; box-sizing: content-box; }
+.etab[aria-selected='false'] .etab__err { border-color: #fff; }
+.etabpanel { display: grid; gap: 20px; }
+.etabpanel[hidden] { display: none; }
+.editor__actions--sticky { position: sticky; bottom: 0; z-index: 5; background: var(--emaille); border-top: 1px solid var(--linie-stark); padding: 12px 0; margin-top: 4px; flex-wrap: wrap; }
+.sb { display: grid; gap: 14px; }
+.sb__box { border: 1px solid var(--linie); border-radius: var(--radius); background: var(--emaille); padding: 14px 16px; display: grid; gap: 14px; }
+.sb__modes { display: flex; flex-wrap: wrap; gap: 8px; }
+.sb__params { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: flex-end; }
+.sb__field { min-width: 0; }
+.sb__days { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 6px; }
+.sb__cron5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; width: 100%; }
+@media (max-width: 720px) {
+  .sb__cron5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .etab { padding: 0 12px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .etab { transition: background-color 0.12s; }
+}

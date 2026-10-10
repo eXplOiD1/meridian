@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 import { Alert } from '../components/Alert';
+import { ScheduleBuilder } from '../components/ScheduleBuilder';
 import { Confirm } from '../components/Confirm';
 import { FormField } from '../components/FormField';
 import { EMPTY_SCRIPT, ShellSections, shellFormFromJob, splitTarget, targetKey, useShellTargets } from '../components/ShellSections';
 import type { ScriptDraft, ShellForm } from '../components/ShellSections';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
-import { CRON_PRESETS } from '../lib/jobs';
 import { canEditHttp, canEditShell } from '../lib/permissions';
 import { setPendingRun } from '../lib/pending';
 import { triggerRun } from '../lib/runs';
@@ -18,6 +18,8 @@ const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
 const WITH_BODY: HttpMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
 const LONG_TIMEOUT = 60;
 const SHELL_DEFAULT_TIMEOUT = 300;
+
+type TabId = 'general' | 'advanced' | 'notify';
 
 interface HeaderRow {
   key: number;
@@ -186,6 +188,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const [nextKey, setNextKey] = useState(1);
   /** true: gespeicherte Werte wurden geladen und stehen in den Feldern. */
   const [revealed, setRevealed] = useState(false);
+  const [tab, setTab] = useState<TabId>('general');
   const [sourceNote, setSourceNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -351,6 +354,34 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const headerErrors = Object.entries(errors).filter(([key]) => key.startsWith('request.headers'));
   const otherErrors = Object.entries(errors).filter(([key]) => !shownKeys.has(key) && !key.startsWith('request.headers') && !key.startsWith('script.env') && !(key === 'script' && editing && !replacingScript) && !(key === 'request' && editing && !replacing));
 
+
+  const tabOf = (key: string): TabId => {
+    if (key.startsWith('http.timeout') || key.startsWith('shell.timeout') || key === 'http.expected_status' || key === 'http.max_redirects' || key === 'http.store_response' || key === 'overlap_policy' || key.startsWith('retry_') || key.startsWith('request.headers') || key === 'request.body' || key.startsWith('script.env')) {
+      return 'advanced';
+    }
+    return 'general';
+  };
+  const errorTabs = new Set<TabId>(Object.keys(errors).map(tabOf));
+  const tabLabels: ReadonlyArray<{ id: TabId; label: string }> = [
+    { id: 'general', label: 'Allgemein' },
+    { id: 'advanced', label: 'Erweitert' },
+    { id: 'notify', label: 'Benachrichtigungen' },
+  ];
+  function onTabKey(event: KeyboardEvent<HTMLButtonElement>, current: TabId): void {
+    const usable = tabLabels.filter((t) => t.id !== 'notify').map((t) => t.id);
+    const i = usable.indexOf(current);
+    let next: TabId | null = null;
+    if (event.key === 'ArrowRight') next = usable[(i + 1) % usable.length] ?? null;
+    else if (event.key === 'ArrowLeft') next = usable[(i - 1 + usable.length) % usable.length] ?? null;
+    else if (event.key === 'Home') next = usable[0] ?? null;
+    else if (event.key === 'End') next = usable[usable.length - 1] ?? null;
+    if (next !== null) {
+      event.preventDefault();
+      setTab(next);
+      document.getElementById('jobtab-' + next)?.focus();
+    }
+  }
+
   function addHeader(): void {
     setDraft((current) => ({ ...current, headers: [...current.headers, { key: nextKey, name: '', value: '' }] }));
     setNextKey((n) => n + 1);
@@ -366,6 +397,18 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
     setReplacing(false);
     setRevealed(false);
     setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith('request'))));
+  }
+
+  /** Springt zum Reiter des ersten Fehlers (Allgemein hat Vorrang) und setzt den Fokus auf das erste fehlerhafte Feld. */
+  function jumpToError(keys: string[]): void {
+    if (keys.length === 0) {
+      return;
+    }
+    const target = keys.some((k) => tabOf(k) === 'general') ? 'general' : 'advanced';
+    setTab(target);
+    window.setTimeout(() => {
+      document.querySelector<HTMLElement>('#jobpanel-' + target + ' [aria-invalid="true"]')?.focus();
+    }, 0);
   }
 
   async function submit(afterwards: 'show' | 'test'): Promise<void> {
@@ -402,6 +445,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
     if (Object.keys(local).length > 0 || timeout === null || (!shellActive && redirects === null) || retryCount === null || retryDelay === null) {
       setErrors(local);
       setFormError('Bitte die markierten Felder korrigieren.');
+      jumpToError(Object.keys(local));
       return;
     }
 
@@ -465,6 +509,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 422) {
         setErrors(caught.fields);
+        jumpToError(Object.keys(caught.fields));
         setFormError(caught.message);
       } else {
         setFormError(errorMessage(caught));
@@ -513,7 +558,34 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
         </Alert>
       )}
 
-      <section className="card" aria-label="Allgemein">
+      <div className="etabs" role="tablist" aria-label="Job-Einstellungen">
+        {tabLabels.map((t) =>
+          t.id === 'notify' ? (
+            <button key={t.id} type="button" role="tab" id="jobtab-notify" className="etab" aria-selected="false" aria-disabled="true" aria-controls="jobpanel-notify" tabIndex={-1} disabled>
+              {t.label} <span className="etab__soon">bald</span>
+            </button>
+          ) : (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={'jobtab-' + t.id}
+              className="etab"
+              aria-selected={tab === t.id}
+              aria-controls={'jobpanel-' + t.id}
+              tabIndex={tab === t.id ? 0 : -1}
+              onClick={() => setTab(t.id)}
+              onKeyDown={(e) => onTabKey(e, t.id)}
+            >
+              {t.label}
+              {errorTabs.has(t.id) && <span className="etab__err" role="img" aria-label="enthält Fehler" />}
+            </button>
+          ),
+        )}
+      </div>
+
+      <div role="tabpanel" id="jobpanel-general" aria-labelledby="jobtab-general" className="etabpanel" hidden={tab !== 'general'}>
+            <section className="card" aria-label="Allgemein">
         <h2>Allgemein</h2>
         <FormField label="Name" error={errors.name}>
           {(aria) => <input {...aria} className="input" name="name" required maxLength={100} value={form.name} onChange={(e) => set('name', e.target.value)} />}
@@ -556,7 +628,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       </section>
 
       {shellActive && (
-        <ShellSections
+              <ShellSections part="general"
           form={shell}
           onChange={(patch) => setShell((current) => ({ ...current, ...patch }))}
           targets={shellTargets.targets}
@@ -581,7 +653,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
         />
       )}
 
-      {!shellActive && (
+            {!shellActive && (
         <section className="card" aria-label="Anfrage">
           <h2>Anfrage</h2>
           <FormField label="Methode" error={errors['http.method']}>
@@ -643,7 +715,61 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
                 )}
               </FormField>
 
-              <fieldset className="headers">
+
+              {editing && (
+                <div className="row">
+                  <button type="button" className="btn btn--ghost" onClick={cancelReplacing}>
+                    Abbrechen (gespeicherte Anfrage behalten)
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className="card" aria-label="Zeitplan">
+        <h2>Zeitplan</h2>
+        <ScheduleBuilder cron={form.cron} onChange={(value) => set('cron', value)} />
+        <div className="grid-2">
+          <FormField label="Cron-Ausdruck" hint="Fünf Felder: Minute Stunde Tag Monat Wochentag. Direkt änderbar; der Baukasten oben folgt nur, was er abbilden kann.">
+            {(aria) => <input {...aria} className="input input--mono" name="cron" spellCheck={false} autoComplete="off" value={form.cron} onChange={(e) => set('cron', e.target.value)} />}
+          </FormField>
+          <FormField label="Zeitzone" error={errors.timezone}>
+            {(aria) => (
+              <select {...aria} className="input" name="timezone" value={form.timezone} onChange={(e) => set('timezone', e.target.value)}>
+                {timezones(form.timezone).map((zone) => (
+                  <option key={zone} value={zone}>
+                    {zone}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+        </div>
+        <SchedulePreview cron={form.cron} timezone={form.timezone} />
+        <label className="check">
+          <input type="checkbox" checked={form.catchUp} onChange={(e) => set('catchUp', e.target.checked)} />
+          <span>Verpassten Lauf nachholen (einmal), wenn der Scheduler zur Zeit nicht lief</span>
+        </label>
+      </section>
+      </div>
+
+      <div role="tabpanel" id="jobpanel-advanced" aria-labelledby="jobtab-advanced" className="etabpanel" hidden={tab !== 'advanced'}>
+      {!shellActive && (
+            <section className="card" aria-label="Anfrage-Details">
+              <h2>Header und Body</h2>
+              {!replacing ? (
+                <div className="stored">
+                  <div className="stored__facts">
+                    {job?.http?.header_count !== undefined && <span>{job.http.header_count > 0 ? 'Header: ' + String(job.http.header_count) + ' (Werte verborgen)' : 'Header: keine'}</span>}
+                    {job?.http?.has_body !== undefined && <span>{job.http.has_body ? 'Body: ja (verborgen)' : 'Body: nein'}</span>}
+                  </div>
+                  <p className="hint">URL, Header und Body werden nur zusammen ersetzt. Wähle dazu im Reiter „Allgemein“ „Anfrage ersetzen“.</p>
+                </div>
+              ) : (
+                <div className="replace">
+                                <fieldset className="headers">
                 <legend className="field__label">Header</legend>
                 {draft.headers.length === 0 && <p className="hint">Keine Header. Werte werden verschlüsselt gespeichert und nie wieder angezeigt.</p>}
                 {draft.headers.map((header, index) => (
@@ -700,52 +826,38 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
               ) : (
                 <p className="hint">{form.method} sendet keinen Body.</p>
               )}
-
-              {editing && (
-                <div className="row">
-                  <button type="button" className="btn btn--ghost" onClick={cancelReplacing}>
-                    Abbrechen (gespeicherte Anfrage behalten)
-                  </button>
                 </div>
               )}
-            </div>
+            </section>
           )}
-        </section>
+
+      {shellActive && (
+              <ShellSections part="advanced"
+          form={shell}
+          onChange={(patch) => setShell((current) => ({ ...current, ...patch }))}
+          targets={shellTargets.targets}
+          targetsError={shellTargets.error}
+          errors={errors}
+          saved={job?.shell ?? null}
+          replacing={replacingScript}
+          draft={script}
+          setDraft={setScript}
+          nextKey={() => envKey.current++}
+          revealed={revealed}
+          onStartReplacing={() => {
+            setScript(EMPTY_SCRIPT);
+            setReplacingScript(true);
+          }}
+          onCancelReplacing={() => {
+            setScript(EMPTY_SCRIPT);
+            setReplacingScript(false);
+            setRevealed(false);
+            setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith('script'))));
+          }}
+        />
       )}
 
-      <section className="card" aria-label="Zeitplan">
-        <h2>Zeitplan</h2>
-        <div className="chips" role="group" aria-label="Voreinstellungen">
-          {CRON_PRESETS.map((preset) => (
-            <button key={preset.cron} type="button" className="chip" aria-pressed={form.cron.trim() === preset.cron} onClick={() => set('cron', preset.cron)}>
-              {preset.label}
-            </button>
-          ))}
-        </div>
-        <div className="grid-2">
-          <FormField label="Cron-Ausdruck" error={errors.cron} hint="Fünf Felder: Minute Stunde Tag Monat Wochentag.">
-            {(aria) => <input {...aria} className="input input--mono" name="cron" spellCheck={false} autoComplete="off" value={form.cron} onChange={(e) => set('cron', e.target.value)} />}
-          </FormField>
-          <FormField label="Zeitzone" error={errors.timezone}>
-            {(aria) => (
-              <select {...aria} className="input" name="timezone" value={form.timezone} onChange={(e) => set('timezone', e.target.value)}>
-                {timezones(form.timezone).map((zone) => (
-                  <option key={zone} value={zone}>
-                    {zone}
-                  </option>
-                ))}
-              </select>
-            )}
-          </FormField>
-        </div>
-        <SchedulePreview cron={form.cron} timezone={form.timezone} />
-        <label className="check">
-          <input type="checkbox" checked={form.catchUp} onChange={(e) => set('catchUp', e.target.checked)} />
-          <span>Verpassten Lauf nachholen (einmal), wenn der Scheduler zur Zeit nicht lief</span>
-        </label>
-      </section>
-
-      <section className="card" aria-label="Ausführung">
+            <section className="card" aria-label="Ausführung">
         <h2>Ausführung</h2>
         <div className="grid-2">
           <FormField label="Zeitlimit in Sekunden" error={errors[shellActive ? 'shell.timeout_seconds' : 'http.timeout_seconds']} hint={'Höchstens ' + String(maxTimeout) + ' s (Einstellung des Administrators).'}>
@@ -802,8 +914,16 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
           </FormField>
         )}
       </section>
+      </div>
 
-      <div className="row editor__actions">
+      <div role="tabpanel" id="jobpanel-notify" aria-labelledby="jobtab-notify" className="etabpanel" hidden>
+        <section className="card" aria-label="Benachrichtigungen">
+          <h2>Benachrichtigungen</h2>
+          <p className="hint">Kommt bald.</p>
+        </section>
+      </div>
+
+      <div className="row editor__actions editor__actions--sticky">
         <button type="submit" className="btn btn--solid" disabled={busy}>
           {busy ? 'Speichert …' : 'Speichern'}
         </button>
