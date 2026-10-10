@@ -34,6 +34,35 @@ Benutzer verwalten, Passwort zurücksetzen, Sperren aufheben: siehe [Befehle](#b
 Das Volume `meridian-secrets` sicher aufbewahren (Sicherung mitnehmen): ohne den Schlüssel sind gespeicherte
 Geheimnisse verloren.
 
+### Shell-Jobs im Docker-Betrieb
+
+Shell-Jobs laufen nie im Meridian-Container, sondern per `docker exec` in einem **freigegebenen Container**.
+Die `compose.yaml` bringt dafür mit:
+
+- `worker-http` und `worker-shell`: getrennte Worker (`worker:run --type=http|shell`); der `scheduler` plant nur
+  (kein Hauptschlüssel, kein Netz). `worker-shell` hat kein Netz und erreicht nur den Docker-Proxy.
+- `docker-proxy` (`wollomatic/socket-proxy`): der **einzige** Dienst mit `/var/run/docker.sock` (nur lesend eingebunden).
+  Er lässt nur `_ping`, `version`, Container-Info der erlaubten Namen und Exec (anlegen, starten, abfragen) durch;
+  `containers/create`, `start`, `rm` u. a. gibt es nicht (403). Er hat kein Netz und keine IP-Adresse, sondern einen
+  Unix-Socket im Volume `meridian-docker-proxy`, das nur er und `worker-shell` einbinden.
+- `sandbox` (`meridian-sandbox`): Standard-Ausführungsort mit busybox, bash, curl, jq, ca-certificates, tzdata,
+  Benutzer 1001, ohne Volumes, schreibgeschützt (nur `/tmp`), 512 MiB, 256 Prozesse. Er wird **nicht automatisch
+  freigegeben**: in Meridian unter Einstellungen -> Ausführungsorte `docker meridian-sandbox` mit Benutzer `1001`
+  eintragen. Mehr Werkzeuge: eigenes Image und eigener Dienst (`docker/Dockerfile.sandbox` als Vorlage).
+
+Weitere Container freigeben: Name in `MERIDIAN_SHELL_CONTAINERS` eintragen (`.env`, getrennt durch `|`, nur
+`A-Z a-z 0-9 _ -`, z. B. `meridian-sandbox|nextcloud`), `docker compose up -d`, und den Container zusätzlich in Meridian
+als Ausführungsort freigeben. Beides muss stimmen (zwei Schichten).
+
+Das Proxy-Image mit Digest festnageln (nie `:latest`): `MERIDIAN_PROXY_IMAGE=wollomatic/socket-proxy:1.13.1@sha256:<Digest>`
+in der `.env`. Den Digest vorher selbst prüfen und eintragen, z. B. mit `docker buildx imagetools inspect
+wollomatic/socket-proxy:1.13.1`. Hat `/var/run/docker.sock` eine andere Gruppe als root, `MERIDIAN_DOCKER_GID` setzen.
+
+**Sicherheitshinweis:** Ein Zugang zur Docker-API ist faktisch Root auf dem Host. Der Proxy begrenzt ihn auf Exec in den
+eingetragenen Containern, kann aber den Inhalt einer Anfrage nicht prüfen. Nur Container freigeben, in denen Admins mit
+dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle ausführen dürfen. Beim Update von einer älteren Version die
+`compose.yaml` komplett neu einfügen; die Volumes `meridian-data` und `meridian-secrets` bleiben bestehen.
+
 ## Befehle
 
 Meridian bringt Befehle für die Verwaltung mit. Sie laufen im Container bzw. auf dem Server, nicht im Browser.
