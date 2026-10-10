@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Meridian\Console;
 
 use Meridian\Runner\JobType;
+use Meridian\Runner\Shell\Docker\InvalidDockerProxy;
 use Meridian\Schedule\RunEvent;
 use Meridian\Schedule\Worker;
 use Meridian\Schedule\WorkerSupervisor;
@@ -31,6 +32,8 @@ final class WorkerRunCommand extends Command
     public const ANNOUNCE_SECONDS = 10;
     public const POLL_SECONDS = 1;
     public const MAX_CONCURRENCY = 32;
+    /** Wartung im Kind (Shell: exec_ref-Aufräumen, ADR 0004 §5.2 Schritt 4). */
+    public const MAINTENANCE_SECONDS = 60;
 
     private bool $stop = false;
 
@@ -38,11 +41,14 @@ final class WorkerRunCommand extends Command
      * @param \Closure(JobType): Worker $childWorker baut im Kind den Worker (lädt Schlüssel, registriert den Runner)
      * @param array<string, string>     $env         Umgebung des Aufsehers (wird für die Kinder gefiltert)
      * @param string                    $script      Pfad zu bin/meridian
+     * @param (\Closure(JobType, bool): list<string>)|null $maintenance im Kind beim Start (true) und alle
+     *                                   {@see self::MAINTENANCE_SECONDS} s; liefert feste Texte ohne Geheimnisse
      */
     public function __construct(
         private readonly \Closure $childWorker,
         private readonly array $env,
         private readonly string $script,
+        private readonly ?\Closure $maintenance = null,
     ) {
         parent::__construct();
     }
@@ -110,8 +116,8 @@ final class WorkerRunCommand extends Command
         try {
             $worker = ($this->childWorker)($type);
             $worker->announce();
-        } catch (SecretException $e) {
-            // Meldungen von KeyLoader/SecretBox sind feste Texte ohne Schlüssel.
+        } catch (SecretException | InvalidDockerProxy $e) {
+            // Meldungen von KeyLoader/SecretBox und zur Proxy-Einstellung sind feste Texte ohne Schlüssel oder Werte.
             $output->writeln('<error>' . $e->getMessage() . '</error>');
 
             return self::FAILURE;
@@ -123,6 +129,8 @@ final class WorkerRunCommand extends Command
 
         $stopRequested = fn (): bool => $this->stop;
         $lastAnnounce = microtime(true);
+        $this->maintain($type, true, $output);
+        $lastMaintenance = microtime(true);
         try {
             do {
                 $events = [];
@@ -130,6 +138,10 @@ final class WorkerRunCommand extends Command
                     if (microtime(true) - $lastAnnounce >= self::ANNOUNCE_SECONDS) {
                         $worker->announce();
                         $lastAnnounce = microtime(true);
+                    }
+                    if (microtime(true) - $lastMaintenance >= self::MAINTENANCE_SECONDS) {
+                        $this->maintain($type, false, $output);
+                        $lastMaintenance = microtime(true);
                     }
                     // Ein Lauf je Durchgang; --once (Tests) arbeitet alles Fällige einmal ab.
                     $events = $worker->work($stopRequested, $once ? Worker::MAX_RUNS_PER_TICK : 1);
@@ -158,6 +170,20 @@ final class WorkerRunCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    private function maintain(JobType $type, bool $first, OutputInterface $output): void
+    {
+        if ($this->maintenance === null) {
+            return;
+        }
+        try {
+            foreach (($this->maintenance)($type, $first) as $line) {
+                $output->writeln($line);
+            }
+        } catch (\Throwable $e) {
+            $output->writeln('<error>Wartung fehlgeschlagen (' . self::shortClass($e) . ').</error>');
+        }
     }
 
     /**

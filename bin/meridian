@@ -42,6 +42,9 @@ use Meridian\Runner\Heartbeat;
 use Meridian\Runner\Shell\DbExecRefSink;
 use Meridian\Runner\Shell\DbShellJobSource;
 use Meridian\Runner\Shell\DbShellTargetSource;
+use Meridian\Runner\Shell\Docker\DockerExecExecutor;
+use Meridian\Runner\Shell\Docker\DockerProxyClient;
+use Meridian\Runner\Shell\Docker\ShellWorkerMaintenance;
 use Meridian\Runner\Shell\ShellRunner;
 use Meridian\Runner\Shell\ShellTargetPolicy;
 use Meridian\Runner\Shell\StoredShellRunSettings;
@@ -115,14 +118,15 @@ if (is_dir($config->dataDir)) {
             ));
         }
         // Shell (ADR 0004 §5.3): nie ein lokaler Prozess im Worker (E2) — nur Docker-Exec über den Socket-Proxy
-        // (S8), Host-Agent folgt mit S11. Ohne Executor endet ein Lauf sofort mit fester Notiz.
+        // (nur unix://, sonst Start abgelehnt), Host-Agent folgt mit S11 (bis dahin endet ein Host-Lauf sofort).
         if ($type === JobType::Shell) {
+            $proxy = DockerProxyClient::fromEnvironment($env['MERIDIAN_DOCKER_PROXY'] ?? null);
             $runners->register(JobType::Shell, new ShellRunner(
                 new DbShellJobSource($db),
                 new SecretBox(KeyLoader::load($env)),
                 new StoredShellRunSettings(new Settings($db, $clock)),
                 new ShellTargetPolicy(new DbShellTargetSource($db)),
-                [],
+                $proxy === null ? [] : ['docker' => new DockerExecExecutor($proxy)],
                 new DbExecRefSink($db),
             ));
         }
@@ -147,10 +151,24 @@ if (is_dir($config->dataDir)) {
             return new Scheduler($lease, $planner, $staleRuns, $worker);
         },
     ));
+    // Shell-Kinder: beim Start und alle 60 s exec_ref aufräumen, Freigaben gegen MERIDIAN_SHELL_CONTAINERS prüfen.
+    $maintenance = null;
     $app->add(new WorkerRunCommand(
         static fn (JobType $type): Worker => new Worker($db, $clock, WorkerIdentity::generate($type), [$type], $runnersFor($type), $authorizer, null, new DbLiveLogFactory($db, $clock)),
         $env,
         __FILE__,
+        static function (JobType $type, bool $first) use ($env, $db, &$maintenance): array {
+            if ($type !== JobType::Shell) {
+                return [];
+            }
+            $maintenance ??= new ShellWorkerMaintenance(
+                $db,
+                DockerProxyClient::fromEnvironment($env['MERIDIAN_DOCKER_PROXY'] ?? null),
+                $env['MERIDIAN_SHELL_CONTAINERS'] ?? null,
+            );
+
+            return $maintenance->run($first);
+        },
     ));
 }
 
