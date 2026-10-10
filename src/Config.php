@@ -14,6 +14,9 @@ final readonly class Config
 {
     public const DEFAULT_LISTEN_PORT = 8080;
     public const DEFAULT_DOCKER_PROXY_HOSTS = ['docker-proxy'];
+    /** Gleichzeitige Live-Log-Verbindungen (SSE) insgesamt, ADR 0004 E9. Jede hält einen PHP-Thread bis zu 60 s. */
+    public const DEFAULT_LIVE_STREAMS = 4;
+    public const MAX_LIVE_STREAMS = 64;
 
     public function __construct(
         public string $dataDir,
@@ -28,6 +31,8 @@ final readonly class Config
         public int $listenPort = self::DEFAULT_LISTEN_PORT,
         /** @var list<string> Host-/Dienstnamen des docker-socket-proxy; nie ein HTTP-Ziel, nie freigebbar. */
         public array $dockerProxyHosts = self::DEFAULT_DOCKER_PROXY_HOSTS,
+        /** Höchstens so viele Live-Log-Verbindungen gleichzeitig (`MERIDIAN_LIVE_STREAMS`); weniger als FrankenPHP-Threads. */
+        public int $liveStreams = self::DEFAULT_LIVE_STREAMS,
     ) {
     }
 
@@ -84,6 +89,15 @@ final readonly class Config
             $proxyHosts = array_values(array_unique([...self::DEFAULT_DOCKER_PROXY_HOSTS, ...$proxyHosts]));
         }
 
+        $liveStreams = self::DEFAULT_LIVE_STREAMS;
+        $liveText = trim($env['MERIDIAN_LIVE_STREAMS'] ?? '');
+        if ($liveText !== '') {
+            if (preg_match('/^[1-9][0-9]{0,2}$/D', $liveText) !== 1 || (int) $liveText > self::MAX_LIVE_STREAMS) {
+                throw new \InvalidArgumentException('MERIDIAN_LIVE_STREAMS: ganze Zahl von 1 bis ' . self::MAX_LIVE_STREAMS . ' (Standard 4), kleiner als die Zahl der FrankenPHP-Threads.');
+            }
+            $liveStreams = (int) $liveText;
+        }
+
         return new self(
             dataDir: rtrim($env['MERIDIAN_DATA_DIR'] ?? '/var/lib/meridian', '/'),
             environment: $environment,
@@ -94,6 +108,7 @@ final readonly class Config
             uiDir: rtrim($env['MERIDIAN_UI_DIR'] ?? dirname(__DIR__) . '/ui', '/'),
             listenPort: $listenPort,
             dockerProxyHosts: $proxyHosts,
+            liveStreams: $liveStreams,
         );
     }
 
