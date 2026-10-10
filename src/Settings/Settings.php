@@ -24,6 +24,10 @@ final class Settings
     public const MIN_TIMEOUT_SECONDS = 1;
     public const MAX_TIMEOUT_SECONDS = 3600;
 
+    /** Shell-Jobs (ADR 0004 E12, O8): Standard-Maximum 1 h, höchstens 24 h. */
+    public const SHELL_DEFAULT_MAX_TIMEOUT_SECONDS = 3600;
+    public const SHELL_MAX_TIMEOUT_LIMIT_SECONDS = 86400;
+
     private const ENTRIES = 'SELECT s.key, s.value_json, s.updated_at, u.display_name FROM settings s LEFT JOIN users u ON u.id = s.updated_by';
 
     public function __construct(
@@ -38,6 +42,14 @@ final class Settings
         $value = $this->read(SettingKey::HttpMaxTimeout);
 
         return is_int($value) ? $value : Settings::DEFAULT_MAX_TIMEOUT_SECONDS;
+    }
+
+    /** Globales Maximum für das Zeitlimit eines Shell-Jobs, 1 bis 86400 s (Standard 3600). */
+    public function shellMaxTimeoutSeconds(): int
+    {
+        $value = $this->read(SettingKey::ShellMaxTimeout);
+
+        return is_int($value) ? $value : Settings::SHELL_DEFAULT_MAX_TIMEOUT_SECONDS;
     }
 
     public function responseStorage(): ResponseStorage
@@ -86,6 +98,12 @@ final class Settings
             case SettingKey::HttpMaxTimeout:
                 if (!is_int($value) || $value < self::MIN_TIMEOUT_SECONDS || $value > self::MAX_TIMEOUT_SECONDS) {
                     throw new InvalidSetting('Das Maximum für das Zeitlimit muss eine ganze Zahl von 1 bis 3600 (Sekunden) sein.');
+                }
+
+                return $value;
+            case SettingKey::ShellMaxTimeout:
+                if (!is_int($value) || $value < self::MIN_TIMEOUT_SECONDS || $value > self::SHELL_MAX_TIMEOUT_LIMIT_SECONDS) {
+                    throw new InvalidSetting('Das Maximum für das Zeitlimit von Shell-Jobs muss eine ganze Zahl von 1 bis 86400 (Sekunden) sein.');
                 }
 
                 return $value;
