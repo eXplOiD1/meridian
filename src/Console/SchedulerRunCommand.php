@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Meridian\Console;
 
+use Meridian\Runner\JobType;
 use Meridian\Schedule\RunEvent;
 use Meridian\Schedule\Scheduler;
 use Meridian\Security\SecretException;
@@ -14,14 +15,16 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Dauerprozess des Schedulers: alle {@see self::TICK_SECONDS} Sekunden ein Takt (Sperre, Planen, Ausführen).
+ * Dauerprozess des Planers: alle {@see self::TICK_SECONDS} Sekunden ein Takt (Sperre, hängende Läufe, Aufräumen,
+ * Planen). Ausgeführt wird nichts (ADR 0004 E5): das tun `worker:run --type=http|shell`. Der Planer braucht deshalb
+ * keinen Schlüssel. Warten fällige Läufe eines Typs ohne lebenden Worker, warnt er einmal (bis wieder einer lebt).
  *
- * SIGTERM/SIGINT setzen nur ein Flag: die laufende Transaktion und ein laufender Lauf werden zu Ende geführt,
- * danach wird nichts Neues angefangen, die Sperre freigegeben und der Prozess beendet.
- * Ausgabe: nur Job-ID, Lauf-ID und Status, nie Payload oder Laufausgabe.
+ * `--inline-worker` (nur Entwicklung/Tests und als Übergang für Installationen ohne Worker-Dienst): `$inline` baut
+ * erst beim Start einen Scheduler mit eingebettetem Worker (lädt den Schlüssel, registriert die Runner); scheitert
+ * es, endet der Befehl mit Exit 1, bevor er die Sperre übernimmt.
  *
- * `$prepare` läuft erst, wenn der Befehl ausgeführt wird (lädt z. B. den Schlüssel und registriert die Runner).
- * Scheitert es, endet der Befehl mit Exit 1, bevor er die Sperre übernimmt.
+ * SIGTERM/SIGINT setzen nur ein Flag: nichts Neues mehr anfangen, ein eingebetteter laufender Lauf wird abgebrochen
+ * (`Worker::NOTE_WORKER_STOPPED`), Sperre freigeben, Exit 0. Ausgabe: nur Job-ID, Lauf-ID, Status und feste Texte.
  */
 #[AsCommand(name: 'scheduler:run', description: 'Startet den Scheduler (Dauerprozess)')]
 final class SchedulerRunCommand extends Command
@@ -31,11 +34,11 @@ final class SchedulerRunCommand extends Command
     private bool $stop = false;
 
     /**
-     * @param (\Closure(): void)|null $prepare
+     * @param (\Closure(): Scheduler)|null $inline baut den Scheduler mit eingebettetem Worker (`--inline-worker`)
      */
     public function __construct(
-        private readonly Scheduler $scheduler,
-        private readonly ?\Closure $prepare = null,
+        private readonly Scheduler $planOnly,
+        private readonly ?\Closure $inline = null,
     ) {
         parent::__construct();
     }
@@ -51,15 +54,22 @@ final class SchedulerRunCommand extends Command
     #[\Override]
     protected function configure(): void
     {
-        $this->addOption('once', null, InputOption::VALUE_NONE, 'Genau einen Takt (Planen und Ausführen), dann beenden');
+        $this->addOption('once', null, InputOption::VALUE_NONE, 'Genau einen Takt, dann beenden');
+        $this->addOption('inline-worker', null, InputOption::VALUE_NONE, 'Läufe im Planer selbst ausführen (nur Entwicklung; braucht den Schlüssel)');
     }
 
     #[\Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        if ($this->prepare !== null) {
+        $scheduler = $this->planOnly;
+        if ($input->getOption('inline-worker') === true) {
+            if ($this->inline === null) {
+                $output->writeln('<error>--inline-worker ist hier nicht verfügbar.</error>');
+
+                return self::INVALID;
+            }
             try {
-                ($this->prepare)();
+                $scheduler = ($this->inline)();
             } catch (SecretException $e) {
                 // Meldungen von KeyLoader/SecretBox sind feste Texte ohne Schlüssel.
                 $output->writeln('<error>' . $e->getMessage() . '</error>');
@@ -81,11 +91,14 @@ final class SchedulerRunCommand extends Command
         $once = $input->getOption('once') === true;
         $stopRequested = fn (): bool => $this->stop;
         $waiting = false;
+        /** @var array<string, true> $warned */
+        $warned = [];
+        $lastWorkerCheck = 0.0;
 
         try {
             do {
                 try {
-                    $events = $this->scheduler->tick($stopRequested);
+                    $events = $scheduler->tick($stopRequested);
                 } catch (\Throwable $e) {
                     // Ein Takt darf den Dienst nicht beenden (z. B. Datenbank kurz gesperrt). Die Meldung der
                     // Ausnahme kann Geheimnisse enthalten: nur die Klasse ausgeben, nie die Meldung.
@@ -93,13 +106,17 @@ final class SchedulerRunCommand extends Command
                     $events = [];
                 }
 
-                if (!$this->scheduler->holdsLease() && !$waiting) {
+                if (!$scheduler->holdsLease() && !$waiting) {
                     $output->writeln('Ein anderer Scheduler hält die Sperre. Warte, bis sie frei wird.');
                 }
-                $waiting = !$this->scheduler->holdsLease();
+                $waiting = !$scheduler->holdsLease();
 
                 foreach ($events as $event) {
                     $output->writeln(self::describe($event));
+                }
+                if ($scheduler->holdsLease() && microtime(true) - $lastWorkerCheck >= 60.0) {
+                    $lastWorkerCheck = microtime(true);
+                    $warned = $this->warnMissingWorkers($scheduler, $warned, $output);
                 }
 
                 if (!$once) {
@@ -109,7 +126,7 @@ final class SchedulerRunCommand extends Command
                 }
             } while (!$once && !$this->stop);
         } finally {
-            $this->scheduler->shutdown();
+            $scheduler->shutdown();
         }
 
         if ($this->stop) {
@@ -117,6 +134,27 @@ final class SchedulerRunCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @param array<string, true> $warned
+     *
+     * @return array<string, true>
+     */
+    private function warnMissingWorkers(Scheduler $scheduler, array $warned, OutputInterface $output): array
+    {
+        try {
+            $missing = array_map(static fn (JobType $t): string => $t->value, $scheduler->typesWaitingWithoutWorker());
+        } catch (\Throwable) {
+            return $warned;
+        }
+        foreach ($missing as $type) {
+            if (!isset($warned[$type])) {
+                $output->writeln(sprintf('<comment>Läufe vom Typ %1$s warten, aber kein Worker ist aktiv: worker:run --type=%1$s starten (Dienst worker-%1$s bzw. meridian-worker@%1$s).</comment>', $type));
+            }
+        }
+
+        return array_fill_keys($missing, true);
     }
 
     private static function shortClass(\Throwable $e): string
