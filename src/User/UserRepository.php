@@ -128,6 +128,134 @@ final class UserRepository
         );
     }
 
+    /** Gibt es den Benutzernamen schon (ohne Rücksicht auf Schreibung, auch gelöschte Konten)? */
+    public function usernameTaken(string $username): bool
+    {
+        return $this->db->fetchOne('SELECT id FROM users WHERE username = :u', ['u' => $username]) !== null;
+    }
+
+    /**
+     * Legt einen Benutzer mit Einmalpasswort an (E6): nur der Hash, Pflichtwechsel an, Ablauf gesetzt, keine Rechte
+     * bis zum Wechsel. Zuweisungen setzt der Aufrufer mit {@see replaceAssignments()}. Öffnet keine Transaktion.
+     */
+    public function insertWithOneTimePassword(string $username, string $displayName, #[\SensitiveParameter] string $hash, \DateTimeImmutable $now, \DateTimeImmutable $expiresAt): int
+    {
+        $this->db->execute(
+            'INSERT INTO users (username, display_name, password_hash, password_must_change, password_expires_at, created_at) VALUES (:u, :d, :h, 1, :e, :c)',
+            ['u' => $username, 'd' => $displayName, 'h' => $hash, 'e' => Timestamp::format($expiresAt), 'c' => Timestamp::format($now)],
+        );
+
+        return $this->db->lastInsertId();
+    }
+
+    /** Ändert den Anzeigenamen eines nicht gelöschten Benutzers. @return bool ob eine Zeile geändert wurde */
+    public function updateDisplayName(int $userId, string $displayName): bool
+    {
+        return $this->db->execute('UPDATE users SET display_name = :d WHERE id = :id AND deleted_at IS NULL', ['d' => $displayName, 'id' => $userId]) === 1;
+    }
+
+    /** Aktiviert oder deaktiviert einen nicht gelöschten Benutzer. @return bool ob eine Zeile geändert wurde */
+    public function setActive(int $userId, bool $active): bool
+    {
+        return $this->db->execute('UPDATE users SET is_active = :a WHERE id = :id AND deleted_at IS NULL', ['a' => $active ? 1 : 0, 'id' => $userId]) === 1;
+    }
+
+    /**
+     * Soft-Delete (E5): Zeile, Benutzername und Anzeigename bleiben (Audit-Log und Verlauf behalten ihren Bezug); das
+     * Passwort wird durch den Hash eines verworfenen Zufallswerts ersetzt, 2FA, Wiederherstellungscodes, API-Tokens und
+     * Zuweisungen werden gelöscht. Sitzungen beendet der Aufrufer ({@see \Meridian\Auth\SessionManager::endAllForUser()}).
+     * Öffnet keine Transaktion; der Aufrufer prüft danach `AdminInvariant`.
+     *
+     * @return bool false, wenn der Benutzer schon gelöscht war (nichts geändert)
+     */
+    public function markDeleted(int $userId, #[\SensitiveParameter] string $discardedHash, \DateTimeImmutable $now): bool
+    {
+        $changed = $this->db->execute(
+            'UPDATE users SET deleted_at = :now, is_active = 0, password_hash = :h, password_must_change = 1, password_expires_at = NULL,
+                    totp_secret_enc = NULL, totp_enabled = 0, totp_last_step = NULL
+              WHERE id = :id AND deleted_at IS NULL',
+            ['now' => Timestamp::format($now), 'h' => $discardedHash, 'id' => $userId],
+        );
+        if ($changed !== 1) {
+            return false;
+        }
+        $this->db->execute('DELETE FROM recovery_codes WHERE user_id = :u', ['u' => $userId]);
+        $this->db->execute('DELETE FROM api_tokens WHERE user_id = :u', ['u' => $userId]);
+        $this->db->execute('DELETE FROM user_roles WHERE user_id = :u', ['u' => $userId]);
+
+        return true;
+    }
+
+    /**
+     * Ersetzt die Zuweisungen eines Benutzers **gezielt**: nicht mehr gewünschte Rollen werden gelöscht, neue angelegt,
+     * geänderte Geltungsbereiche angepasst; nie wird die Tabelle geleert und neu befüllt. Die Reihenfolge beachtet die
+     * Trigger aus Migration 0009 (erst Einzelkategorien entfernen, dann „alle“ setzen; erst „alle“ abschalten, dann
+     * Kategorien eintragen). Öffnet keine Transaktion; der Aufrufer prüft danach `AdminInvariant`.
+     *
+     * @param list<Assignment> $assignments validiert (AssignmentValidator), Kategorien müssen existieren
+     */
+    public function replaceAssignments(int $userId, array $assignments): void
+    {
+        /** @var array<int, array{id: int, all: bool, categories: list<int>}> $existing Rollen-ID => Zeile */
+        $existing = [];
+        foreach ($this->db->fetchAll('SELECT id, role_id, all_categories FROM user_roles WHERE user_id = :u', ['u' => $userId]) as $row) {
+            $rowId = Row::int($row, 'id');
+            $categories = [];
+            foreach ($this->db->fetchAll('SELECT category_id FROM user_role_categories WHERE user_role_id = :g', ['g' => $rowId]) as $categoryRow) {
+                $categories[] = Row::int($categoryRow, 'category_id');
+            }
+            $existing[Row::int($row, 'role_id')] = ['id' => $rowId, 'all' => Row::bool($row, 'all_categories'), 'categories' => $categories];
+        }
+
+        $wanted = [];
+        foreach ($assignments as $assignment) {
+            $wanted[$assignment->roleId] = true;
+        }
+        foreach ($existing as $roleId => $row) {
+            if (!isset($wanted[$roleId])) {
+                $this->db->execute('DELETE FROM user_roles WHERE id = :id', ['id' => $row['id']]);
+            }
+        }
+
+        foreach ($assignments as $assignment) {
+            $current = $existing[$assignment->roleId] ?? null;
+            if ($current === null) {
+                $this->db->execute(
+                    'INSERT INTO user_roles (user_id, role_id, all_categories) VALUES (:u, :r, :all)',
+                    ['u' => $userId, 'r' => $assignment->roleId, 'all' => $assignment->allCategories ? 1 : 0],
+                );
+                $this->addCategories($this->db->lastInsertId(), $assignment->categoryIds);
+                continue;
+            }
+
+            if ($assignment->allCategories) {
+                if (!$current['all'] || $current['categories'] !== []) {
+                    $this->db->execute('DELETE FROM user_role_categories WHERE user_role_id = :g', ['g' => $current['id']]);
+                    $this->db->execute('UPDATE user_roles SET all_categories = 1 WHERE id = :g', ['g' => $current['id']]);
+                }
+                continue;
+            }
+
+            if ($current['all']) {
+                $this->db->execute('UPDATE user_roles SET all_categories = 0 WHERE id = :g', ['g' => $current['id']]);
+            }
+            foreach (array_diff($current['categories'], $assignment->categoryIds) as $removed) {
+                $this->db->execute('DELETE FROM user_role_categories WHERE user_role_id = :g AND category_id = :c', ['g' => $current['id'], 'c' => $removed]);
+            }
+            $this->addCategories($current['id'], array_values(array_diff($assignment->categoryIds, $current['categories'])));
+        }
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     */
+    private function addCategories(int $userRoleId, array $categoryIds): void
+    {
+        foreach ($categoryIds as $categoryId) {
+            $this->db->execute('INSERT INTO user_role_categories (user_role_id, category_id) VALUES (:g, :c)', ['g' => $userRoleId, 'c' => $categoryId]);
+        }
+    }
+
     public function markLogin(int $userId, \DateTimeImmutable $at): void
     {
         $this->db->execute('UPDATE users SET last_login_at = :at WHERE id = :id', ['at' => $at->format('c'), 'id' => $userId]);
