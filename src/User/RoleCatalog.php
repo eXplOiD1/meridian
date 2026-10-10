@@ -9,12 +9,18 @@ use Meridian\Security\Permission;
 use Meridian\Security\RoleGrant;
 
 /**
- * Liest Rollen und ihre Rechte. Im MVP nur lesend (E1): Rollen und Rechte stehen in den Migrationen.
+ * Liest Rollen und ihre Rechte (nur lesend; geschrieben wird nur über `RoleRepository` aus `RoleAdminService`,
+ * ADR 0006). Standardrollen über ihre Kennung ({@see builtin()}), nie über den Namen. Kein Cache: jede Abfrage liest
+ * frisch, damit eine Rollenänderung sofort wirkt (E6).
  */
 final class RoleCatalog
 {
-    private const ROLES_SQL = 'SELECT r.id, r.name, r.is_builtin, rp.permission FROM roles r
+    private const ROLES_SQL = 'SELECT r.id, r.name, r.is_builtin, r.builtin_key, r.description, rp.permission FROM roles r
       LEFT JOIN role_permissions rp ON rp.role_id = r.id ORDER BY r.id, rp.permission';
+
+    private const ID_BY_NAME_SQL = 'SELECT id FROM roles WHERE name = :name COLLATE NOCASE';
+
+    private const ID_BY_KEY_SQL = 'SELECT id FROM roles WHERE builtin_key = :k';
 
     private const CATEGORY_NAMES_SQL = 'SELECT id, name FROM categories WHERE id IN (SELECT value FROM json_each(:ids)) ORDER BY name COLLATE NOCASE, id';
 
@@ -27,7 +33,7 @@ final class RoleCatalog
      */
     public function all(): array
     {
-        /** @var array<int, array{name: string, builtin: bool, permissions: list<Permission>}> $byId */
+        /** @var array<int, array{name: string, builtin: bool, key: BuiltinRole|null, description: string|null, permissions: list<Permission>}> $byId */
         $byId = [];
         foreach ($this->db->fetchAll(self::ROLES_SQL) as $row) {
             $id = $row['id'] ?? null;
@@ -35,7 +41,9 @@ final class RoleCatalog
             if (!is_int($id) || !is_string($name)) {
                 continue;
             }
-            $byId[$id] ??= ['name' => $name, 'builtin' => ($row['is_builtin'] ?? 0) === 1, 'permissions' => []];
+            $key = isset($row['builtin_key']) && is_string($row['builtin_key']) ? BuiltinRole::tryFrom($row['builtin_key']) : null;
+            $description = isset($row['description']) && is_string($row['description']) ? $row['description'] : null;
+            $byId[$id] ??= ['name' => $name, 'builtin' => ($row['is_builtin'] ?? 0) === 1, 'key' => $key, 'description' => $description, 'permissions' => []];
             // Unbekannte Rechte (z. B. aus einer neueren Version) werden nie gewährt und hier weggelassen.
             $permission = isset($row['permission']) && is_string($row['permission']) ? Permission::tryFrom($row['permission']) : null;
             if ($permission !== null) {
@@ -45,7 +53,7 @@ final class RoleCatalog
 
         $roles = [];
         foreach ($byId as $id => $role) {
-            $roles[] = new Role($id, $role['name'], $role['builtin'], $role['permissions']);
+            $roles[] = new Role($id, $role['name'], $role['builtin'], $role['permissions'], $role['key'], $role['description']);
         }
 
         return $roles;
@@ -60,6 +68,27 @@ final class RoleCatalog
         }
 
         return null;
+    }
+
+    /** Rolle nach Namen ohne Rücksicht auf Schreibung (CLI `user:create --role=`, auch eigene Rollen). */
+    public function findByName(string $name): ?Role
+    {
+        $row = $this->db->fetchOne(self::ID_BY_NAME_SQL, ['name' => $name]);
+
+        return $row !== null && isset($row['id']) && is_int($row['id']) ? $this->find($row['id']) : null;
+    }
+
+    /**
+     * Eine Standardrolle über ihre Kennung. Fehlt sie, ist die Datenbank nicht auf Stand (Migration 0013).
+     *
+     * @throws \RuntimeException
+     */
+    public function builtin(BuiltinRole $key): Role
+    {
+        $row = $this->db->fetchOne(self::ID_BY_KEY_SQL, ['k' => $key->value]);
+        $role = $row !== null && isset($row['id']) && is_int($row['id']) ? $this->find($row['id']) : null;
+
+        return $role ?? throw new \RuntimeException('Standardrolle fehlt. Zuerst `bin/meridian migrate` ausführen.');
     }
 
     /**

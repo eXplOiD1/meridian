@@ -6,6 +6,8 @@ namespace Meridian\Console;
 
 use Meridian\Database\Migrator;
 use Meridian\Job\DisplayUrlUpgrade;
+use Meridian\User\AdminInvariant;
+use Meridian\User\UserRepository;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -17,6 +19,8 @@ final class MigrateCommand extends Command
     public function __construct(
         private readonly Migrator $migrator,
         private readonly ?DisplayUrlUpgrade $displayUrls = null,
+        private readonly ?AdminInvariant $invariant = null,
+        private readonly ?UserRepository $users = null,
     ) {
         parent::__construct();
     }
@@ -32,14 +36,25 @@ final class MigrateCommand extends Command
         }
         if ($applied === []) {
             $output->writeln('Datenbank ist aktuell.');
-
-            return self::SUCCESS;
         }
-
         foreach ($applied as $name) {
             $output->writeln('Eingespielt: ' . $name);
         }
+        $this->warnWithoutAdmin($output);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Gibt es Benutzer, aber keinen mit allen Rechten (z. B. nach einem neuen Recht nur eigene Rollen mit „allen“
+     * Rechten, ADR 0006 E2), blockiert `AdminInvariant` jede Rechteänderung. Nur warnen, nichts ändern.
+     */
+    private function warnWithoutAdmin(OutputInterface $output): void
+    {
+        if ($this->invariant === null || $this->users === null || !$this->users->hasUsers() || $this->invariant->countAdmins() > 0) {
+            return;
+        }
+        $output->writeln('<comment>Warnung: Kein aktiver Administrator mit allen Rechten. Einen anlegen mit '
+            . '`bin/meridian user:create <name> --role=Admin` (oder einem Benutzer die Rolle Admin für alle Kategorien zuweisen).</comment>');
     }
 }

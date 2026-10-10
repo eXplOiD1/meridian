@@ -12,6 +12,11 @@ enum Permission: string
     case EditShellJobs = 'jobs.edit_shell';
     case EditStatusPages = 'status_pages.edit';
     case ManageUsers = 'users.manage';
+    /**
+     * Rollen anlegen, umbenennen, Rechte setzen, löschen (ADR 0006 E2, F3). Ändert die Rechte **aller** Inhaber einer
+     * Rolle auf einmal; per Migration 0013 nur an Admin. Zuweisen von Rollen an Benutzer bleibt `users.manage`.
+     */
+    case ManageRoles = 'roles.manage';
     /** Freigaben interner Ziele für HTTP-Jobs pflegen (lockert den SSRF-Schutz). */
     case ManageInternalTargets = 'network.internal_targets';
     /** Globale Einstellungen ändern (lockern Schutz: Antworten speichern, Anzeige-Pfad, Zeitlimits). */
@@ -29,7 +34,7 @@ enum Permission: string
     public function isDangerous(): bool
     {
         return match ($this) {
-            self::EditShellJobs, self::ManageUsers, self::ManageInternalTargets, self::ManageSettings, self::ManageCategories, self::ManageShellTargets => true,
+            self::EditShellJobs, self::ManageUsers, self::ManageRoles, self::ManageInternalTargets, self::ManageSettings, self::ManageCategories, self::ManageShellTargets => true,
             self::ViewJobs, self::RunJobs, self::EditHttpJobs, self::EditStatusPages => false,
         };
     }

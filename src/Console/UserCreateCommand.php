@@ -29,7 +29,7 @@ final class UserCreateCommand extends Command
         $this
             ->addArgument('username', InputArgument::REQUIRED)
             ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Anzeigename')
-            ->addOption('role', null, InputOption::VALUE_REQUIRED, 'Admin, Operator oder Beobachter', 'Beobachter');
+            ->addOption('role', null, InputOption::VALUE_REQUIRED, 'Rollenname ohne Rücksicht auf Schreibung (Admin, Operator, Beobachter oder eine eigene Rolle)', 'Beobachter');
         // Kein --password: Passwörter gehören nicht in die Shell-History oder die Prozessliste.
     }
 
