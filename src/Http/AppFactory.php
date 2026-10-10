@@ -49,7 +49,10 @@ use Meridian\User\UserRepository;
  */
 final class AppFactory
 {
-    public static function create(Config $config, Connection $db, SecretBox $box, ?Clock $clock = null): Kernel
+    /**
+     * @param SseChannel|null $sse Ausgabekanal des Live-Logs (Tests: aufzeichnend); null = {@see PhpSseChannel}
+     */
+    public static function create(Config $config, Connection $db, SecretBox $box, ?Clock $clock = null, ?SseChannel $sse = null): Kernel
     {
         $clock ??= new SystemClock();
         $masker = new SecretMasker();
@@ -111,6 +114,8 @@ final class AppFactory
             new RunService($db, $jobs, $access, $audit, $clock),
             new RunCancelService($db, $runs, $access, $audit, $clock),
         ))->register($kernel);
+        // Live-Log per Server-Sent Events (ADR 0004 §6.1), begrenzt über live_streams.
+        (new RunLiveController($sessionAuth, $users, $access, $runs, new LiveStreamSlots($db, $clock, $config->liveStreams), $clock, $sse ?? new PhpSseChannel()))->register($kernel);
         // Freigaben interner Ziele (network.internal_targets, nur Admin).
         (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock, $infrastructure), $masker))->register($kernel);
         // Kategorien-Verwaltung (categories.manage, nur Admin).
