@@ -34,15 +34,18 @@ Die Suiten liegen lokal unter `tests/` (gitignored), u. a. `tests/Integration/Ph
 - Jobs im internen Netz: Einstellungen → „Freigaben interner Ziele“ oder `docker exec -it meridian-web php bin/meridian http:internal-targets add …`.
 - Kategorien: `category:create|rename|delete`. Einstellungen: `settings:get|set`.
 
-## Eigene Rollen (Phase 5, Entwurf 10.10.2026)
-- Entwurf `docs/decisions/0006-eigene-rollen.md`, Scheiben R1–R6 in `TODO.md` (Phase 5). Admin-Rolle bleibt fest (alle Rechte),
-  Operator/Beobachter: Rechte änderbar, Name fest; neues gefährliches Recht `roles.manage` nur für Admin.
+## Eigene Rollen (Phase 5, Stand 10.10.2026)
+- ADR `docs/decisions/0006-eigene-rollen.md`, F1–F9 von Alex entschieden (§9.1). **R1–R3 erledigt und gepusht**: Migration 0013,
+  `roles.manage`, `BuiltinRole`, `RoleAdminService` (alle Prüfungen E3–E5, F5-Ausnahme für volle Admins, Passwort einmal je
+  Anfrage, Grenzen), Rollen-API `/api/roles/manage`, `POST/PUT/DELETE /api/roles…`, `GET /api/users?role_id=`, `/me` maskiert.
+  Tests lokal: `tests/Unit/Database/CustomRolesMigrationTest.php`, `tests/Unit/User/RoleAdminServiceTest.php`,
+  `tests/Unit/Http/RoleApiTest.php` (inkl. Wettlauf zweier Prozesse, Leak, Mutanten der zentralen Regeln).
+- Offen: R4 (Gesamtsuite: Wirkung in offenen Sitzungen, SSE, wartende Läufe), R5 (Oberfläche), R6 (Review Phase 5).
 - Ab Migration 0013 Standardrollen nur über `roles.builtin_key` ansprechen (nie über den Namen); neues Recht → Trigger
-  `role_permissions_known` in seiner Migration neu anlegen.
-- Offen für Alex: F1–F9 (§9), bis dahin gelten die Empfehlungen.
+  `role_permissions_known` in seiner Migration neu anlegen. **0013 bricht ab**, wenn eine der Standardrollen per Hand
+  umbenannt wurde (dann Namen Admin/Operator/Beobachter zurücksetzen). `migrate` warnt, wenn kein Admin mit allen Rechten bleibt.
 
 ## Offene Entscheidungen von Alex (bis dahin gelten die Empfehlungen aus den ADRs)
-- ADR 0006 F1–F9 (eigene Rollen: Standardrollen, `roles.manage`, Löschen nur ohne Zuweisungen, eigene Rolle nicht änderbar, Grenzen).
 - ADR 0004 O1–O12 (u. a. Proxy-Image `wollomatic/socket-proxy`, Host-Ausführung für systemd erst Phase 9, Sandbox-Container, Skript nicht wieder lesbar).
 - ADR 0005 B2–B14 (B1 „feste Rollen“ abgelöst durch 0006; u. a. Soft-Delete, Einmalpasswort 7 Tage, eigenes Passwort bei gefährlichen Aktionen).
 - Compose-Betrieb: Scheduler erreicht Meridian über `web:8080`/Host-Port; optional `MERIDIAN_SELF_HOSTS` (0003 E17).

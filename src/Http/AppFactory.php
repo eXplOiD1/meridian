@@ -45,7 +45,10 @@ use Meridian\Settings\SettingsController;
 use Meridian\Settings\SettingsService;
 use Meridian\User\AdminInvariant;
 use Meridian\User\AssignmentValidator;
+use Meridian\User\RoleAdminService;
 use Meridian\User\RoleCatalog;
+use Meridian\User\RoleRepository;
+use Meridian\User\RoleValidator;
 use Meridian\User\UserAdminService;
 use Meridian\User\UserRepository;
 
@@ -101,7 +104,11 @@ final class AppFactory
             $throttle,
         );
         (new AccountController($config, $sessionAuth, $csrf, $users, $sessions, $auth, $audit, $masker, $clock))->register($kernel);
-        (new UserController($config, $sessionAuth, $csrf, $users, $access, $roles, $sessions, $throttle, new UserPresenter($masker), $userAdmin, new AssignmentValidator($roles)))->register($kernel);
+        $userPresenter = new UserPresenter($masker);
+        (new UserController($config, $sessionAuth, $csrf, $users, $access, $roles, $sessions, $throttle, $userPresenter, $userAdmin, new AssignmentValidator($roles)))->register($kernel);
+        // Eigene Rollen (roles.manage, nur Admin; ADR 0006).
+        $roleAdmin = new RoleAdminService($db, $roles, new RoleRepository($db), $users, new GrantPolicy($access), new AdminInvariant($db, $users, $access), $audit, $auth, $clock);
+        (new RoleController($config, $sessionAuth, $csrf, $users, $access, $roleAdmin, new RoleValidator(), $userPresenter))->register($kernel);
         (new AdminController($sessionAuth, $csrf, $users, $access, $audit, $throttle, $masker))->register($kernel);
         $runs = new RunRepository($db);
         (new JobController(
