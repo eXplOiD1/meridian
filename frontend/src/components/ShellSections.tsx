@@ -22,7 +22,10 @@ export interface EnvRow {
   value: string;
 }
 
-/** Skript und Umgebung: nur schreibend, nie vorbefüllt, nach dem Speichern aus dem Zustand gelöscht. */
+/**
+ * Skript und Umgebung: nach dem Speichern aus dem Zustand gelöscht. Vorbefüllt nur bei Einstellung
+ * `jobs.reveal_for_edit` (Job-Editor lädt `GET /api/jobs/{id}/source`), sonst nur schreibend.
+ */
 export interface ScriptDraft {
   source: string;
   env: EnvRow[];
@@ -98,12 +101,14 @@ interface Props {
   draft: ScriptDraft;
   setDraft: Dispatch<SetStateAction<ScriptDraft>>;
   nextKey: () => number;
+  /** true: Skript und Umgebung sind mit den gespeicherten Werten vorbefüllt (Werte sichtbar). */
+  revealed?: boolean;
   onStartReplacing: () => void;
   onCancelReplacing: () => void;
 }
 
 /** Die Karten „Ausführungsort“ und „Skript“ des Job-Editors für Shell-Jobs. */
-export function ShellSections({ form, onChange, targets, targetsError, errors, saved, replacing, draft, setDraft, nextKey, onStartReplacing, onCancelReplacing }: Props) {
+export function ShellSections({ form, onChange, targets, targetsError, errors, saved, replacing, draft, setDraft, nextKey, revealed = false, onStartReplacing, onCancelReplacing }: Props) {
   const list = targets ?? [];
   const selected = list.find((option) => targetKey(option.kind, option.name) === form.target) ?? null;
   const parsed = splitTarget(form.target);
@@ -240,7 +245,7 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
             <FormField
               label="Skript"
               error={errors['script.source']}
-              hint="Wird verschlüsselt gespeichert und nie wieder angezeigt. Bewahre es zusätzlich in deiner Versionsverwaltung auf."
+              hint={revealed ? 'Wird verschlüsselt gespeichert. Bewahre es zusätzlich in deiner Versionsverwaltung auf.' : 'Wird verschlüsselt gespeichert und nie wieder angezeigt. Bewahre es zusätzlich in deiner Versionsverwaltung auf.'}
             >
               {(aria) => (
                 <textarea
@@ -278,7 +283,7 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
                   />
                   <input
                     className="input input--mono-plain"
-                    type="password"
+                    type={revealed ? 'text' : 'password'}
                     aria-label={'Variable ' + String(index + 1) + ' Wert'}
                     placeholder="Wert"
                     autoComplete="new-password"

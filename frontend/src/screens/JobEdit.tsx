@@ -12,7 +12,7 @@ import { canEditHttp, canEditShell } from '../lib/permissions';
 import { setPendingRun } from '../lib/pending';
 import { triggerRun } from '../lib/runs';
 import { hrefOf, navigate } from '../lib/useHashRoute';
-import type { CategoryRef, HttpMethod, JobDetail, JobLimits, JobType, OverlapPolicy, Profile, StoreResponse } from '../types';
+import type { CategoryRef, HttpMethod, JobDetail, JobLimits, JobSource, JobType, OverlapPolicy, Profile, StoreResponse } from '../types';
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
 const WITH_BODY: HttpMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
@@ -42,7 +42,11 @@ interface Form {
   store: StoreResponse;
 }
 
-/** Geheimnisfelder: nur schreibend, nie vorbefüllt, nach dem Absenden geleert. */
+/**
+ * Geheimnisfelder: nach dem Absenden geleert. Vorbefüllt nur, wenn der Admin „Gespeicherte Skripte und Links im Editor
+ * anzeigen“ eingeschaltet hat (`GET /api/jobs/{id}/source`); auch dann nur im Zustand dieser Seite, nie in Browser-Speicher
+ * oder URL, und beim Speichern und Verlassen gelöscht.
+ */
 interface RequestDraft {
   url: string;
   headers: HeaderRow[];
@@ -180,6 +184,9 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [nextKey, setNextKey] = useState(1);
+  /** true: gespeicherte Werte wurden geladen und stehen in den Feldern. */
+  const [revealed, setRevealed] = useState(false);
+  const [sourceNote, setSourceNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +215,44 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       cancelled = true;
     };
   }, [id]);
+
+  // Gespeicherte Werte vorbefüllen (Einstellung jobs.reveal_for_edit). Bei „aus“ antwortet der Server 403 mit
+  // reveal_disabled: dann bleibt alles wie bisher (nur „ersetzen“). Jeder Abruf wird auf dem Server protokolliert.
+  const sourceAllowed = job !== null && job.can.edit && (job.type !== 'shell' || canEditShell(profile));
+  useEffect(() => {
+    if (id === null || !sourceAllowed) {
+      return undefined;
+    }
+    let cancelled = false;
+    request<JobSource>('GET', '/api/jobs/' + id + '/source')
+      .then((source) => {
+        if (cancelled) {
+          return;
+        }
+        if (source.type === 'http') {
+          let key = 1;
+          setDraft({ url: source.url, headers: source.headers.map((h) => ({ key: key++, name: h.name, value: h.value })), body: source.body ?? '' });
+          setNextKey(key);
+          setReplacing(true);
+        } else {
+          setScript({ source: source.script, env: source.env.map((e) => ({ key: envKey.current++, name: e.name, value: e.value })) });
+          setReplacingScript(true);
+        }
+        setRevealed(true);
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled && !(caught instanceof ApiError && caught.revealDisabled)) {
+          setSourceNote('Gespeicherte Werte konnten nicht geladen werden: ' + errorMessage(caught));
+        }
+      });
+    return () => {
+      cancelled = true;
+      // Beim Verlassen der Seite nichts zurücklassen.
+      setDraft(EMPTY_REQUEST);
+      setScript(EMPTY_SCRIPT);
+      setRevealed(false);
+    };
+  }, [id, sourceAllowed]);
 
   // Kategorien für die Auswahl: Shell-Jobs gibt es nur uneingeschränkt, dort zählt die Sicht auf alle Kategorien.
   useEffect(() => {
@@ -319,6 +364,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   function cancelReplacing(): void {
     setDraft(EMPTY_REQUEST);
     setReplacing(false);
+    setRevealed(false);
     setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith('request'))));
   }
 
@@ -406,6 +452,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       setReplacing(false);
       setScript(EMPTY_SCRIPT);
       setReplacingScript(false);
+      setRevealed(false);
       const jobId = String(data.job.id);
       if (afterwards === 'test') {
         try {
@@ -450,6 +497,12 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       autoComplete="off"
     >
       {formError !== null && <Alert tone="err">{formError}</Alert>}
+      {revealed && (
+        <Alert tone="warn">
+          <span data-testid="reveal-note">Gespeicherte Werte werden angezeigt (Einstellung des Admins).</span> Der Abruf wurde protokolliert. Beim Speichern werden {shellActive ? 'Skript und Umgebungsvariablen' : 'URL, Header und Body'} so übernommen, wie sie hier stehen.
+        </Alert>
+      )}
+      {sourceNote !== null && <Alert tone="info">{sourceNote}</Alert>}
       {otherErrors.length > 0 && (
         <Alert tone="err">
           <ul className="errlist">
@@ -514,6 +567,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
           draft={script}
           setDraft={setScript}
           nextKey={() => envKey.current++}
+          revealed={revealed}
           onStartReplacing={() => {
             setScript(EMPTY_SCRIPT);
             setReplacingScript(true);
@@ -521,6 +575,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
           onCancelReplacing={() => {
             setScript(EMPTY_SCRIPT);
             setReplacingScript(false);
+            setRevealed(false);
             setErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith('script'))));
           }}
         />
@@ -604,7 +659,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
                     />
                     <input
                       className="input input--mono-plain"
-                      type="password"
+                      type={revealed ? 'text' : 'password'}
                       aria-label={'Header ' + String(index + 1) + ' Wert'}
                       placeholder="Wert"
                       autoComplete="new-password"
@@ -628,7 +683,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
               </fieldset>
 
               {bodyAllowed ? (
-                <FormField label="Body" error={errors['request.body']} hint="Wird verschlüsselt gespeichert und nie wieder angezeigt.">
+                <FormField label="Body" error={errors['request.body']} hint={revealed ? 'Wird verschlüsselt gespeichert.' : 'Wird verschlüsselt gespeichert und nie wieder angezeigt.'}>
                   {(aria) => (
                     <textarea
                       {...aria}

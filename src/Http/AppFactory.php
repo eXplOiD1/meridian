@@ -19,6 +19,7 @@ use Meridian\Database\Connection;
 use Meridian\Job\CategoryRepository;
 use Meridian\Job\JobRepository;
 use Meridian\Job\JobService;
+use Meridian\Job\JobSourceReader;
 use Meridian\Job\JobValidator;
 use Meridian\Job\RunCancelService;
 use Meridian\Job\RunRepository;
@@ -118,6 +119,8 @@ final class AppFactory
             new RunService($db, $jobs, $access, $audit, $clock),
             new RunCancelService($db, $runs, $access, $audit, $clock),
         ))->register($kernel);
+        // Gespeicherte Werte zum Bearbeiten (nur bei jobs.reveal_for_edit = on, ADR 0003 N1 / 0004 N1).
+        (new JobSourceController($sessionAuth, $users, $access, $jobs, $settings, new JobSourceReader($db, $box), $audit, $db, $clock))->register($kernel);
         // Live-Log per Server-Sent Events (ADR 0004 §6.1), begrenzt über live_streams.
         (new RunLiveController($sessionAuth, $users, $access, $runs, new LiveStreamSlots($db, $clock, $config->liveStreams), $clock, $sse ?? new PhpSseChannel()))->register($kernel);
         // Freigaben interner Ziele (network.internal_targets, nur Admin).

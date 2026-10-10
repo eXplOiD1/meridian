@@ -87,6 +87,25 @@ const SHELL_SPECS: SettingSpec[] = [
   },
 ];
 
+const EDITOR_SPECS: SettingSpec[] = [
+  {
+    key: 'jobs.reveal_for_edit',
+    title: 'Gespeicherte Skripte und Links im Editor anzeigen',
+    lead: 'Bestimmt, ob der Job-Editor URL, Header, Body, Skript und Umgebungsvariablen eines gespeicherten Jobs vorbefüllt und bearbeitbar zeigt. Aus: Diese Werte sind nach dem Speichern nicht mehr lesbar und lassen sich nur als Ganzes ersetzen. Standard: aus.',
+    options: [
+      { value: 'off', label: 'Aus', help: 'Standard. Gespeicherte Werte erscheinen nirgends; im Editor gibt es nur „Anfrage ersetzen“ bzw. „Skript ersetzen“.' },
+      { value: 'on', label: 'An', help: 'Wer einen Job bearbeiten darf, sieht beim Öffnen des Editors die gespeicherten Werte im Klartext. Beobachter und Benutzer ohne Bearbeitungsrecht für die Kategorie nie.' },
+    ],
+    extra: (entry) => (
+      <Alert tone="warn">
+        <strong>Achtung:</strong> Wer bearbeiten darf, kann Geheimnisse im Klartext sehen: Tokens in URLs, Header-Werte, Skripte und Umgebungsvariablen. Jeder Abruf wird im Audit-Log protokolliert
+        („job.source_viewed“), höchstens 60 Abrufe je Benutzer und Stunde. Standard ist aus.
+        {entry.value === 'on' ? ' Aktuell ist die Anzeige eingeschaltet.' : ''}
+      </Alert>
+    ),
+  },
+];
+
 function optionLabel(spec: SettingSpec, value: number | string): string {
   if (spec.options === null) {
     return String(value) + ' s';
@@ -255,6 +274,18 @@ function ShellSettings({ csrf }: { csrf: string }) {
       title="Shell-Jobs"
       lead="Globale Grenzwerte für alle Shell-Jobs. Änderungen gelten beim nächsten Lauf ohne Neustart und werden im Audit-Log festgehalten."
       specs={SHELL_SPECS}
+      csrf={csrf}
+    />
+  );
+}
+
+function EditorSettings({ csrf }: { csrf: string }) {
+  return (
+    <SettingsGroup
+      id="settings-editor"
+      title="Job-Editor"
+      lead="Was der Job-Editor von gespeicherten Jobs zeigt. Änderungen gelten sofort und werden im Audit-Log festgehalten."
+      specs={EDITOR_SPECS}
       csrf={csrf}
     />
   );
@@ -791,6 +822,7 @@ export function Settings({ profile }: { profile: Profile }) {
     <div className="settings">
       {settings && <HttpSettings csrf={profile.csrf_token} />}
       {settings && <ShellSettings csrf={profile.csrf_token} />}
+      {settings && <EditorSettings csrf={profile.csrf_token} />}
       {targets && <InternalTargets csrf={profile.csrf_token} />}
       {shellTargets && <ShellTargets csrf={profile.csrf_token} />}
     </div>

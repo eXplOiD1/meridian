@@ -157,7 +157,15 @@ export interface JobLimits {
   response_storage: 'off' | 'on' | 'never';
 }
 
-export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path' | 'http.display_host';
+export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path' | 'http.display_host' | 'shell.max_timeout_seconds' | 'jobs.reveal_for_edit';
+
+/**
+ * Antwort von `GET /api/jobs/{id}/source` (nur bei Einstellung `jobs.reveal_for_edit = on` und Bearbeitungsrecht):
+ * gespeicherte Werte im Klartext. Nur im Zustand des Editors halten, nie in Browser-Speicher oder URL.
+ */
+export type JobSource =
+  | { job_id: number; type: 'http'; url: string; headers: { name: string; value: string }[]; body: string | null }
+  | { job_id: number; type: 'shell'; script: string; env: { name: string; value: string }[] };
 
 export interface SettingEntry {
   key: string;
