@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
 import { ApiError, PASSWORD_CHANGE_EVENT, request, SESSION_ENDED_EVENT, setCsrfRefresher } from './lib/api';
-import { canManageCategories, canManageUsers } from './lib/permissions';
+import { canManageCategories, canManageUsers, canSeeUsersArea } from './lib/permissions';
 import type { Route } from './lib/useHashRoute';
 import { navigate, useHashRoute } from './lib/useHashRoute';
 import { Account } from './screens/Account';
@@ -14,6 +14,7 @@ import { Login } from './screens/Login';
 import { Overview } from './screens/Overview';
 import { PasswordCard } from './screens/AccountExtras';
 import { UserEdit } from './screens/UserEdit';
+import { RoleEdit } from './screens/RoleEdit';
 import { Roles, Users } from './screens/Users';
 import { Settings } from './screens/Settings';
 import type { Profile } from './types';
@@ -31,6 +32,8 @@ const HEADINGS: Record<Route['name'], { kicker: string; title: string }> = {
   'job-edit': { kicker: 'Jobs', title: 'Job bearbeiten' },
   users: { kicker: 'Zugang und Rechte', title: 'Benutzer & Rollen' },
   roles: { kicker: 'Zugang und Rechte', title: 'Rollen und Rechte' },
+  'role-new': { kicker: 'Rollen und Rechte', title: 'Rolle anlegen' },
+  role: { kicker: 'Rollen und Rechte', title: 'Rolle bearbeiten' },
   'user-new': { kicker: 'Benutzer & Rollen', title: 'Benutzer anlegen' },
   user: { kicker: 'Benutzer & Rollen', title: 'Benutzer' },
   categories: { kicker: 'Zugang und Rechte', title: 'Kategorien' },
@@ -74,6 +77,17 @@ export function App() {
     });
     return () => setCsrfRefresher(null);
   }, []);
+
+  // Rechte können sich ändern (Rolle bearbeitet): beim Zurückkehren in das Fenster das Profil neu laden, damit Menü und Schaltflächen stimmen.
+  useEffect(() => {
+    const onVisible = (): void => {
+      if (document.visibilityState === 'visible') {
+        void refresh();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refresh]);
 
   // Der Server hat die Sitzung beendet (z. B. Passwort per Befehl neu gesetzt): zurück zur Anmeldung statt Fehlermeldungen.
   useEffect(() => {
@@ -145,9 +159,11 @@ export function App() {
     );
   }
   // Nur Bedienkomfort: Die Seite „Audit-Log“ prüft der Server selbst; ohne Recht antwortet er mit 403.
-  const usersRoute = route.name === 'users' || route.name === 'roles' || route.name === 'user-new' || route.name === 'user' || route.name === 'audit';
+  const usersRoute = route.name === 'users' || route.name === 'user-new' || route.name === 'user' || route.name === 'audit';
+  const rolesRoute = route.name === 'roles' || route.name === 'role-new' || route.name === 'role';
   const effective: Route =
-    (usersRoute && !canManageUsers(profile)) || (route.name === 'categories' && !canManageCategories(profile)) ? { name: 'home' } : route;
+    (usersRoute && !canManageUsers(profile)) ||
+    (rolesRoute && !canSeeUsersArea(profile)) || (route.name === 'categories' && !canManageCategories(profile)) ? { name: 'home' } : route;
   const heading = HEADINGS[effective.name];
 
   return (
@@ -159,8 +175,10 @@ export function App() {
       {effective.name === 'jobs' && <Jobs profile={profile} />}
       {effective.name === 'job' && <JobDetail key={effective.id} profile={profile} id={effective.id} />}
       {effective.name === 'job-new' && <JobEdit profile={profile} id={null} />}
-      {effective.name === 'users' && <Users />}
-      {effective.name === 'roles' && <Roles />}
+      {effective.name === 'users' && <Users profile={profile} roleId={effective.roleId ?? null} />}
+      {effective.name === 'roles' && <Roles profile={profile} />}
+      {effective.name === 'role-new' && <RoleEdit key="new" profile={profile} id={null} />}
+      {effective.name === 'role' && <RoleEdit key={effective.id} profile={profile} id={effective.id} />}
       {effective.name === 'user-new' && <UserEdit key="new" profile={profile} id={null} />}
       {effective.name === 'user' && <UserEdit key={effective.id} profile={profile} id={effective.id} />}
       {effective.name === 'categories' && <Categories profile={profile} />}

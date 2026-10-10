@@ -1,6 +1,6 @@
 import { InsecureWarning } from './InsecureWarning';
 import type { ReactNode } from 'react';
-import { canManageCategories, canManageInternalTargets, canManageSettings, canManageShellTargets, canManageUsers, canViewJobs, roleNames } from '../lib/permissions';
+import { canManageCategories, canManageInternalTargets, canManageSettings, canManageShellTargets, canManageUsers, canSeeUsersArea, canViewJobs, roleNames } from '../lib/permissions';
 import type { Route } from '../lib/useHashRoute';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { Profile } from '../types';
@@ -37,8 +37,12 @@ function entries(profile: Profile): NavEntry[] {
     { path: null, label: 'Verlauf', hint: 'bald' },
     { path: null, label: 'Statusseiten', hint: 'bald' },
   );
-  if (canManageUsers(profile)) {
-    list.push({ path: 'benutzer', label: 'Benutzer & Rollen', current: (r) => r.name === 'users' || r.name === 'roles' || r.name === 'user-new' || r.name === 'user' });
+  if (canSeeUsersArea(profile)) {
+    list.push({
+      path: canManageUsers(profile) ? 'benutzer' : 'benutzer/rollen',
+      label: 'Benutzer & Rollen',
+      current: (r) => r.name === 'users' || r.name === 'roles' || r.name === 'role-new' || r.name === 'role' || r.name === 'user-new' || r.name === 'user',
+    });
   }
   if (canManageCategories(profile)) {
     list.push({ path: 'kategorien', label: 'Kategorien', current: (r) => r.name === 'categories' });

@@ -9,6 +9,21 @@ export function canManageUsers(profile: Profile): boolean {
   return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('users.manage'));
 }
 
+/** Rollen anlegen, ändern, löschen: gefährlich, nur uneingeschränkt. */
+export function canManageRoles(profile: Profile): boolean {
+  return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('roles.manage'));
+}
+
+/** Menü „Benutzer & Rollen“: mit Benutzer- oder Rollenverwaltung. */
+export function canSeeUsersArea(profile: Profile): boolean {
+  return canManageUsers(profile) || canManageRoles(profile);
+}
+
+/** Hat der Handelnde das Recht uneingeschränkt (Voraussetzung, es einer Rolle zu geben oder zu nehmen)? */
+export function holdsUnrestricted(profile: Profile, permission: string): boolean {
+  return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes(permission));
+}
+
 export function canManageCategories(profile: Profile): boolean {
   return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('categories.manage'));
 }
@@ -23,8 +38,24 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'users.manage': 'Benutzer verwalten, Audit-Log, Sperren aufheben',
   'categories.manage': 'Kategorien verwalten',
   'network.internal_targets': 'Interne Ziele freigeben',
+  'roles.manage': 'Rollen und Rechte verwalten',
   'settings.manage': 'Einstellungen ändern',
   'shell.targets': 'Ausführungsorte für Shell-Jobs verwalten',
+};
+
+/** Ein Erklärsatz je Recht für den Rollen-Editor. */
+export const PERMISSION_HINTS: Record<string, string> = {
+  'jobs.view': 'Jobs, Läufe und Verlauf der erlaubten Kategorien ansehen.',
+  'jobs.run': 'Jobs von Hand starten und laufende Läufe abbrechen.',
+  'jobs.edit_http': 'HTTP-Jobs anlegen, ändern und löschen.',
+  'jobs.edit_shell': 'Shell-Jobs anlegen und ändern. Das führt Befehle auf freigegebenen Zielen aus.',
+  'status_pages.edit': 'Statusseiten bearbeiten.',
+  'users.manage': 'Benutzer anlegen, Rollen zuweisen, Passwörter und 2FA zurücksetzen, Audit-Log lesen.',
+  'categories.manage': 'Kategorien anlegen, umbenennen und löschen.',
+  'network.internal_targets': 'Interne Netze und Hosts für HTTP-Jobs freigeben. Das lockert den Schutz.',
+  'settings.manage': 'Globale Einstellungen ändern.',
+  'shell.targets': 'Container und Host-Profile für Shell-Jobs freigeben.',
+  'roles.manage': 'Eigene Rollen anlegen, ihre Rechte ändern und sie löschen.',
 };
 
 export function permissionLabel(key: string): string {

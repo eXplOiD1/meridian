@@ -50,9 +50,10 @@ export function AssignmentEditor({ catalog, categories, value, onChange, disable
                 Zuweisung entfernen
               </button>
             </div>
+            {role?.description != null && <p className="hint">{role.description}</p>}
             {dangerous && (
               <Alert tone="warn">
-                Diese Rolle enthält gefährliche Rechte (Benutzer, Einstellungen, Kategorien, interne Ziele). Sie gilt nur für alle Kategorien. Das Ändern verlangt dein Passwort.
+                Diese Rolle enthält gefährliche Rechte. Sie gilt nur für alle Kategorien. Das Ändern verlangt dein Passwort.
               </Alert>
             )}
             <label className="check">
@@ -92,7 +93,7 @@ export function AssignmentEditor({ catalog, categories, value, onChange, disable
         );
       })}
       {error !== undefined && <p className="field__error">{error}</p>}
-      {free.length > 0 && value.length < 3 && (
+      {free.length > 0 && value.length < (catalog.max_assignments ?? 10) && (
         <div className="row">
           <label className="field__label" htmlFor={base + '-add'}>
             Rolle hinzufügen

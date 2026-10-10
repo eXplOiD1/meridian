@@ -14,8 +14,10 @@ export type Route =
   | { name: 'job-new' }
   | { name: 'job'; id: string }
   | { name: 'job-edit'; id: string }
-  | { name: 'users' }
+  | { name: 'users'; roleId?: string }
   | { name: 'roles' }
+  | { name: 'role-new' }
+  | { name: 'role'; id: string }
   | { name: 'user-new' }
   | { name: 'user'; id: string }
   | { name: 'categories' };
@@ -23,7 +25,9 @@ export type Route =
 const ID = /^[1-9][0-9]{0,17}$/;
 
 export function parseRoute(hash: string): Route {
-  const parts = hash.replace(/^#\/?/, '').split('/').filter((part) => part !== '');
+  const [pathPart = '', queryPart = ''] = hash.replace(/^#\/?/, '').split('?', 2);
+  const parts = pathPart.split('/').filter((part) => part !== '');
+  const roleParam = new URLSearchParams(queryPart).get('rolle');
   const [first, second, third] = parts;
   if (parts.length === 0) {
     return { name: 'home' };
@@ -42,10 +46,16 @@ export function parseRoute(hash: string): Route {
   }
   if (first === 'benutzer') {
     if (parts.length === 1) {
-      return { name: 'users' };
+      return roleParam !== null && ID.test(roleParam) ? { name: 'users', roleId: roleParam } : { name: 'users' };
     }
     if (parts.length === 2 && second === 'rollen') {
       return { name: 'roles' };
+    }
+    if (parts.length === 3 && second === 'rollen' && third === 'neu') {
+      return { name: 'role-new' };
+    }
+    if (parts.length === 3 && second === 'rollen' && third !== undefined && ID.test(third)) {
+      return { name: 'role', id: third };
     }
     if (parts.length === 2 && second === 'neu') {
       return { name: 'user-new' };
