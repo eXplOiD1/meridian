@@ -90,6 +90,7 @@ final class AppFactory
             $sessions,
             $clock,
         );
+        (new AccountController($config, $sessionAuth, $csrf, $users, $sessions, $auth, $audit, $masker, $clock))->register($kernel);
         (new UserController($config, $sessionAuth, $csrf, $users, $access, $roles, $sessions, $throttle, new UserPresenter($masker), $userAdmin, new AssignmentValidator($roles)))->register($kernel);
         (new AdminController($sessionAuth, $csrf, $users, $access, $audit, $throttle, $masker))->register($kernel);
         (new JobController(
