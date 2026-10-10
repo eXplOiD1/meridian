@@ -1,0 +1,10 @@
+# syntax=docker/dockerfile:1
+#
+# Sandbox für Shell-Jobs (docs/decisions/0004, E2/O4). Die compose.yaml enthält denselben Inhalt inline
+# (Dienst "sandbox"); bei Änderungen beide anpassen. Erweitern: eigenes Image und eigener Dienst.
+# Basis-Image-Pin: Version alpine:3.20; für Reproduzierbarkeit den Digest ergänzen (alpine:3.20@sha256:<Digest>).
+FROM alpine:3.20
+RUN apk add --no-cache bash curl jq ca-certificates tzdata \
+ && adduser -D -u 1001 -h /tmp sandbox
+USER 1001:1001
+WORKDIR /tmp
