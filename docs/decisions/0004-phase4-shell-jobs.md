@@ -1077,6 +1077,11 @@ eingeschränkte Admins nie. Damit entschlüsselt der Web-Prozess `payload_enc` v
 (`JobSourceReader`); E6 („nur der Shell-Worker liest es“) gilt sonst weiter. Der Web-Dienst mountet
 `meridian-secrets` (compose.yaml, `&common`). Skript und Umgebung bleiben „nur als Ganzes ersetzen“ (PUT).
 
+**Herkunftsprüfung (Korrektur):** Browser senden `Sec-Fetch-Site` nur bei vertrauenswürdigen Herkünften (HTTPS,
+localhost), nicht bei `http://<LAN-IP>` (NAS-Betrieb). Daher: Ist der Header da, muss er `same-origin` sein; fehlt er,
+verlangt der Endpunkt das `X-CSRF-Token` (gegen die Sitzung geprüft; ohne CORS-Preflight setzt es keine fremde Seite)
+und, falls Origin/Referer vorhanden, einen passenden Host. Das Frontend sendet das Token bei diesem GET mit.
+
 ## Nachtrag N2 (2026-10-10): Container-Freigabe nur in der Oberfläche (ersetzt §5.5/§7.1/E10 zu `MERIDIAN_SHELL_CONTAINERS`)
 
 Entscheidung Alex: Einen Container für Shell-Jobs freizugeben darf **nur einmal** nötig sein, in Meridian unter
