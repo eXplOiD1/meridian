@@ -7,7 +7,8 @@ ist begonnen, Phase 4 (Shell-Jobs) ist entworfen. Normativ: `docs/decisions/0003
 ## Stand Phase 4a
 Fertig und gepusht: S1 (Migration 0009, Rechte, GrantPolicy, letzter Admin), S2 (Einmalpasswort, Passwort-Bestätigung, Sitzungen),
 S3 (lesende Benutzer-API), S7 (Kategorien-Verwaltung API + CLI).
-**Angefangen, ungeprüft: S4 (schreibende Benutzer-API).** Der Stand liegt als
+**S4 und S6 sind fertig (2e73311, 2fb0401).** Offen in 4a: S5, S8, U1–U5, Review.
+(alter Hinweis, erledigt:) S4 Der Stand liegt als
 `docs/wip/phase4a-s4-benutzer-schreib-api-unfertig.patch` (`git apply`; betrifft `AppFactory`, `UserController`, `UserRepository`
 und neue Klassen `Actor`, `CreatedUser`, `DisplayName`, `UserAdminService`, `UserRequestRefused`). Danach Tests, Qualitätskette,
 committen, Patch löschen.
@@ -21,6 +22,11 @@ committen, Patch löschen.
 4. Review Phase 4a (sicherheit); dabei auch prüfen: einmaliges 403 bei `POST /api/jobs` direkt nach frischer Sitzung (nicht reproduziert).
 5. **Phase 4 – Shell-Jobs** nach ADR 0004 (neue Compose-Struktur mit Proxy `wollomatic/socket-proxy`, Sandbox-Container, Worker).
 6. PHPStan max unter PHP 8.4 bzw. in CI belegen; neue ZIP an Alex nach jedem Abschluss.
+
+## Arbeitsweise (Sparmodus, Entscheidung Alex 10.10.)
+- Agenten starten mit Stufe **mittel** (Umsetzung); **hoch** nur für Entwürfe und das Phasen-Review der Sicherheit. Stufe nur beim Start einstellbar.
+- Zwischendurch nur gezielte Tests; volle Suite, PHPStan, Psalm, Taint, smoke, audit einmal pro Commit. Mutationsprüfung nur für zentrale Sicherheitsregeln.
+- Höchstens zwei Agenten parallel, wenige größere Schritte, Review nur am Phasenende, kurze Berichte.
 
 ## Beim Deploy zu beachten
 - Compose auf dem NAS aus dem Repository neu einfügen (Raw-Datei `compose.yaml`; **keine** alte Git-Context-Fassung: das NAS hat kein `git`).
