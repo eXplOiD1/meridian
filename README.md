@@ -115,11 +115,12 @@ docker exec -it meridian-web php bin/meridian auth:unlock 192.168.0.25
 docker exec -it meridian-web php bin/meridian shell:targets add docker meridian-sandbox --user=1001 --category=NAS --note="Sandbox"
 docker exec -it meridian-web php bin/meridian shell:targets add docker nextcloud --user=www-data --user=root --default-user=www-data
 docker exec -it meridian-web php bin/meridian shell:targets list
+docker exec -it meridian-web php bin/meridian shell:targets update 3 --user=www-data --default-user=www-data --note="ohne root"
 docker exec -it meridian-web php bin/meridian shell:targets remove 3
 ```
 
 Ohne `--category` gilt die Freigabe global, sonst nur für Jobs dieser Kategorie. Ohne `--default-user` gilt der einzige
-angegebene Benutzer als Standard. Skript und Umgebungsvariablen eines Shell-Jobs sind Geheimnisse: Sie sind nach dem
+angegebene Benutzer als Standard. `update` ändert nur die genannten Felder (`--name`, `--category=NAME` oder `--global`, `--user`, `--default-user`, `--note`); die Art bleibt fest, Jobs mit dem bisherigen Ort oder Benutzer werden ab dem nächsten Lauf abgelehnt. Skript und Umgebungsvariablen eines Shell-Jobs sind Geheimnisse: Sie sind nach dem
 Speichern nicht mehr lesbar und werden nur als Ganzes ersetzt.
 
 Passwörter werden nie als Argument übergeben (sie würden in der Shell-History und der Prozessliste landen),

@@ -127,6 +127,78 @@ final class ShellTargetStore
     }
 
     /**
+     * Ändert eine Freigabe (Name, Geltungsbereich, Benutzer, Standardbenutzer, Notiz; die Art nie) und schreibt
+     * `shell.target_updated` (alt → neu) in **derselben** Transaktion. Null, wenn es die Freigabe nicht gibt.
+     * Jobs, die auf den alten Ort oder Benutzer zeigen, lehnt der Runner ab dem nächsten Lauf ab
+     * ({@see \Meridian\Runner\Shell\ShellTargetPolicy::check()}); `affected_jobs` zählt sie.
+     *
+     * @return array{record: ShellTargetRecord, affected_jobs: int}|null
+     *
+     * @throws InvalidShellTarget Art geändert oder doppelte Freigabe
+     */
+    public function update(int $id, ShellTargetInput $input, ?int $userId, AuditLog $audit): ?array
+    {
+        return $this->db->immediate(function () use ($id, $input, $userId, $audit): ?array {
+            $old = $this->find($id);
+            if ($old === null) {
+                return null;
+            }
+            if ($old->target->kind !== $input->target->kind) {
+                throw new InvalidShellTarget('kind', 'Die Art lässt sich nicht ändern. Den Ort entfernen und neu anlegen.');
+            }
+            $exists = $this->db->fetchOne(
+                'SELECT id FROM shell_targets WHERE kind = :kind AND name = :name AND COALESCE(category_id, 0) = COALESCE(:category, 0) AND id <> :id',
+                ['kind' => $input->target->kind->value, 'name' => $input->target->name, 'category' => $input->categoryId, 'id' => $id],
+            );
+            if ($exists !== null) {
+                throw new InvalidShellTarget('name', 'Diesen Ausführungsort gibt es für diesen Geltungsbereich schon (gleiche Art, gleicher Name, global oder gleiche Kategorie).');
+            }
+            $this->db->execute(
+                'UPDATE shell_targets SET name = :name, category_id = :category, users_json = :users, default_user = :default, note = :note WHERE id = :id',
+                [
+                    'name' => $input->target->name,
+                    'category' => $input->categoryId,
+                    'users' => json_encode($input->users, JSON_THROW_ON_ERROR),
+                    'default' => $input->defaultUser,
+                    'note' => $input->note,
+                    'id' => $id,
+                ],
+            );
+            $new = $this->find($id);
+            if ($new === null) {
+                throw new \RuntimeException('Der Ausführungsort wurde gespeichert, ist aber nicht lesbar.');
+            }
+            $hints = [];
+            if ($old->users !== $new->users || $old->defaultUser !== $new->defaultUser) {
+                $hints[] = 'Benutzer geändert';
+            }
+            if ($old->allowsRoot() !== $new->allowsRoot()) {
+                $hints[] = $new->allowsRoot() ? 'root freigegeben' : 'root-Freigabe entfernt';
+            }
+            $audit->record($userId, 'shell.target_updated', '#' . $id . ' ' . $old->describe() . ' → ' . $new->describe() . ($hints === [] ? '' : ' [' . implode(', ', $hints) . ']'));
+
+            return ['record' => $new, 'affected_jobs' => $this->jobsUsing($old)];
+        });
+    }
+
+    /**
+     * Zahl der Shell-Jobs, die auf diesen Ort zeigen (Art und Name; bei einer Kategorie nur Jobs dieser Kategorie).
+     * Ohne Entschlüsselung: gelesen wird nur `config_json` (keine Geheimnisse).
+     */
+    public function jobsUsing(ShellTargetRecord $record): int
+    {
+        $row = $this->db->fetchOne(
+            "SELECT COUNT(*) AS n FROM jobs
+              WHERE type = 'shell'
+                AND json_extract(config_json, '$.shell.target.kind') = :kind
+                AND json_extract(config_json, '$.shell.target.name') = :name
+                AND (:category IS NULL OR category_id = :category)",
+            ['kind' => $record->target->kind->value, 'name' => $record->target->name, 'category' => $record->categoryId],
+        );
+        return isset($row['n']) && is_int($row['n']) ? $row['n'] : 0;
+    }
+
+    /**
      * Löscht eine Freigabe und schreibt `shell.target_removed` in derselben Transaktion; null, wenn es sie nicht
      * gibt (dann kein Audit-Eintrag). Jobs, die den Ort nutzen, schlagen ab dem nächsten Lauf fehl, nie fallen sie
      * auf „global“ zurück.
