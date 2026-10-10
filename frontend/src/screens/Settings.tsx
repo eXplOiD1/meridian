@@ -652,7 +652,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
         Shell-Jobs laufen nie in Meridian selbst, sondern nur an einem hier freigegebenen Ort: in einem Docker-Container oder als Host-Profil. Eine Freigabe gilt global oder für genau eine Kategorie.
       </p>
       <Alert tone="warn">
-        Eine Freigabe erlaubt Administratoren mit dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle an diesem Ort. Der Container muss zusätzlich in MERIDIAN_SHELL_CONTAINERS stehen. Gib nur Orte frei, die dafür gedacht sind, und wähle
+        Eine Freigabe erlaubt Administratoren mit dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle an diesem Ort. Diese Freigabe ist die einzige nötige Einstellung: Der Container muss laufen und der Name muss exakt stimmen. Meridians eigene Container (meridian-…, außer meridian-sandbox) sind gesperrt. Gib nur Orte frei, die dafür gedacht sind, und wähle
         möglichst eine Kategorie.
       </Alert>
       <p className="hint">

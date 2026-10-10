@@ -13,6 +13,8 @@ namespace Meridian\Runner\Shell;
  * stehen (genau, kein Muster); `root` (und UID 0) also nur, wenn ein Admin es ausdrücklich eingetragen hat. Ohne
  * Benutzerangabe gilt der Standardbenutzer der Freigabe, nie der des Containers. `host` kennt keinen Benutzer.
  *
+ * Meridians eigene Container ({@see InfrastructureContainers}) lehnt die Prüfung immer ab, auch mit Freigabe.
+ *
  * Doppelt hält besser: auch wenn die Quelle fremde Freigaben liefert, zählen nur Zeilen, die zu Art, Name und
  * Kategorie passen.
  */
@@ -27,6 +29,9 @@ final class ShellTargetPolicy
      */
     public function check(ShellTarget $target, ?string $user, ?int $categoryId): ?ShellTargetRefusal
     {
+        if ($target->kind === ShellTargetKind::Docker && InfrastructureContainers::isInfrastructure($target->name)) {
+            return ShellTargetRefusal::Infrastructure;
+        }
         $grants = $this->matching($target, $categoryId);
         if ($grants === []) {
             return ShellTargetRefusal::TargetNotAllowed;

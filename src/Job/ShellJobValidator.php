@@ -65,7 +65,7 @@ final class ShellJobValidator
         $resolved = $user;
         if ($target !== null && !isset($errors['shell.target']) && !isset($errors['shell.user']) && $categoryValid) {
             $refusal = $this->targets === null ? ShellTargetRefusal::TargetNotAllowed : $this->targets->check($target, $user, $categoryId);
-            if ($refusal === ShellTargetRefusal::TargetNotAllowed) {
+            if ($refusal === ShellTargetRefusal::TargetNotAllowed || $refusal === ShellTargetRefusal::Infrastructure) {
                 $errors['shell.target'] = $refusal->message();
             } elseif ($refusal === ShellTargetRefusal::UserNotAllowed) {
                 $errors['shell.user'] = $user !== null && ShellRules::isRootUser($user) ? self::MSG_ROOT : $refusal->message();

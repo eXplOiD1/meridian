@@ -42,7 +42,7 @@ Die `compose.yaml` bringt dafür mit:
 - `worker-http` und `worker-shell`: getrennte Worker (`worker:run --type=http|shell`); der `scheduler` plant nur
   (kein Hauptschlüssel, kein Netz). `worker-shell` hat kein Netz und erreicht nur den Docker-Proxy.
 - `docker-proxy` (`wollomatic/socket-proxy`): der **einzige** Dienst mit `/var/run/docker.sock` (nur lesend eingebunden).
-  Er lässt nur `_ping`, `version`, Container-Info der erlaubten Namen und Exec (anlegen, starten, abfragen) durch;
+  Er lässt nur `_ping`, `version`, Container-Info und Exec (anlegen, starten, abfragen) durch;
   `containers/create`, `start`, `rm` u. a. gibt es nicht (403). Er hat kein Netz und keine IP-Adresse, sondern einen
   Unix-Socket im Volume `meridian-docker-proxy`, das nur er und `worker-shell` einbinden.
 - `sandbox` (`meridian-sandbox`): Standard-Ausführungsort mit busybox, bash, curl, jq, ca-certificates, tzdata,
@@ -50,9 +50,10 @@ Die `compose.yaml` bringt dafür mit:
   freigegeben**: in Meridian unter Einstellungen -> Ausführungsorte `docker meridian-sandbox` mit Benutzer `1001`
   eintragen. Mehr Werkzeuge: eigenes Image und eigener Dienst (`docker/Dockerfile.sandbox` als Vorlage).
 
-Weitere Container freigeben: Name in `MERIDIAN_SHELL_CONTAINERS` eintragen (`.env`, getrennt durch `|`, nur
-`A-Z a-z 0-9 _ -`, z. B. `meridian-sandbox|nextcloud`), `docker compose up -d`, und den Container zusätzlich in Meridian
-als Ausführungsort freigeben. Beides muss stimmen (zwei Schichten).
+Weitere Container freigeben: nur in Meridian unter Einstellungen -> Ausführungsorte (Admin mit dem Recht
+`shell.targets`); in `compose.yaml` oder `.env` ist nichts einzutragen. Der Container muss laufen und der Name exakt
+stimmen. Meridians eigene Container (`web`, `scheduler`, `worker-http`, `worker-shell`, `docker-proxy`, alles mit dem
+Präfix `meridian-` außer `meridian-sandbox`) lehnt Meridian als Ausführungsort ab.
 
 Das Proxy-Image mit Digest festnageln (nie `:latest`): `MERIDIAN_PROXY_IMAGE=wollomatic/socket-proxy:1.13.1@sha256:<Digest>`
 in der `.env`. Den Digest vorher selbst prüfen und eintragen, z. B. mit `docker buildx imagetools inspect

@@ -13,14 +13,14 @@ enum ShellTargetKind: string
     case Docker = 'docker';
     case Host = 'host';
 
-    /** Allowlist-Muster für den Namen: Docker ohne Punkt (passend zur Proxy-Regel), Host-Profil in Kleinbuchstaben. */
+    /** Allowlist-Muster für den Namen: Docker wie bei Docker selbst (auch Punkt), Host-Profil in Kleinbuchstaben. */
     /**
      * @return non-empty-string
      */
     public function namePattern(): string
     {
         return match ($this) {
-            self::Docker => '/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/D',
+            self::Docker => '/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D',
             self::Host => '/^[a-z][a-z0-9-]{0,31}$/D',
         };
     }

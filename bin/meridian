@@ -151,7 +151,7 @@ if (is_dir($config->dataDir)) {
             return new Scheduler($lease, $planner, $staleRuns, $worker);
         },
     ));
-    // Shell-Kinder: beim Start und alle 60 s exec_ref aufräumen, Freigaben gegen MERIDIAN_SHELL_CONTAINERS prüfen.
+    // Shell-Kinder: beim Start und alle 60 s exec_ref aufräumen, Docker-Proxy prüfen.
     $maintenance = null;
     $app->add(new WorkerRunCommand(
         static fn (JobType $type): Worker => new Worker($db, $clock, WorkerIdentity::generate($type), [$type], $runnersFor($type), $authorizer, null, new DbLiveLogFactory($db, $clock)),
@@ -161,11 +161,7 @@ if (is_dir($config->dataDir)) {
             if ($type !== JobType::Shell) {
                 return [];
             }
-            $maintenance ??= new ShellWorkerMaintenance(
-                $db,
-                DockerProxyClient::fromEnvironment($env['MERIDIAN_DOCKER_PROXY'] ?? null),
-                $env['MERIDIAN_SHELL_CONTAINERS'] ?? null,
-            );
+            $maintenance ??= new ShellWorkerMaintenance($db, DockerProxyClient::fromEnvironment($env['MERIDIAN_DOCKER_PROXY'] ?? null));
 
             return $maintenance->run($first);
         },
