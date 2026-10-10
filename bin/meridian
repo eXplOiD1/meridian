@@ -75,7 +75,7 @@ if (is_dir($config->dataDir)) {
     $app->add(new CategoryDeleteCommand($categoryService));
     $throttle = new LoginThrottle($db, new SystemClock());
     $app->add(new UnlockCommand($throttle, $audit));
-    $app->add(new UserPasswordCommand(new PasswordReset($users, new PasswordHasher(), new SessionManager($db, new SystemClock()), $throttle, $audit)));
+    $app->add(new UserPasswordCommand(new PasswordReset($users, new PasswordHasher(), new SessionManager($db, new SystemClock()), $throttle, $audit, new SystemClock())));
     $app->add(new InternalTargetsCommand(new InternalTargetStore($db, new SystemClock(), InfrastructureTargets::fromConfig($config)), $audit));
     $settingsService = new SettingsService($db, $audit, new SystemClock());
     $app->add(new SettingsGetCommand($settingsService));

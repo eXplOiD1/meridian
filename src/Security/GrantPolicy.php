@@ -65,4 +65,17 @@ final class GrantPolicy
 
         return true;
     }
+
+    /**
+     * Verlangt `users.manage` ohne Kategorie (über {@see AccessControl::require()}). Die Benutzerverwaltung prüft das
+     * am Anfang jeder Schreibtransaktion noch einmal mit frisch geladenen Rechten (Review 4a N1).
+     *
+     * @param list<RoleGrant> $actorGrants
+     *
+     * @throws AccessDenied
+     */
+    public function requireUserManager(array $actorGrants): void
+    {
+        $this->access->require($actorGrants, Permission::ManageUsers);
+    }
 }

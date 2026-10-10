@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
-import { ApiError, PASSWORD_CHANGE_EVENT, request, SESSION_ENDED_EVENT } from './lib/api';
+import { ApiError, PASSWORD_CHANGE_EVENT, request, SESSION_ENDED_EVENT, setCsrfRefresher } from './lib/api';
 import { canManageCategories, canManageUsers } from './lib/permissions';
 import type { Route } from './lib/useHashRoute';
 import { navigate, useHashRoute } from './lib/useHashRoute';
@@ -57,6 +57,24 @@ export function App() {
     void refresh();
   }, [refresh]);
 
+  // CSRF-Token veraltet (403 mit csrf_failed): einmal /me neu laden und das neue Token übernehmen. Die abgewiesene
+  // Anfrage wiederholt niemand automatisch; die Stelle zeigt „Sitzung aktualisiert, bitte erneut absenden.“
+  useEffect(() => {
+    setCsrfRefresher(async (): Promise<boolean> => {
+      try {
+        const profile = await request<Profile>('GET', '/api/auth/me');
+        setSession({ status: 'in', profile });
+        return true;
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          setSession({ status: 'anonymous' });
+        }
+        return false;
+      }
+    });
+    return () => setCsrfRefresher(null);
+  }, []);
+
   // Der Server hat die Sitzung beendet (z. B. Passwort per Befehl neu gesetzt): zurück zur Anmeldung statt Fehlermeldungen.
   useEffect(() => {
     const ended = (): void => {
@@ -75,6 +93,11 @@ export function App() {
     window.addEventListener(PASSWORD_CHANGE_EVENT, required);
     return () => window.removeEventListener(PASSWORD_CHANGE_EVENT, required);
   }, [refresh]);
+
+  // Neues CSRF-Token aus einer Antwort (Passwortwechsel ersetzt die Sitzung) direkt übernehmen.
+  const adoptCsrf = useCallback((token: string): void => {
+    setSession((current) => (current.status === 'in' ? { status: 'in', profile: { ...current.profile, csrf_token: token } } : current));
+  }, []);
 
   const logout = useCallback(async (profile: Profile): Promise<void> => {
     try {
@@ -113,7 +136,7 @@ export function App() {
     return (
       <div className="center">
         <div className="login__card">
-          <PasswordCard profile={profile} forced onChanged={refresh} />
+          <PasswordCard profile={profile} forced onChanged={refresh} onCsrfToken={adoptCsrf} />
           <button type="button" className="btn btn--ghost" onClick={() => void logout(profile)}>
             Abmelden
           </button>
@@ -130,7 +153,7 @@ export function App() {
   return (
     <Layout profile={profile} route={effective} kicker={heading.kicker} title={heading.title} onLogout={() => void logout(profile)}>
       {effective.name === 'home' && <Overview profile={profile} />}
-      {effective.name === 'konto' && <Account profile={profile} onChanged={refresh} />}
+      {effective.name === 'konto' && <Account profile={profile} onChanged={refresh} onCsrfToken={adoptCsrf} />}
       {effective.name === 'settings' && <Settings profile={profile} />}
       {effective.name === 'audit' && <Audit profile={profile} />}
       {effective.name === 'jobs' && <Jobs profile={profile} />}

@@ -17,7 +17,7 @@ Skills und Hook: §10.
 | `users` (`username` UNIQUE NOCASE, `display_name`, `password_hash`, `totp_*`, `is_active`, `last_login_at`), `roles` (3 Standardrollen aus 0001), `role_permissions`, `user_roles` (UNIQUE `user_id, role_id`, `all_categories` aus 0004), `user_role_categories` (CASCADE auf Kategorie) | Mehrere Zuweisungen je Benutzer sind schon möglich. Neu: Soft-Delete, Pflicht-Passwortwechsel, Ablauf des Einmalpassworts, Sitzungsangaben, Recht `categories.manage`, Trigger für „alle ⇒ keine Zeilen“. |
 | `UserRepository::grantsFor()` lädt nur aktive Benutzer, „alle“ nur bei Flag **und** ohne Zeilen | Bleibt die einzige Quelle für Rechte. Pflicht-Passwortwechsel und Löschen wirken hier fail-closed (§3.3). |
 | `RoleGrant::allows()` verweigert gefährliche Rechte jeder beschränkten Rolle; `AccessControl::scope()` | Unverändert. Neue Prüfungen gegen Rechteausweitung bauen auf `can()` auf, nicht daneben. |
-| CLI `user:create` (immer `all_categories = 1`), `user:password` (`PasswordReset`: Sitzungen beenden, Sperre aufheben, Audit), `category:create`, `auth:unlock` | Web-API benutzt dieselben Bausteine. CLI bleibt Notausgang (Vertrauensgrenze OS-Benutzer). |
+| CLI `user:create` (immer `all_categories = 1`), `user:password` (`PasswordReset`: Pflichtwechsel/Ablauf löschen, `password_changed_at` setzen, gelöschte Benutzer ablehnen, Sitzungen beenden, Sperre aufheben, Audit; Review 4a N2), `category:create`, `auth:unlock` | Web-API benutzt dieselben Bausteine. CLI bleibt Notausgang (Vertrauensgrenze OS-Benutzer). |
 | `AuthService::enableTwoFactor/disableTwoFactor` prüfen das Passwort mit `reserveOrFail()`/`fail()` gegen die Sperre | Daraus wird die Passwort-Bestätigung für gefährliche Verwaltungsaktionen (`confirmPassword`, §4.4). |
 | `SessionManager` speichert nur Hash, Zeiten; `endAllForUser()` | Für die Sitzungsübersicht fehlen Kennung für „diese Sitzung“, Browser, Adresse (B8). |
 | FK auf `users`: `audit_log.user_id`, `runs.started_by`, `jobs.owner_id`, `settings.updated_by`, `http_internal_targets.created_by` mit `SET NULL`; `sessions`, `api_tokens`, `recovery_codes`, `user_roles` mit `CASCADE` | Hartes Löschen würde die Urheberschaft im Audit-Log und im Verlauf löschen → Soft-Delete (B2). |
@@ -152,7 +152,9 @@ Ergänzung möglich (Token im URL-Fragment, Hash in der DB), nicht im MVP.
 
 ### E7 – Gefährliche Verwaltungsaktionen verlangen das eigene Passwort (B5)
 
-Admin-Zuweisung vergeben oder entziehen, Passwort-Reset, 2FA-Reset, Löschen: Anfragekörper enthält
+Admin-Zuweisung vergeben oder entziehen, Passwort-Reset, 2FA-Reset, Löschen sowie Deaktivieren **und** Aktivieren eines
+Benutzers mit gefährlicher Rolle (`Role::isDangerous()`, z. B. Admin; Review 4a M1, Bestätigung vor der Transaktion,
+`deactivate`/`activate` nehmen dafür den optionalen Körper `{current_password}`, unbekannte Felder 422): Anfragekörper enthält
 `current_password` des **Handelnden**. Prüfung über `AuthService::confirmPassword()` mit derselben Sperre wie die
 Anmeldung (`reserveOrFail()` → `fail()` mit Audit `auth.reauth_failed`; gesperrt → 429 mit `Retry-After`). Eine
 gestohlene Sitzung allein reicht so nicht, um sich ein zweites Admin-Konto zu bauen oder 2FA eines anderen
@@ -592,7 +594,7 @@ Bis zur Entscheidung gilt die Empfehlung (fett).
 | B7 | Recht für Kategorien | neues `categories.manage` (gefährlich) · `users.manage` mitbenutzen | **Neues Recht**, per Migration nur an Admin |
 | B8 | Sitzungsübersicht mit Browser und IP speichern | ja, nur für den Inhaber · nur Zeiten · keine Übersicht | **Ja, nur für den Inhaber sichtbar**; Admin sieht bei anderen nur die Anzahl |
 | B9 | 2FA für Admins erzwingen | jetzt · später als Einstellung · nie | **Später als Einstellung** (lockert nichts, verschärft; eigener Schlüssel in `settings`); im MVP Hinweis in der Benutzerliste |
-| B10 | Darf ein Admin einen anderen Admin zurücksetzen, deaktivieren, löschen? | ja mit Bestätigung · nein | **Ja**, mit Passwort-Bestätigung und Audit; die Invariante schützt den letzten |
+| B10 | Darf ein Admin einen anderen Admin zurücksetzen, deaktivieren, löschen? | ja mit Bestätigung · nein | **Ja**, mit Passwort-Bestätigung (auch Deaktivieren/Aktivieren eines Admins, Review 4a M1) und Audit; die Invariante schützt den letzten |
 | B11 | Benutzername änderbar? | nein · ja mit Audit | **Nein** (Anmeldename, Sperr-Bezug, Audit-Ziel) |
 | B12 | Zuweisungen, die nach Kategorie-Löschung leer sind | behalten und markieren · automatisch löschen | **Behalten und als „wirkungslos“ markieren** (sichtbar statt still; gewähren nichts) |
 | B13 | Admin-Passwort-Reset und 2FA | 2FA bleibt · 2FA wird mit zurückgesetzt | **2FA bleibt** (wie `user:password`); 2FA-Reset ist eine eigene Aktion |

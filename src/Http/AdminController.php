@@ -81,7 +81,7 @@ final class AdminController
         }
         // Reihenfolge wie überall (mer-security §1): CSRF/Herkunft vor dem Recht.
         if (!$this->csrf->check($request, $session->token)) {
-            return self::error(403, 'CSRF-Prüfung fehlgeschlagen.');
+            return JsonReply::csrfFailed();
         }
         $this->access->require($this->users->grantsFor($session->userId), Permission::ManageUsers);
 

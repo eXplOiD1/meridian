@@ -164,7 +164,12 @@ final class UserController
 
     private function setActive(#[\SensitiveParameter] Request $request, bool $active): Response
     {
-        return $this->mutate($request, fn (Actor $actor): Response => JsonReply::json(['user' => $this->render($this->service->setActive($actor, self::id($request), $active))]));
+        return $this->mutate($request, function (Actor $actor) use ($request, $active): Response {
+            // Körper leer, `{}` oder `{current_password}` (Pflicht bei Admin-Zielen, sonst ignoriert).
+            $data = self::optionalBody($request, ['current_password']);
+
+            return JsonReply::json(['user' => $this->render($this->service->setActive($actor, self::id($request), $active, self::password($data)))]);
+        });
     }
 
     public function delete(#[\SensitiveParameter] Request $request): Response
@@ -350,7 +355,7 @@ final class UserController
             return JsonReply::error(401, 'Nicht angemeldet.');
         }
         if ($mutating && !$this->csrf->check($request, $session->token)) {
-            return JsonReply::error(403, 'CSRF-Prüfung fehlgeschlagen.');
+            return JsonReply::csrfFailed();
         }
         $grants = $this->users->grantsFor($session->userId);
         $this->access->require($grants, Permission::ManageUsers);

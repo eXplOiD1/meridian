@@ -87,7 +87,7 @@ Entwurf: `docs/decisions/0005-benutzer-und-rollen.md` (Abschnitte in Klammern). 
 | [x] | U4 Kategorien-Seite mit Folgen-Vorschau (§7) | frontend |
 | [x] | U5 Mein Konto (Anzeigename, Passwort, Sitzungen), Screen „Passwort festlegen“ (§7) | frontend |
 | [ ] | Regeländerungen aus §10 in `CLAUDE.md`, Skills und Hook eintragen | Koordinator |
-| [ ] | Review Phase 4a | sicherheit |
+| [x] | Review Phase 4a (Befunde M1 Admin aktivieren/deaktivieren mit Passwort, N1 Rechte in jeder Verwaltungs-Transaktion frisch, N2 `user:password` löscht Pflichtwechsel und lehnt Gelöschte ab — behoben; dazu `csrf_failed` + Token-Reload in der Oberfläche) | sicherheit |
 
 ## Phase 4 – Shell-Jobs (MVP 6 PT)
 

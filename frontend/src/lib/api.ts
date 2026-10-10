@@ -9,6 +9,19 @@ export const SESSION_ENDED_EVENT = 'meridian:session-ended';
 /** Der Server verlangt zuerst ein eigenes Passwort (Pflichtwechsel): Profil neu laden, dann zeigt die App nur diesen Schritt. */
 export const PASSWORD_CHANGE_EVENT = 'meridian:password-change-required';
 
+/** Meldung, wenn das CSRF-Token veraltet war und die App es neu geladen hat. Die Anfrage wird nie automatisch wiederholt. */
+export const CSRF_REFRESHED_MESSAGE = 'Sitzung aktualisiert, bitte erneut absenden.';
+
+let csrfRefresher: (() => Promise<boolean>) | null = null;
+
+/**
+ * Die App meldet hier, wie sie nach einem CSRF-Fehler das Profil (mit neuem Token) über /me neu lädt; true = geladen.
+ * Nur eine Stelle: `request()` ruft sie einmal je abgewiesener Anfrage auf und wiederholt die Anfrage selbst nicht.
+ */
+export function setCsrfRefresher(refresher: (() => Promise<boolean>) | null): void {
+  csrfRefresher = refresher;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly retryAfter: number | null;
@@ -17,6 +30,8 @@ export class ApiError extends Error {
   readonly fields: Record<string, string>;
   /** 503 bei der Anmeldung: Proxy-Header ohne MERIDIAN_TRUSTED_PROXIES. Konfigurationsfehler, kein Grund für erneute Versuche. */
   readonly trustedProxiesRequired: boolean;
+  /** 403 wegen veraltetem CSRF-Token (`csrf_failed: true`): das Token ist neu geladen, der Benutzer sendet erneut. */
+  readonly csrfFailed: boolean;
 
   constructor(
     message: string,
@@ -25,6 +40,7 @@ export class ApiError extends Error {
     totpRequired: boolean,
     fields: Record<string, string> = {},
     trustedProxiesRequired = false,
+    csrfFailed = false,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -33,6 +49,7 @@ export class ApiError extends Error {
     this.totpRequired = totpRequired;
     this.fields = fields;
     this.trustedProxiesRequired = trustedProxiesRequired;
+    this.csrfFailed = csrfFailed;
   }
 }
 
@@ -88,7 +105,21 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path
     if (response.status === 403 && isRecord(data) && data.password_change_required === true) {
       window.dispatchEvent(new Event(PASSWORD_CHANGE_EVENT));
     }
-    const message = isRecord(data) && typeof data.error === 'string' ? data.error : 'Unerwarteter Fehler (' + String(response.status) + ').';
+    let message = isRecord(data) && typeof data.error === 'string' ? data.error : 'Unerwarteter Fehler (' + String(response.status) + ').';
+    const csrfFailed = response.status === 403 && isRecord(data) && data.csrf_failed === true;
+    // Veraltetes Token (zweiter Tab, neue Anmeldung): einmal das Profil neu laden, dann erst den Fehler melden — so
+    // trägt das nächste Absenden schon das neue Token. Nie automatisch wiederholen (die Anfrage könnte etwas ändern).
+    if (csrfFailed && csrfRefresher !== null) {
+      let refreshed = false;
+      try {
+        refreshed = await csrfRefresher();
+      } catch {
+        refreshed = false;
+      }
+      if (refreshed) {
+        message = CSRF_REFRESHED_MESSAGE;
+      }
+    }
     const retry = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
     throw new ApiError(
       message,
@@ -97,6 +128,7 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path
       isRecord(data) && data.totp_required === true,
       fieldErrors(data),
       isRecord(data) && data.trusted_proxies_required === true,
+      csrfFailed,
     );
   }
 
