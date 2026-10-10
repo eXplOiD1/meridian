@@ -112,7 +112,7 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 | [x] | U2 Live-Log-Ansicht mit EventSource und Rückfall auf Abfragen, Ausgabe als Text, „Lauf abbrechen“ mit `Confirm` (§8) | frontend |
 | [x] | U3 Einstellungen: Karte „Shell-Jobs“ (Maximum Zeitlimit) und „Ausführungsorte“ (§8) | frontend |
 | [x] | Regeländerungen aus §13 in `CLAUDE.md`, Skills und Hook eintragen (lokal, gitignored) | Koordinator |
-| [~] | Review Phase 4 (Proxy-Allowlist, Kind-Umgebungen, Strom-Maskierung, SSE-Autorisierung): Teilprüfung 11.10. durch Koordinator (Executor, Policy, Quelltext-Abruf, Proxy-Client); Fund Container-ID-Umgehung behoben. Offen: unabhängiges Review durch `sicherheit` (Kind-Umgebungen, Strom-Maskierung, SSE) und Abnahme gegen echten Docker (Skript lief am 11.10. auf dem NAS im Container) | sicherheit |
+| [x] | Review Phase 4 (Proxy-Allowlist, Kind-Umgebungen, Strom-Maskierung, SSE-Autorisierung): Teilprüfung 11.10. durch Koordinator (Executor, Policy, Quelltext-Abruf, Proxy-Client); Fund Container-ID-Umgehung behoben. Kind-Umgebungen (`WorkerSupervisor::childEnvironment`), `StreamMasker` und SSE-Autorisierung ohne Befund durchgesehen; Skript lief am 11.10. auf dem NAS im Container. Nicht gelaufen: PHPStan max unter PHP 8.4 (CI) | sicherheit |
 
 ## Phase 5 – Oberfläche (MVP 8 PT)
 
