@@ -84,6 +84,7 @@ final class UserAdminService
 
         $id = $this->db->immediate(function () use ($actor, $username, $displayName, $assignments, $hash, $now, $expiresAt): int {
             $actor = $this->recheck($actor);
+            $this->assertScopesFitRoles($assignments);
             foreach ($assignments as $assignment) {
                 $this->assertMayAssign($actor, $assignment);
             }
@@ -155,6 +156,7 @@ final class UserAdminService
             if ($current->status === UserStatus::Deleted) {
                 throw UserRequestRefused::deleted();
             }
+            $this->assertScopesFitRoles($assignments);
             foreach ($assignments as $assignment) {
                 if (!self::unchanged($assignment, $current->assignments)) {
                     $this->assertMayAssign($actor, $assignment);
@@ -403,6 +405,32 @@ final class UserAdminService
     {
         if (!$this->policy->mayManage($actor->grants, $this->users->assignedGrantsFor($userId))) {
             throw UserRequestRefused::mayNotManage();
+        }
+    }
+
+    /**
+     * ADR 0006 E3, in der Schreibtransaktion mit **frisch** gelesenen Rollenrechten: Eine Rolle mit gefährlichem Recht
+     * nur für alle Kategorien. Der Validator prüft das vorher schon; eine gleichzeitige Rollenänderung (Rolle wird
+     * gefährlich) darf daraus keine beschränkte Zuweisung einer gefährlichen Rolle machen. Eine inzwischen gelöschte
+     * Rolle ist ein Feldfehler, kein 500.
+     *
+     * @param list<Assignment> $assignments
+     *
+     * @throws ValidationFailed
+     */
+    private function assertScopesFitRoles(array $assignments): void
+    {
+        $errors = [];
+        foreach ($assignments as $index => $assignment) {
+            $role = $this->roles->find($assignment->roleId);
+            if ($role === null) {
+                $errors['assignments.' . $index . '.role_id'] = AssignmentValidator::MESSAGE_ROLE;
+            } elseif (!$assignment->allCategories && $role->isDangerous()) {
+                $errors['assignments.' . $index . '.all_categories'] = AssignmentValidator::MESSAGE_DANGEROUS;
+            }
+        }
+        if ($errors !== []) {
+            throw new ValidationFailed($errors);
         }
     }
 
