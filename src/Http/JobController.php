@@ -7,6 +7,7 @@ namespace Meridian\Http;
 use Meridian\Auth\Clock;
 use Meridian\Auth\CsrfGuard;
 use Meridian\Auth\Session;
+use Meridian\Database\Timestamp;
 use Meridian\Job\CategoryRepository;
 use Meridian\Job\JobRepository;
 use Meridian\Job\JobService;
@@ -46,6 +47,10 @@ final class JobController
     private const DEFAULT_RUN_LIMIT = 50;
     private const MAX_PREVIEW = 10;
     private const DEFAULT_PREVIEW = 5;
+    /** Worker schreiben `seen_at` alle 10 s; älter als das gilt ein Worker als nicht aktiv. */
+    public const WORKER_ALIVE_SECONDS = 30;
+    public const NOTE_NO_SHELL_WORKER = 'Kein Shell-Worker aktiv: Dienst worker-shell prüfen.';
+    public const NOTE_NO_HTTP_WORKER = 'Kein HTTP-Worker aktiv: Dienst worker-http prüfen.';
 
     public function __construct(
         private readonly SessionAuth $sessionAuth,
@@ -315,7 +320,21 @@ final class JobController
         // Ein Lauf erbt die Kategorie seines Jobs.
         $this->access->require($grants, Permission::ViewJobs, $run->categoryName);
 
-        return JsonReply::json(['run' => $this->presenter->run($run, true, $this->settings->httpDisplay())]);
+        $data = $this->presenter->run($run, true, $this->settings->httpDisplay());
+        // Wartet ein Lauf, ohne dass ein Worker seines Typs lebt, soll das sichtbar sein statt still zu hängen:
+        // abgeleitetes Feld `worker_available` (nur bei wartenden Läufen) und ein fester Hinweis in der Notiz. Nie
+        // Kennung, Host oder PID eines Workers (H2).
+        if ($run->status === RunStatus::Queued) {
+            $cutoff = Timestamp::format($this->clock->now()->modify('-' . self::WORKER_ALIVE_SECONDS . ' seconds'));
+            $alive = $this->runs->workerAlive($run->jobType, $cutoff);
+            $data['worker_available'] = $alive;
+            if (!$alive) {
+                $hint = $run->jobType === JobType::Shell ? self::NOTE_NO_SHELL_WORKER : self::NOTE_NO_HTTP_WORKER;
+                $data['note'] = self::withHint($data['note'] ?? null, $hint);
+            }
+        }
+
+        return JsonReply::json(['run' => $data]);
     }
 
     /**
@@ -542,5 +561,11 @@ final class JobController
     private static function positiveInt(mixed $value): ?int
     {
         return is_string($value) && preg_match('/^[1-9][0-9]{0,17}$/D', $value) === 1 ? (int) $value : null;
+    }
+
+    /** Hängt den festen Hinweis an eine (schon bereinigte) Notiz an; nur für die Antwort, nie gespeichert. */
+    private static function withHint(mixed $note, string $hint): string
+    {
+        return is_string($note) && $note !== '' ? $note . ' ' . $hint : $hint;
     }
 }
