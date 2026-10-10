@@ -139,7 +139,7 @@ final class CategoryController
             return JsonReply::error(401, 'Nicht angemeldet.');
         }
         if ($changes && !$this->csrf->check($request, $session->token)) {
-            return JsonReply::error(403, 'CSRF-Prüfung fehlgeschlagen.');
+            return JsonReply::csrfFailed();
         }
         $this->access->require($this->users->grantsFor($session->userId), Permission::ManageCategories);
 

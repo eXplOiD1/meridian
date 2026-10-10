@@ -54,12 +54,12 @@ final class UserPasswordCommand extends Command
             return self::INVALID;
         }
         if (!$found) {
-            $output->writeln('<error>Diesen Benutzer gibt es nicht.</error>');
+            $output->writeln('<error>Benutzer nicht gefunden oder gelöscht. Es wurde nichts geändert.</error>');
 
             return self::FAILURE;
         }
 
-        $output->writeln('Passwort für ' . $username . ' gesetzt. Alle Sitzungen dieses Benutzers sind beendet, die Sperre ist aufgehoben.');
+        $output->writeln('Passwort für ' . $username . ' gesetzt. Ein Pflichtwechsel ist aufgehoben, alle Sitzungen dieses Benutzers sind beendet, die Sperre ist aufgehoben.');
 
         return self::SUCCESS;
     }

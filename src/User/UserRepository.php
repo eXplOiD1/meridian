@@ -141,11 +141,14 @@ final class UserRepository
     }
 
     /**
-     * Eigenes Passwort gesetzt (E10): Pflichtwechsel aus, Ablauf weg, Zeitpunkt vermerkt.
+     * Eigenes Passwort gesetzt (E10) bzw. per CLI `user:password` neu gesetzt: Pflichtwechsel aus, Ablauf weg,
+     * Zeitpunkt vermerkt. Gelöschte Benutzer bleiben unverändert.
+     *
+     * @return bool ob eine Zeile geändert wurde (false bei gelöschtem oder unbekanntem Benutzer)
      */
-    public function setOwnPasswordHash(int $userId, #[\SensitiveParameter] string $hash, \DateTimeImmutable $changedAt): void
+    public function setOwnPasswordHash(int $userId, #[\SensitiveParameter] string $hash, \DateTimeImmutable $changedAt): bool
     {
-        $this->db->execute(
+        return 1 === $this->db->execute(
             'UPDATE users SET password_hash = :h, password_must_change = 0, password_expires_at = NULL, password_changed_at = :c WHERE id = :id AND deleted_at IS NULL',
             ['h' => $hash, 'c' => Timestamp::format($changedAt), 'id' => $userId],
         );

@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { errorMessage, fieldErrors, isStatus } from '../lib/errors';
 
@@ -17,7 +17,8 @@ interface PasswordConfirmProps {
 /**
  * Gefährliche Verwaltungsaktion mit Rückfrage und Passwort des Handelnden (ADR 0005 E7). Das Passwort lebt nur im
  * Feld dieser Komponente und wird nach jedem Absenden geleert. Ein falsches Passwort steht am Feld, alles andere
- * (409, 429, …) als Meldung in der Rückfrage. Der Fokus startet im Passwortfeld; Escape bricht ab.
+ * (409, 429, …) als Meldung in der Rückfrage. Der Fokus startet im Passwortfeld und kehrt nach jedem Fehler dorthin
+ * zurück (auch nach „Sitzung aktualisiert, bitte erneut absenden.“); Escape bricht ab.
  */
 export function PasswordConfirm({ label, question, confirmLabel, onSubmit, disabled = false, accessibleName, tone = 'danger' }: PasswordConfirmProps) {
   const id = useId();
@@ -26,6 +27,7 @@ export function PasswordConfirm({ label, question, confirmLabel, onSubmit, disab
   const [busy, setBusy] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   function close(): void {
     setOpen(false);
@@ -53,6 +55,7 @@ export function PasswordConfirm({ label, question, confirmLabel, onSubmit, disab
       } else {
         setError(errorMessage(caught));
       }
+      inputRef.current?.focus();
     } finally {
       setBusy(false);
     }
@@ -89,6 +92,7 @@ export function PasswordConfirm({ label, question, confirmLabel, onSubmit, disab
         </label>
         <input
           id={id}
+          ref={inputRef}
           className="input"
           type="password"
           name="current_password"

@@ -12,6 +12,7 @@ import { DisplayNameCard, PasswordCard, SessionsCard } from './AccountExtras';
 interface AccountProps {
   profile: Profile;
   onChanged: () => Promise<void>;
+  onCsrfToken: (token: string) => void;
 }
 
 interface Setup {
@@ -49,7 +50,7 @@ function QrImage({ uri }: { uri: string }) {
   return src === null ? <p className="hint">QR-Code wird erzeugt …</p> : <img src={src} alt="QR-Code zum Einscannen mit der Authenticator-App" />;
 }
 
-export function Account({ profile, onChanged }: AccountProps) {
+export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
   const [setup, setSetup] = useState<Setup | null>(null);
   const [recovery, setRecovery] = useState<string[] | null>(null);
   const [password, setPassword] = useState('');
@@ -225,7 +226,7 @@ export function Account({ profile, onChanged }: AccountProps) {
     </div>
     <div className="grid-2">
       <DisplayNameCard profile={profile} onChanged={onChanged} />
-      <PasswordCard profile={profile} onChanged={onChanged} />
+      <PasswordCard profile={profile} onChanged={onChanged} onCsrfToken={onCsrfToken} />
     </div>
     <SessionsCard profile={profile} />
     </div>

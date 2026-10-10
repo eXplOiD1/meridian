@@ -292,6 +292,8 @@ export function UserEdit({ profile, id }: Props) {
   const deleted = user.status === 'deleted';
   const locked = isSelf || deleted;
   const selfHint = isSelf ? 'Für das eigene Konto: „Mein Konto“. Rollen ändert ein anderer Administrator.' : null;
+  // Benutzer mit gefährlicher Rolle (Admin): Aktivieren und Deaktivieren verlangen das eigene Passwort (ADR 0005 E7).
+  const targetDangerous = catalog !== null && user.assignments.some((a) => isDangerousRole(catalog, a.role_id));
 
   const issue = (path: string) => async (typed: string): Promise<void> => {
     const reply = await request<OneTimePasswordReply>('POST', '/api/users/' + uid + path, { csrf, body: { current_password: typed } });
@@ -432,7 +434,26 @@ export function UserEdit({ profile, id }: Props) {
                 : 'Beendet alle Sitzungen, der Benutzer kann sich nicht mehr anmelden. Zuweisungen bleiben erhalten. Umkehrbar.'}
             </p>
             <div>
-              {user.status === 'inactive' ? (
+              {targetDangerous ? (
+                <PasswordConfirm
+                  label={user.status === 'inactive' ? 'Aktivieren' : 'Deaktivieren'}
+                  question={
+                    user.status === 'inactive'
+                      ? user.username + ' hat Administratorrechte und kann sich danach wieder anmelden.'
+                      : user.username + ' hat Administratorrechte, kann sich danach nicht mehr anmelden, alle Sitzungen enden.'
+                  }
+                  confirmLabel={user.status === 'inactive' ? 'Aktivieren' : 'Deaktivieren'}
+                  tone={user.status === 'inactive' ? 'normal' : 'danger'}
+                  disabled={locked}
+                  accessibleName={user.username + (user.status === 'inactive' ? ' aktivieren' : ' deaktivieren')}
+                  onSubmit={async (typed) => {
+                    const action = user.status === 'inactive' ? 'activate' : 'deactivate';
+                    await request('POST', '/api/users/' + uid + '/' + action, { csrf, body: { current_password: typed } });
+                    setInfo(user.username + (action === 'activate' ? ' ist aktiviert.' : ' ist deaktiviert.'));
+                    await load();
+                  }}
+                />
+              ) : user.status === 'inactive' ? (
                 <button
                   type="button"
                   className="btn btn--ghost"

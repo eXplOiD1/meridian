@@ -58,10 +58,15 @@ interface PasswordCardProps {
   /** Pflichtwechsel nach Einmalpasswort: andere Überschrift und Beschriftung. */
   forced?: boolean;
   onChanged: () => Promise<void>;
+  /** Neues CSRF-Token aus der Antwort sofort übernehmen (die Sitzung ist ersetzt, das alte Token gilt nicht mehr). */
+  onCsrfToken: (token: string) => void;
 }
 
-/** Passwort ändern. Alle Felder werden nach dem Absenden geleert; das neue CSRF-Token holt der Aufrufer über /me. */
-export function PasswordCard({ profile, forced = false, onChanged }: PasswordCardProps) {
+/**
+ * Passwort ändern. Alle Felder werden nach dem Absenden geleert; das neue CSRF-Token kommt direkt aus der Antwort,
+ * danach lädt der Aufrufer das Profil über /me neu.
+ */
+export function PasswordCard({ profile, forced = false, onChanged, onCsrfToken }: PasswordCardProps) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
@@ -85,9 +90,12 @@ export function PasswordCard({ profile, forced = false, onChanged }: PasswordCar
     setNext('');
     setRepeat('');
     try {
-      await request('POST', '/api/auth/password', { csrf: profile.csrf_token, body });
+      const reply = await request<{ csrf_token?: unknown }>('POST', '/api/auth/password', { csrf: profile.csrf_token, body });
       setDone(true);
-      // Der Server hat die Sitzung ersetzt: Profil (mit neuem CSRF-Token) neu laden.
+      // Der Server hat die Sitzung ersetzt: das neue Token sofort übernehmen, dann das Profil neu laden.
+      if (typeof reply.csrf_token === 'string' && reply.csrf_token !== '') {
+        onCsrfToken(reply.csrf_token);
+      }
       await onChanged();
     } catch (caught) {
       const errs = fieldErrors(caught);

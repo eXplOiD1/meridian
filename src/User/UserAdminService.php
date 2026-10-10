@@ -24,6 +24,10 @@ use Meridian\Security\PasswordHasher;
  * `mayAssign` je neue/geänderte Zuweisung (403) → Passwort-Bestätigung bei gefährlichen Aktionen (403/429) →
  * **eine** `Connection::immediate()`-Transaktion mit Schreiben, `AdminInvariant::assertHeld()` (409, Rollback) und
  * Audit-Eintrag (nie mit Passwort, Hash oder Einmalpasswort).
+ *
+ * Am Anfang jeder Transaktion werden die Rechte des Handelnden frisch geladen und `users.manage`, `mayManage` und
+ * `mayAssign` wiederholt ({@see recheck()}, Review 4a N1): wer zwischen Laden und Schreiben herabgestuft oder
+ * deaktiviert wurde, schreibt nichts mehr (403).
  */
 final class UserAdminService
 {
@@ -79,6 +83,10 @@ final class UserAdminService
         $expiresAt = OneTimePassword::expiresAt($now);
 
         $id = $this->db->immediate(function () use ($actor, $username, $displayName, $assignments, $hash, $now, $expiresAt): int {
+            $actor = $this->recheck($actor);
+            foreach ($assignments as $assignment) {
+                $this->assertMayAssign($actor, $assignment);
+            }
             $this->assertWithinLimit($actor, 'user.created', self::CREATE_LIMIT, 'Zu viele neue Benutzer in der letzten Stunde (höchstens ' . self::CREATE_LIMIT . '). Später erneut versuchen.');
             if ($this->users->usernameTaken($username)) {
                 throw ValidationFailed::field('username', 'Benutzername ist vergeben.');
@@ -105,6 +113,7 @@ final class UserAdminService
         $this->assertMayManage($actor, $userId);
 
         return $this->db->immediate(function () use ($actor, $target, $displayName): UserSummary {
+            $this->recheck($actor, $target->id);
             if (!$this->users->updateDisplayName($target->id, $displayName)) {
                 throw UserRequestRefused::deleted();
             }
@@ -141,9 +150,15 @@ final class UserAdminService
         }
 
         return $this->db->immediate(function () use ($actor, $target, $assignments, $needsPassword): UserSummary {
+            $actor = $this->recheck($actor, $target->id);
             $current = $this->reload($target->id);
             if ($current->status === UserStatus::Deleted) {
                 throw UserRequestRefused::deleted();
+            }
+            foreach ($assignments as $assignment) {
+                if (!self::unchanged($assignment, $current->assignments)) {
+                    $this->assertMayAssign($actor, $assignment);
+                }
             }
             // Hat sich der Bestand seit der Passwort-Bestätigung so geändert, dass jetzt eine gefährliche Rolle
             // betroffen ist, die nicht bestätigt wurde: nichts schreiben (confirm() darf hier nicht laufen — die
@@ -172,18 +187,32 @@ final class UserAdminService
 
     /**
      * Deaktiviert (Sitzungen enden sofort) oder aktiviert einen Benutzer. Nie am eigenen Konto, nie bei gelöschten.
-     * Ist er schon im gewünschten Zustand, ändert sich nichts (kein Audit-Eintrag).
+     * Hat das Ziel eine Rolle mit gefährlichem Recht (Admin), verlangen Deaktivieren **und** Aktivieren das Passwort des
+     * Handelnden (E7, Review 4a M1). Ist er schon im gewünschten Zustand, ändert sich nichts (kein Audit-Eintrag).
+     *
+     * @throws UserRequestRefused 404, 409 (gelöscht, selbst, letzter Admin, inzwischen geändert), 403
+     * @throws ValidationFailed   Passwort fehlt
+     * @throws TooManyAttempts    Passwort-Bestätigung gesperrt
      */
-    public function setActive(Actor $actor, int $userId, bool $active): UserSummary
+    public function setActive(Actor $actor, int $userId, bool $active, #[\SensitiveParameter] ?string $currentPassword = null): UserSummary
     {
         $target = $this->load($userId);
         $this->assertNotSelf($actor, $target);
         $this->assertMayManage($actor, $userId);
+        $needsPassword = $this->hasDangerousRole($this->reload($userId)->assignments);
+        if ($needsPassword) {
+            $this->confirm($actor, $currentPassword);
+        }
 
-        return $this->db->immediate(function () use ($actor, $target, $active): UserSummary {
+        return $this->db->immediate(function () use ($actor, $target, $active, $needsPassword): UserSummary {
+            $this->recheck($actor, $target->id);
             $current = $this->reload($target->id);
             if ($current->status === UserStatus::Deleted) {
                 throw UserRequestRefused::deleted();
+            }
+            // Inzwischen eine Admin-Rolle bekommen, aber ohne Passwort bestätigt: nichts schreiben.
+            if (!$needsPassword && $this->hasDangerousRole($current->assignments)) {
+                throw UserRequestRefused::changedMeanwhile();
             }
             if (($current->status === UserStatus::Active) !== $active) {
                 if (!$this->users->setActive($target->id, $active)) {
@@ -217,6 +246,7 @@ final class UserAdminService
         $now = $this->clock->now();
 
         $this->db->immediate(function () use ($actor, $target, $discarded, $now): void {
+            $this->recheck($actor, $target->id);
             if (!$this->users->markDeleted($target->id, $discarded, $now)) {
                 throw UserRequestRefused::deleted();
             }
@@ -248,6 +278,7 @@ final class UserAdminService
         $expiresAt = OneTimePassword::expiresAt($this->clock->now());
 
         $this->db->immediate(function () use ($actor, $target, $hash, $expiresAt): void {
+            $this->recheck($actor, $target->id);
             $this->assertWithinLimit($actor, 'user.password_reset', self::RESET_LIMIT, 'Zu viele Passwort-Resets in der letzten Stunde (höchstens ' . self::RESET_LIMIT . '). Später erneut versuchen.');
             if (!$this->users->setOneTimePasswordHash($target->id, $hash, $expiresAt)) {
                 throw UserRequestRefused::deleted();
@@ -279,6 +310,7 @@ final class UserAdminService
         $this->confirm($actor, $currentPassword);
 
         return $this->db->immediate(function () use ($actor, $target): UserSummary {
+            $this->recheck($actor, $target->id);
             $this->assertWithinLimit($actor, 'user.2fa_reset', self::RESET_LIMIT, 'Zu viele 2FA-Resets in der letzten Stunde (höchstens ' . self::RESET_LIMIT . '). Später erneut versuchen.');
             if (!$this->users->clearTwoFactor($target->id)) {
                 throw UserRequestRefused::deleted();
@@ -306,6 +338,7 @@ final class UserAdminService
         $this->assertMayManage($actor, $userId);
 
         return $this->db->immediate(function () use ($actor, $target): int {
+            $this->recheck($actor, $target->id);
             if ($this->reload($target->id)->status === UserStatus::Deleted) {
                 throw UserRequestRefused::deleted();
             }
@@ -334,6 +367,25 @@ final class UserAdminService
         }
 
         return $target;
+    }
+
+    /**
+     * In der Schreibtransaktion: Rechte des Handelnden frisch laden (inaktiv, gelöscht, Pflichtwechsel → leer),
+     * `users.manage` verlangen und — bei einem Ziel — `mayManage` wiederholen. Der Aufrufer wiederholt `mayAssign` mit
+     * dem zurückgegebenen Handelnden.
+     *
+     * @throws \Meridian\Security\AccessDenied 403
+     * @throws UserRequestRefused               403 (mayManage)
+     */
+    private function recheck(Actor $actor, ?int $targetId = null): Actor
+    {
+        $fresh = new Actor($actor->user, $this->users->grantsFor($actor->user->id), $actor->ip);
+        $this->policy->requireUserManager($fresh->grants);
+        if ($targetId !== null) {
+            $this->assertMayManage($fresh, $targetId);
+        }
+
+        return $fresh;
     }
 
     private function assertNotSelf(Actor $actor, UserAccount $target): void
@@ -386,6 +438,22 @@ final class UserAdminService
         $role = $this->roles->find($roleId);
 
         return $role !== null && $role->isDangerous();
+    }
+
+    /**
+     * Hat eine der Zuweisungen eine Rolle mit gefährlichem Recht?
+     *
+     * @param list<AssignmentView> $assignments
+     */
+    private function hasDangerousRole(array $assignments): bool
+    {
+        foreach ($assignments as $view) {
+            if ($this->isDangerousRole($view->roleId)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

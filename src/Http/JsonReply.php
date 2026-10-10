@@ -40,6 +40,15 @@ final class JsonReply
         return self::json(['error' => $message], $status);
     }
 
+    /**
+     * 403 bei fehlgeschlagener CSRF-/Herkunftsprüfung — einzige Stelle für diese Antwort. `csrf_failed: true` sagt der
+     * Oberfläche, dass sie das Token über `/api/auth/me` neu laden kann (sie wiederholt die Anfrage nie selbst).
+     */
+    public static function csrfFailed(): JsonResponse
+    {
+        return self::json(['error' => 'CSRF-Prüfung fehlgeschlagen.', 'csrf_failed' => true], 403);
+    }
+
     public static function validation(ValidationFailed $failed): JsonResponse
     {
         return self::json([

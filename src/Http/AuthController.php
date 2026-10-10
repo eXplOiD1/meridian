@@ -101,7 +101,7 @@ final class AuthController
             return self::error(401, 'Nicht angemeldet.');
         }
         if (!$this->csrf->check($request, $session->token)) {
-            return self::error(403, 'CSRF-Prüfung fehlgeschlagen.');
+            return JsonReply::csrfFailed();
         }
 
         $this->auth->logout($session);
@@ -207,7 +207,7 @@ final class AuthController
             return self::error(401, 'Nicht angemeldet.');
         }
         if (!$this->csrf->check($request, $session->token)) {
-            return self::error(403, 'CSRF-Prüfung fehlgeschlagen.');
+            return JsonReply::csrfFailed();
         }
 
         $user = $this->users->findById($session->userId);
