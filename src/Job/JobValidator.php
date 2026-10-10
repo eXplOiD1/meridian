@@ -13,6 +13,7 @@ use Meridian\Runner\Http\InvalidUrl;
 use Meridian\Runner\Http\UrlDisplay;
 use Meridian\Runner\Http\UrlPolicy;
 use Meridian\Runner\JobType;
+use Meridian\Runner\Shell\ShellTargetPolicy;
 use Meridian\Schedule\CronSchedule;
 use Meridian\Schedule\OverlapPolicy;
 use Meridian\Schedule\RetryPolicy;
@@ -35,12 +36,18 @@ final class JobValidator
     public const DEFAULT_RETRY_DELAY_SECONDS = 60;
     public const DEFAULT_REDIRECTS = 3;
 
+    /** Obergrenze des Anfragekörpers eines Shell-Jobs (Skript bis 256 KiB, ADR 0004 §4.3). */
+    public const MAX_SHELL_BODY_BYTES = 327680;
+
     private const TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http', 'request'];
+    private const SHELL_TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'shell', 'script'];
     private const HTTP_KEYS = ['method', 'timeout_seconds', 'expected_status', 'max_redirects', 'store_response'];
     private const REQUEST_KEYS = ['url', 'headers', 'body'];
 
     private const MSG_REQUIRED = 'Pflichtfeld: bitte einen Wert angeben.';
     private const MSG_CATEGORY = 'Kategorie unbekannt oder nicht erlaubt.';
+
+    private readonly ShellJobValidator $shellValidator;
 
     public function __construct(
         private readonly CategoryRepository $categories,
@@ -48,12 +55,14 @@ final class JobValidator
         private readonly Clock $clock,
         private readonly ?AddressPolicy $addresses = null,
         private readonly string $defaultTimezone = 'Europe/Berlin',
+        ?ShellTargetPolicy $shellTargets = null,
     ) {
+        $this->shellValidator = new ShellJobValidator($settings, $shellTargets);
     }
 
     /**
      * @param array<mixed> $input      der Anfragekörper (bereits als Objekt gelesen)
-     * @param CategoryScope $editScope Bereich des Rechts `jobs.edit_http` des Benutzers
+     * @param CategoryScope $editScope Bereich des Rechts `jobs.edit_http` bzw. `jobs.edit_shell` des Benutzers (nach Typ)
      *
      * @throws ValidationFailed
      */
@@ -62,12 +71,22 @@ final class JobValidator
         /** @var array<string, string> $errors */
         $errors = [];
 
-        $unknown = array_diff(array_map(strval(...), array_keys($input)), self::TOP_KEYS);
+        $isShell = (array_key_exists('type', $input) ? $input['type'] : $existing?->type->value) === JobType::Shell->value;
+        $allowed = $isShell ? self::SHELL_TOP_KEYS : self::TOP_KEYS;
+        $unknown = array_diff(array_map(strval(...), array_keys($input)), $allowed);
         if ($unknown !== []) {
-            throw ValidationFailed::field('body', 'Unbekannte Felder im Anfragekörper. Erlaubt sind: ' . implode(', ', self::TOP_KEYS) . '.');
+            throw ValidationFailed::field('body', 'Unbekannte Felder im Anfragekörper. Erlaubt sind: ' . implode(', ', $allowed) . '.');
         }
 
+        if (!$isShell && strlen((string) json_encode($input, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR)) > self::MAX_BODY_BYTES) {
+            // Die Job-API liest bis 320 KiB (Shell-Jobs); für HTTP-Jobs bleibt es bei 160 KiB.
+            throw ValidationFailed::field('body', 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 160 KiB, höchstens 5 Ebenen tief).');
+        }
         $this->checkType($input, $existing);
+
+        if ($isShell) {
+            return $this->validateShell($input, $editScope, $existing);
+        }
 
         $http = self::objectField($input, 'http');
         if ($http === null) {
@@ -130,6 +149,40 @@ final class JobValidator
     }
 
     /**
+     * Shell-Job (ADR 0004 §4.3): gleiche Grundfelder wie bei HTTP, dazu `shell` und `script`.
+     *
+     * @param array<mixed> $input
+     *
+     * @throws ValidationFailed
+     */
+    private function validateShell(#[\SensitiveParameter] array $input, CategoryScope $editScope, ?JobRecord $existing): JobDraft
+    {
+        /** @var array<string, string> $errors */
+        $errors = [];
+        $name = $this->name($input, $existing, $errors);
+        [$categoryId, $categoryName] = $this->category($input, $existing, $editScope, $errors);
+        $timezone = $this->timezone($input, $existing, $errors);
+        $cron = $this->cron($input, $existing, $timezone, $errors);
+        $isEnabled = $this->bool($input, 'is_enabled', $existing === null ? true : $existing->isEnabled, $errors);
+        $catchUp = $this->bool($input, 'catch_up', $existing === null ? false : $existing->catchUp, $errors);
+        $overlap = $this->overlap($input, $existing, $errors);
+        $retryCount = $this->integer($input, 'retry_count', $existing === null ? 0 : $existing->retryCount, 0, RetryPolicy::MAX_RETRIES, 'Wiederholungen: ganze Zahl von 0 bis ' . RetryPolicy::MAX_RETRIES . '.', $errors);
+        $retryDelay = $this->integer($input, 'retry_delay_seconds', $existing === null ? self::DEFAULT_RETRY_DELAY_SECONDS : $existing->retryDelaySeconds, 1, RetryPolicy::MAX_DELAY_SECONDS, 'Abstand der Wiederholungen: ganze Zahl von 1 bis 3600 (Sekunden).', $errors);
+
+        [$config, $payload] = $this->shellValidator->validate($input, $existing, $categoryId, $categoryName !== false, $errors);
+
+        if ($errors !== []) {
+            throw new ValidationFailed($errors);
+        }
+        if ($name === null || $categoryName === false || $timezone === null || $cron === null || $isEnabled === null || $catchUp === null
+            || $overlap === null || $retryCount === null || $retryDelay === null || $config === null) {
+            throw new \LogicException('Validierung ohne Fehlermeldung abgebrochen.');
+        }
+
+        return new JobDraft($name, JobType::Shell, $categoryId, $categoryName, $cron, $timezone, $isEnabled, $catchUp, $overlap, $retryCount, $retryDelay, $config, $payload);
+    }
+
+    /**
      * @param array<mixed> $input
      *
      * @throws ValidationFailed
@@ -140,13 +193,10 @@ final class JobValidator
         if ($type === null) {
             throw ValidationFailed::field('type', self::MSG_REQUIRED);
         }
-        if ($type === 'shell') {
-            throw ValidationFailed::field('type', 'Shell-Jobs folgen mit Phase 4.');
+        if ($type !== 'http' && $type !== 'shell') {
+            throw ValidationFailed::field('type', 'Erlaubt sind „http“ und „shell“.');
         }
-        if ($type !== 'http') {
-            throw ValidationFailed::field('type', 'Erlaubt ist „http“.');
-        }
-        if ($existing !== null && $existing->type !== JobType::Http) {
+        if ($existing !== null && $existing->type->value !== $type) {
             throw ValidationFailed::field('type', 'Der Typ eines Jobs lässt sich nicht ändern.');
         }
     }

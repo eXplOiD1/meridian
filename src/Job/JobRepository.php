@@ -8,6 +8,7 @@ use Meridian\Auth\Clock;
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
 use Meridian\Runner\JobType;
+use Meridian\Runner\Shell\ShellJobConfig;
 use Meridian\Schedule\OverlapPolicy;
 use Meridian\Schedule\RunStatus;
 use Meridian\Schedule\RunTrigger;
@@ -110,7 +111,7 @@ final class JobRepository
     public function insert(#[\SensitiveParameter] JobDraft $draft, int $ownerId): int
     {
         if ($draft->payload === null) {
-            throw new \LogicException('Ein neuer Job braucht eine Anfrage.');
+            throw new \LogicException('Ein neuer Job braucht eine Anfrage bzw. ein Skript.');
         }
         $now = Timestamp::format($this->clock->now());
         $this->db->execute(
@@ -125,7 +126,7 @@ final class JobRepository
                 'owner' => $ownerId,
                 'cron' => $draft->cron,
                 'timezone' => $draft->timezone,
-                'config' => $draft->http->toJson(),
+                'config' => $draft->config->toJson(),
                 'payload' => $this->box->encrypt($draft->payload->toJson()),
                 'overlap' => $draft->overlapPolicy->value,
                 'retry_count' => $draft->retryCount,
@@ -158,7 +159,7 @@ final class JobRepository
                 'category' => $draft->categoryId,
                 'cron' => $draft->cron,
                 'timezone' => $draft->timezone,
-                'config' => $draft->http->toJson(),
+                'config' => $draft->config->toJson(),
                 'payload' => $draft->payload === null ? null : $this->box->encrypt($draft->payload->toJson()),
                 'overlap' => $draft->overlapPolicy->value,
                 'retry_count' => $draft->retryCount,
@@ -227,6 +228,7 @@ final class JobRepository
                 Row::int($row, 'retry_delay_seconds'),
                 Row::bool($row, 'catch_up'),
                 $type === JobType::Http ? self::config($id, Row::string($row, 'config_json')) : null,
+                $type === JobType::Shell ? self::shellConfig($id, Row::string($row, 'config_json')) : null,
                 $states[$id]['last_run'] ?? null,
                 $states[$id]['running'] ?? false,
                 Row::string($row, 'created_at'),
@@ -244,6 +246,18 @@ final class JobRepository
             return HttpJobConfig::fromJson($json);
         } catch (InvalidJobConfig) {
             error_log('Meridian: Die Konfiguration von Job ' . $jobId . ' ist unlesbar. Anfrage im Job neu eingeben und speichern.');
+
+            return null;
+        }
+    }
+
+    /** Wie {@see self::config()} für Shell-Jobs: unlesbar heißt `shell: null`, der Lauf scheitert dann nicht wiederholbar. */
+    private static function shellConfig(int $jobId, string $json): ?ShellJobConfig
+    {
+        try {
+            return ShellJobConfig::fromJson($json);
+        } catch (InvalidJobConfig) {
+            error_log('Meridian: Die Konfiguration von Job ' . $jobId . ' ist unlesbar. Ausführungsort und Skript im Job neu eingeben und speichern.');
 
             return null;
         }

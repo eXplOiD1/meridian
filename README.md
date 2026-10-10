@@ -110,7 +110,17 @@ docker exec -it meridian-web php bin/meridian category:create "Deuba24"
 # Gesperrten Benutzer oder gesperrte IP freigeben
 docker exec -it meridian-web php bin/meridian auth:unlock jana
 docker exec -it meridian-web php bin/meridian auth:unlock 192.168.0.25
+
+# Ausführungsorte für Shell-Jobs freigeben (Container-Name, erlaubte Benutzer; root nur, wenn ausdrücklich genannt)
+docker exec -it meridian-web php bin/meridian shell:targets add docker meridian-sandbox --user=1001 --category=NAS --note="Sandbox"
+docker exec -it meridian-web php bin/meridian shell:targets add docker nextcloud --user=www-data --user=root --default-user=www-data
+docker exec -it meridian-web php bin/meridian shell:targets list
+docker exec -it meridian-web php bin/meridian shell:targets remove 3
 ```
+
+Ohne `--category` gilt die Freigabe global, sonst nur für Jobs dieser Kategorie. Ohne `--default-user` gilt der einzige
+angegebene Benutzer als Standard. Skript und Umgebungsvariablen eines Shell-Jobs sind Geheimnisse: Sie sind nach dem
+Speichern nicht mehr lesbar und werden nur als Ganzes ersetzt.
 
 Passwörter werden nie als Argument übergeben (sie würden in der Shell-History und der Prozessliste landen),
 sondern immer verdeckt abgefragt. Jeder dieser Befehle, der Benutzer oder Sperren ändert, schreibt einen Eintrag ins Audit-Log.

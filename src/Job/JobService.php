@@ -6,6 +6,9 @@ namespace Meridian\Job;
 
 use Meridian\Auth\AuditLog;
 use Meridian\Database\Connection;
+use Meridian\Runner\JobType;
+use Meridian\Runner\Shell\ShellJobConfig;
+use Meridian\Runner\Shell\ShellPayload;
 use Meridian\Schedule\Planner;
 use Meridian\Security\AccessControl;
 use Meridian\Security\AccessDenied;
@@ -24,7 +27,9 @@ use Meridian\Security\RoleGrant;
  * `Planner::reschedule()` (H6: die Speicher-Transaktion hat `next_run_at` auf NULL gesetzt, der neue Termin wird
  * nach der Rechteprüfung und außerhalb der Transaktion berechnet, weil `reschedule()` selbst eine öffnet).
  *
- * Das Audit-Log bekommt nur Feldnamen, nie Werte, und nie die Anzeige-URL.
+ * Das Audit-Log bekommt nur Feldnamen, nie Werte, und nie die Anzeige-URL. Shell-Jobs (ADR 0004): `jobs.edit_shell`
+ * für anlegen, ändern (alte **und** neue Kategorie), löschen, aktivieren und deaktivieren; „Skript ersetzt“ statt
+ * Inhalt.
  */
 final class JobService
 {
@@ -46,16 +51,19 @@ final class JobService
      */
     public function create(int $userId, array $grants, #[\SensitiveParameter] array $input): ?JobRecord
     {
-        $editScope = $this->access->scope($grants, Permission::EditHttpJobs);
+        // Das Recht richtet sich nach dem Typ der Anfrage; alles außer „shell“ prüft das HTTP-Recht, der Validator
+        // lehnt unbekannte Typen danach mit 422 ab.
+        $permission = ($input['type'] ?? null) === 'shell' ? JobPermissions::edit(JobType::Shell) : JobPermissions::edit(JobType::Http);
+        $editScope = $this->access->scope($grants, $permission);
         if ($editScope->isEmpty()) {
             // Ohne das Recht in irgendeiner Kategorie gibt es nichts zu validieren: 403, nicht 422.
-            throw new AccessDenied(Permission::EditHttpJobs);
+            throw new AccessDenied($permission);
         }
 
-        $id = $this->db->immediate(function () use ($userId, $grants, $input, $editScope): int {
+        $id = $this->db->immediate(function () use ($userId, $grants, $input, $editScope, $permission): int {
             $draft = $this->validator->validate($input, $editScope, null);
             // Doppelt hält besser: das Recht in der Zielkategorie, auch wenn der Validator den Bereich schon kennt.
-            $this->access->require($grants, Permission::EditHttpJobs, $draft->categoryName);
+            $this->access->require($grants, $permission, $draft->categoryName);
             $id = $this->jobs->insert($draft, $userId);
             $this->audit->record($userId, 'job.created', 'job:' . $id . ' ' . $draft->name);
 
@@ -201,18 +209,27 @@ final class JobService
         $add($new->retryCount !== $old->retryCount, 'retry_count');
         $add($new->retryDelaySeconds !== $old->retryDelaySeconds, 'retry_delay_seconds');
         $http = $old->http;
-        if ($http !== null) {
-            $add($new->http->method !== $http->method, 'http.method');
-            $add($new->http->timeoutSeconds !== $http->timeoutSeconds, 'http.timeout_seconds');
-            $add($new->http->expectedStatus !== $http->expectedStatus, 'http.expected_status');
-            $add($new->http->maxRedirects !== $http->maxRedirects, 'http.max_redirects');
-            $add($new->http->storeResponse !== $http->storeResponse, 'http.store_response');
+        if ($http !== null && $new->config instanceof HttpJobConfig) {
+            $add($new->config->method !== $http->method, 'http.method');
+            $add($new->config->timeoutSeconds !== $http->timeoutSeconds, 'http.timeout_seconds');
+            $add($new->config->expectedStatus !== $http->expectedStatus, 'http.expected_status');
+            $add($new->config->maxRedirects !== $http->maxRedirects, 'http.max_redirects');
+            $add($new->config->storeResponse !== $http->storeResponse, 'http.store_response');
+        }
+        $shell = $old->shell;
+        if ($new->config instanceof ShellJobConfig) {
+            // Nur Feldnamen: nie Inhalt des Skripts, nie Variablennamen.
+            $add($shell === null || $new->config->target->kind !== $shell->target->kind || $new->config->target->name !== $shell->target->name, 'shell.target');
+            $add($shell === null || $new->config->interpreter !== $shell->interpreter, 'shell.interpreter');
+            $add($shell === null || $new->config->user !== $shell->user, 'shell.user');
+            $add($shell === null || $new->config->workdir !== $shell->workdir, 'shell.workdir');
+            $add($shell === null || $new->config->timeoutSeconds !== $shell->timeoutSeconds, 'shell.timeout_seconds');
         }
         if ($new->categoryId !== $old->categoryId) {
             $fields[] = 'Kategorie ' . ($old->categoryName ?? 'ohne') . ' → ' . ($new->categoryName ?? 'ohne');
         }
         if ($new->payload !== null) {
-            $fields[] = 'Anfrage ersetzt';
+            $fields[] = $new->payload instanceof ShellPayload ? 'Skript ersetzt' : 'Anfrage ersetzt';
         }
 
         return $fields;

@@ -10,6 +10,8 @@ use Meridian\Job\LiveChunk;
 use Meridian\Job\LastRun;
 use Meridian\Job\RunRecord;
 use Meridian\Runner\Http\UrlDisplay;
+use Meridian\Runner\JobType;
+use Meridian\Runner\Shell\ShellJobConfig;
 use Meridian\Security\AccessControl;
 use Meridian\Security\Permission;
 use Meridian\Security\RoleGrant;
@@ -27,6 +29,8 @@ use Meridian\Settings\HttpDisplay;
  * - Beim Lesen werden `display_url` und `target` auf die aktuellen Einstellungen verschärft
  *   (`http.display_path`, `http.display_host`, {@see UrlDisplay::tightenStored()}); bei `display_host = hidden`
  *   zeigt `target` nur `https://••••`, für jede Rolle.
+ * - Shell-Jobs (ADR 0004 E6): `shell` mit Ausführungsort, Interpreter, Benutzer, Arbeitsverzeichnis, Zeitlimit,
+ *   `has_script`, `has_env` und `env_count`. Skript und Umgebung erscheinen nie, auch nicht maskiert.
  * - `worker` und `heartbeat_at` eines Laufs erscheinen nie (H2).
  * - Jeder Text läuft vor der Ausgabe durch `SecretMasker::mask()`.
  */
@@ -45,6 +49,10 @@ final class JobPresenter
      */
     public function summary(JobRecord $job, array $grants, HttpDisplay $display): array
     {
+        if ($job->type === JobType::Shell) {
+            return $this->base($job, $grants) + ['shell' => $job->shell === null ? null : ['target' => $this->target($job->shell)]];
+        }
+
         return $this->base($job, $grants) + [
             'http' => $job->http === null ? null : ['target' => $this->text(UrlDisplay::target($job->http->target(), $display))],
         ];
@@ -57,6 +65,9 @@ final class JobPresenter
      */
     public function detail(JobRecord $job, array $grants, HttpDisplay $display): array
     {
+        if ($job->type === JobType::Shell) {
+            return $this->base($job, $grants) + ['shell' => $job->shell === null ? null : $this->shell($job->shell)];
+        }
         $http = $job->http;
         if ($http === null) {
             return $this->base($job, $grants) + ['http' => null];
@@ -85,6 +96,34 @@ final class JobPresenter
         }
 
         return $this->base($job, $grants) + ['http' => $data];
+    }
+
+    /**
+     * Der nicht geheime Teil eines Shell-Jobs (ADR 0004 E6): nie Skript, nie Variablennamen oder -werte, auch nicht
+     * maskiert, nicht die Länge; nur `has_script` und die Anzahl der Variablen.
+     *
+     * @return array<string, mixed>
+     */
+    private function shell(ShellJobConfig $shell): array
+    {
+        return [
+            'target' => $this->target($shell),
+            'interpreter' => $shell->interpreter->value,
+            'user' => $shell->user === null ? null : $this->text($shell->user),
+            'workdir' => $shell->workdir === null ? null : $this->text($shell->workdir),
+            'timeout_seconds' => $shell->timeoutSeconds,
+            'has_script' => $shell->hasScript,
+            'has_env' => $shell->hasEnv,
+            'env_count' => $shell->envCount,
+        ];
+    }
+
+    /**
+     * @return array{kind: string, name: string}
+     */
+    private function target(ShellJobConfig $shell): array
+    {
+        return ['kind' => $shell->target->kind->value, 'name' => $this->text($shell->target->name)];
     }
 
     /**

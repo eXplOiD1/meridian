@@ -465,6 +465,7 @@ final class JobController
         // Nur diese zwei Werte, keine weiteren Einstellungen.
         return JsonReply::json([
             'max_timeout_seconds' => $this->settings->maxTimeoutSeconds(),
+            'shell_max_timeout_seconds' => $this->settings->shellMaxTimeoutSeconds(),
             'response_storage' => $this->settings->responseStorage()->value,
         ]);
     }
@@ -519,7 +520,8 @@ final class JobController
      */
     private static function body(#[\SensitiveParameter] Request $request): array
     {
-        $data = JsonBody::object($request->getContent(), JobValidator::MAX_BODY_BYTES, 5);
+        // Bis 320 KiB wegen des Skripts eines Shell-Jobs; für HTTP-Jobs begrenzt der Validator auf 160 KiB.
+        $data = JsonBody::object($request->getContent(), JobValidator::MAX_SHELL_BODY_BYTES, 5);
         $message = 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 160 KiB, höchstens 5 Ebenen tief).';
         if ($data === null) {
             throw ValidationFailed::field('body', $message);
