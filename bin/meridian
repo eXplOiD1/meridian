@@ -59,6 +59,8 @@ use Meridian\Notify\SmtpSender;
 use Meridian\Notify\TelegramSender;
 use Meridian\Notify\WebhookSender;
 use Meridian\Runner\Shell\Docker\ShellWorkerMaintenance;
+use Meridian\Runner\Shell\HostSocketExecutor;
+use Meridian\Runner\Shell\HostSockets;
 use Meridian\Runner\Shell\ShellRunner;
 use Meridian\Runner\Shell\ShellTargetPolicy;
 use Meridian\Runner\Shell\StoredShellRunSettings;
@@ -154,12 +156,21 @@ if (is_dir($config->dataDir)) {
         // (nur unix://, sonst Start abgelehnt), Host-Agent folgt mit S11 (bis dahin endet ein Host-Lauf sofort).
         if ($type === JobType::Shell) {
             $proxy = DockerProxyClient::fromEnvironment($env['MERIDIAN_DOCKER_PROXY'] ?? null);
+            // Host-Ausführung nur über den Agent-Socket eines freigegebenen Profils (ADR 0014); ohne Angabe gibt es sie nicht.
+            $hostSockets = HostSockets::parse($env['MERIDIAN_SHELL_HOST_SOCKETS'] ?? '');
+            $executors = [];
+            if ($proxy !== null) {
+                $executors['docker'] = new DockerExecExecutor($proxy);
+            }
+            if (!$hostSockets->isEmpty()) {
+                $executors['host'] = new HostSocketExecutor($hostSockets);
+            }
             $runners->register(JobType::Shell, new ShellRunner(
                 new DbShellJobSource($db),
                 new SecretBox(KeyLoader::load($env)),
                 new StoredShellRunSettings(new Settings($db, $clock)),
                 new ShellTargetPolicy(new DbShellTargetSource($db)),
-                $proxy === null ? [] : ['docker' => new DockerExecExecutor($proxy)],
+                $executors,
                 new DbExecRefSink($db),
             ));
         }

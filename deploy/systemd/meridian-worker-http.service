@@ -1,0 +1,36 @@
+[Unit]
+Description=Meridian Worker für HTTP-Jobs und Benachrichtigungen
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=meridian
+Group=meridian
+WorkingDirectory=/opt/meridian
+EnvironmentFile=/etc/meridian/meridian.env
+ExecStart=/usr/bin/php /opt/meridian/bin/meridian worker:run --type=http -v
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=40
+KillMode=mixed
+
+# Härtung (der HTTP-Worker braucht Netz und den Schlüssel, aber nie Docker- oder Host-Sockets)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/meridian
+InaccessiblePaths=/run/meridian-docker /run/meridian-shell
+LoadCredential=meridian_key:/etc/meridian/master.key
+Environment=MERIDIAN_KEY_FILE=%d/meridian_key
+
+[Install]
+WantedBy=multi-user.target

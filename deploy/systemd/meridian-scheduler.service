@@ -27,8 +27,10 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
 ReadWritePaths=/var/lib/meridian
-LoadCredential=meridian_key:/etc/meridian/master.key
-Environment=MERIDIAN_KEY_FILE=%d/meridian_key
+# Der Planer plant nur: kein Schlüssel, kein Netz (Ausführung machen die Worker).
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+InaccessiblePaths=/run/meridian-docker /etc/meridian
 
 [Install]
 WantedBy=multi-user.target

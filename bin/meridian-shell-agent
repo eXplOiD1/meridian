@@ -1,0 +1,37 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Host-Agent (ADR 0004 E3/§5.6, ADR 0014): führt EINEN Lauf für den Worker aus und endet. Wird von systemd je Verbindung
+ * gestartet (`meridian-shell@.service`, Benutzer `meridian-run`, `StandardInput=socket`, `StandardOutput=socket`).
+ *
+ * Ohne Datenbank, ohne Schlüssel, ohne Konfigurationsdatei: es liest nur den gerahmten Auftrag von STDIN, startet den
+ * Interpreter über den lokalen Executor (eigene Prozessgruppe, exakte Umgebung) und reicht die Ausgabe auf STDOUT zurück.
+ * Läuft der Prozess als root, im Container oder kann er Schlüssel/Datenbank lesen, verweigert der Executor den Start.
+ * Ins Journal (STDERR) gehen nur feste Texte, nie Skript, Werte oder Ausgabe.
+ */
+
+use Meridian\Runner\Shell\Agent\AgentSession;
+use Meridian\Runner\Shell\HostIsolation;
+use Meridian\Runner\Shell\LocalProcessExecutor;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+// Nichts, was einen Auftragsinhalt enthalten könnte, darf je ausgegeben werden: auch keine PHP-Meldungen.
+ini_set('display_errors', '0');
+ini_set('log_errors', '0');
+set_exception_handler(static function (\Throwable $e): void {
+    fwrite(STDERR, 'meridian-shell-agent: interner Fehler (' . $e::class . ").\n");
+    exit(70);
+});
+
+$session = new AgentSession(
+    new LocalProcessExecutor(new HostIsolation(), sys_get_temp_dir()),
+    static function (string $text): void {
+        fwrite(STDERR, 'meridian-shell-agent: ' . $text . "\n");
+    },
+);
+
+exit($session->run(STDIN, STDOUT));
