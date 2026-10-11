@@ -147,4 +147,7 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 | [x] | REST-API mit Tokens (ADR 0009) | backend |
 | [x] | curl-Import für Jobs (Browser-seitig, `frontend/src/lib/curl.ts`) | frontend |
 | [x] | Backup und Wiederherstellung (`backup:create/list/restore`, tägliche Sicherung im Planer, `docs/BETRIEB.md` mit Update-Ablauf) | infra |
-| [ ] | Abschluss-Review vor Version 1.0 | sicherheit |
+| [x] | Einstellbare Sitzungsdauer (ADR 0015) | backend, frontend |
+| [~] | Mehrsprachigkeit de/en (ADR 0016): Umschalter, Speicherung je Benutzer, Rahmen übersetzt; **Bildschirme folgen mit dem Redesign** | frontend |
+| [ ] | Redesign der Oberfläche nach Umsetzungsauftrag und Klickdummy von Alex (alle Funktionen erhalten; Lücken im Auftrag ergänzen); Texte dabei über `t()` | frontend |
+| [ ] | Abschluss-Review vor Version 1.0 (nach dem Redesign) | sicherheit |
