@@ -362,6 +362,7 @@ trait Pipeline
             'jobs' => 'SELECT * FROM jobs',
             'live_streams' => 'SELECT * FROM live_streams',
             'login_failures' => 'SELECT * FROM login_failures',
+            'monitor_channels' => 'SELECT * FROM monitor_channels',
             'monitors' => 'SELECT * FROM monitors',
             'notification_channels' => 'SELECT * FROM notification_channels',
             'notification_outbox' => 'SELECT * FROM notification_outbox',
