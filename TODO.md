@@ -142,6 +142,7 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 |---|---|---|
 | [ ] | Benachrichtigungen: E-Mail und ntfy (MVP), Telegram, Webhook, Schwellen, Herzschlag | backend |
 | [ ] | Statistiken über Wochen und Monate, Verdichtung alter Läufe | backend |
+| [ ] | **Sekunden-Intervalle (Wunsch Alex):** Modus „Alle n Sekunden“ mit Untergrenze (Vorschlag 10 s) und vom Admin einstellbarer globaler Mindestzeit, Planer im Sekundentakt, Taktband gröber zusammenfassen. Voraussetzung: Verdichtung alter Läufe (Last: 8.000+ Läufe/Tag bei 10 s). Die Cron-Bibliothek kennt keine Sekunden, daher festes Intervall statt Cron | scheduler, backend, frontend |
 | [ ] | Öffentliche Statusseiten | frontend |
 | [ ] | REST-API mit Tokens, curl-Import | backend |
 | [ ] | Backup und Wiederherstellung, Update-Ablauf, Doku | infra |
