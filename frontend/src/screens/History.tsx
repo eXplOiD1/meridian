@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert } from '../components/Alert';
 import { RunBadge } from '../components/RunBadge';
+import { RunDetail } from '../components/RunDetail';
+import { RunLog } from '../components/RunLog';
 import { request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatTime } from '../lib/format';
-import { formatDuration, RUN_STATUS, TRIGGER_LABEL } from '../lib/jobs';
+import { formatDuration, isFinished, RUN_STATUS, TRIGGER_LABEL } from '../lib/jobs';
+import { canRun } from '../lib/permissions';
 import { hrefOf } from '../lib/useHashRoute';
 import type { Profile, Run, RunStatus } from '../types';
 
@@ -23,12 +26,13 @@ const PAGE_SIZE = 50;
 const STATUS_ORDER: RunStatus[] = ['queued', 'running', 'ok', 'failed', 'timeout', 'aborted', 'skipped'];
 
 /** Verlauf über alle Jobs, die der Benutzer sehen darf (der Server kappt auf die erlaubten Kategorien). */
-export function History(_props: { profile: Profile }) {
+export function History({ profile }: { profile: Profile }) {
   const [runs, setRuns] = useState<HistoryRun[]>([]);
   const [nextBefore, setNextBefore] = useState<number | null>(null);
   const [status, setStatus] = useState<'' | RunStatus>('');
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [selected, setSelected] = useState<HistoryRun | null>(null);
 
   const load = useCallback(
     async (before: number | null, append: boolean): Promise<void> => {
@@ -53,6 +57,21 @@ export function History(_props: { profile: Profile }) {
     [status],
   );
 
+  async function select(run: HistoryRun): Promise<void> {
+    setSelected(run);
+    try {
+      const detail = (await request<{ run: Run }>('GET', '/api/runs/' + String(run.id))).run;
+      setSelected({ ...run, ...detail });
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }
+
+  function onSelectedFinished(run: Run): void {
+    setSelected((current) => (current === null ? current : { ...current, ...run }));
+    void load(null, false);
+  }
+
   useEffect(() => {
     setLoaded(false);
     void load(null, false);
@@ -65,7 +84,10 @@ export function History(_props: { profile: Profile }) {
       <div className="row">
         <label className="field field--inline">
           <span className="field__label">Status</span>
-          <select value={status} onChange={(event) => setStatus(event.target.value as '' | RunStatus)}>
+          <select value={status} onChange={(event) => {
+              setSelected(null);
+              setStatus(event.target.value as '' | RunStatus);
+            }}>
             <option value="">Alle</option>
             {STATUS_ORDER.map((value) => (
               <option key={value} value={value}>
@@ -95,8 +117,12 @@ export function History(_props: { profile: Profile }) {
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr key={run.id}>
-                  <td>{formatTime(run.started_at ?? run.scheduled_for ?? '')}</td>
+                <tr key={run.id} className={selected?.id === run.id ? 'is-selected' : undefined}>
+                  <td>
+                    <button type="button" className="linkbtn" aria-expanded={selected?.id === run.id} onClick={() => void select(run)}>
+                      {formatTime(run.started_at ?? run.scheduled_for ?? '')}
+                    </button>
+                  </td>
                   <td>
                     <a href={hrefOf('jobs/' + String(run.job.id))}>{run.job.name}</a>
                   </td>
@@ -113,6 +139,10 @@ export function History(_props: { profile: Profile }) {
           </table>
         </div>
       )}
+      {selected !== null && !isFinished(selected.status) && (
+        <RunLog key={selected.id} runId={selected.id} csrf={profile.csrf_token} canCancel={canRun(profile, selected.category?.name ?? null)} onFinished={onSelectedFinished} />
+      )}
+      {selected !== null && isFinished(selected.status) && <RunDetail run={selected} heading={'Lauf-Details: ' + selected.job.name} />}
       {nextBefore !== null && (
         <div className="row">
           <button type="button" className="btn btn--ghost" onClick={() => void load(nextBefore, true)}>
