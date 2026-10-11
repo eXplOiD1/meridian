@@ -1,5 +1,6 @@
 /** Englische Fassungen; Schlüssel ist der deutsche Quelltext. Fehlt ein Eintrag, bleibt die Oberfläche deutsch. */
 export const EN: Record<string, string> = {
+  'Mehr erfahren': 'Learn more',
   'Jeder Job': 'Every job',
   'pünktlich': 'on time',
   'zur richtigen Zeit.': 'at the right time.',

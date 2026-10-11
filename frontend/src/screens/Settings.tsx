@@ -1,3 +1,4 @@
+import { ExpandableLead } from '../components/ExpandableLead';
 import { useCallback, useEffect, useId, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Alert } from '../components/Alert';
@@ -14,7 +15,7 @@ import type { CategoryRef, InternalTarget, Profile, SettingChange, SettingEntry,
 interface SettingSpec {
   key: string;
   title: string;
-  lead: ReactNode;
+  lead: string;
   /** Auswahl (Wert → Beschriftung) oder null = Zahl. */
   options: { value: string; label: string; help: string }[] | null;
   numberLabel?: string;
@@ -218,7 +219,7 @@ function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry:
         <h3 id={headingId}>{spec.title}</h3>
         <span className={'badge ' + (entry.source === 'stored' ? 'badge--warn' : 'badge--ok')}>{entry.source === 'stored' ? 'Geändert' : 'Standard'}</span>
       </div>
-      <p className="card__lead">{spec.lead}</p>
+      <ExpandableLead text={spec.lead} />
       <dl className="facts">
         <dt>Aktuell</dt>
         <dd>
