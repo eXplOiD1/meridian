@@ -160,7 +160,7 @@ export interface JobLimits {
   response_storage: 'off' | 'on' | 'never';
 }
 
-export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path' | 'http.display_host' | 'shell.max_timeout_seconds' | 'jobs.reveal_for_edit';
+export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path' | 'http.display_host' | 'shell.max_timeout_seconds' | 'jobs.reveal_for_edit' | 'app.public_url';
 
 /**
  * Antwort von `GET /api/jobs/{id}/source` (nur bei Einstellung `jobs.reveal_for_edit = on` und Bearbeitungsrecht):
@@ -344,11 +344,13 @@ export interface Overview {
   attention: Array<{ job: { id: number; name: string }; status: 'failed' | 'timeout'; finished_at: string | null }>;
 }
 
+export type ChannelKind = 'email' | 'ntfy' | 'webhook' | 'telegram';
+
 /** Kanal der Benachrichtigungen (`/api/notifications/channels`). Das Geheimnis kommt nie zurück, nur `has_secret`. */
 export interface NotificationChannel {
   id: number;
   name: string;
-  type: 'email' | 'ntfy';
+  type: ChannelKind;
   enabled: boolean;
   config: {
     host?: string;
@@ -361,6 +363,8 @@ export interface NotificationChannel {
     server?: string;
     topic?: string;
     priority?: number;
+    url?: string;
+    chat_id?: string;
   };
   has_secret: boolean;
   created_at: string;
@@ -372,7 +376,7 @@ export interface NotificationChannel {
 export interface NotificationChannelName {
   id: number;
   name: string;
-  type: 'email' | 'ntfy';
+  type: ChannelKind;
   enabled: boolean;
 }
 

@@ -139,7 +139,7 @@ final class ChannelStore
             );
             // Nur Feldnamen ins Audit, nie Werte.
             $changed = [];
-            foreach (['host', 'port', 'encryption', 'username', 'from', 'from_name', 'to', 'server', 'topic', 'priority'] as $key) {
+            foreach (['host', 'port', 'encryption', 'username', 'from', 'from_name', 'to', 'server', 'topic', 'priority', 'url', 'chat_id'] as $key) {
                 if (($existing->config[$key] ?? null) !== ($draft->config[$key] ?? null)) {
                     $changed[] = $key;
                 }

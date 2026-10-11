@@ -18,6 +18,8 @@ interface SettingSpec {
   /** Auswahl (Wert → Beschriftung) oder null = Zahl. */
   options: { value: string; label: string; help: string }[] | null;
   numberLabel?: string;
+  /** Freitext statt Zahl (z. B. eine Adresse). */
+  text?: boolean;
   extra?: (entry: SettingEntry) => ReactNode;
 }
 
@@ -107,7 +109,21 @@ const EDITOR_SPECS: SettingSpec[] = [
   },
 ];
 
+const APP_SPECS: SettingSpec[] = [
+  {
+    key: 'app.public_url',
+    title: 'Adresse von Meridian',
+    lead: 'Unter welcher Adresse du Meridian im Browser öffnest, z. B. http://192.168.0.110:8090 oder https://meridian.example.org. Sie wird für den Link zum Job in Benachrichtigungen gebraucht. Leer = Nachrichten enthalten keinen Link.',
+    options: null,
+    numberLabel: 'Adresse',
+    text: true,
+  },
+];
+
 function optionLabel(spec: SettingSpec, value: number | string): string {
+  if (spec.text === true) {
+    return value === '' ? '(nicht gesetzt)' : String(value);
+  }
   if (spec.options === null) {
     return String(value) + ' s';
   }
@@ -154,7 +170,7 @@ function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry:
   function submit(event: FormEvent): void {
     event.preventDefault();
     // Zahlen als Zahl senden; alles andere unverändert, damit der Server die feste Meldung liefert.
-    const value = spec.options === null && /^[0-9]{1,6}$/.test(draft.trim()) ? Number.parseInt(draft, 10) : draft;
+    const value = spec.options === null && spec.text !== true && /^[0-9]{1,6}$/.test(draft.trim()) ? Number.parseInt(draft, 10) : draft.trim();
     void send(value);
   }
 
@@ -190,7 +206,7 @@ function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry:
       <FormField label={spec.numberLabel ?? 'Neuer Wert'} error={fieldError} hint={help}>
         {(aria) =>
           spec.options === null ? (
-            <input {...aria} className="input input--short" name={spec.key} inputMode="numeric" autoComplete="off" value={draft} onChange={(e) => setDraft(e.target.value)} />
+            <input {...aria} className={spec.text === true ? 'input' : 'input input--short'} name={spec.key} inputMode={spec.text === true ? 'url' : 'numeric'} autoComplete="off" value={draft} onChange={(e) => setDraft(e.target.value)} />
           ) : (
             <select {...aria} className="input input--short" name={spec.key} value={draft} onChange={(e) => setDraft(e.target.value)}>
               {spec.options.map((option) => (
@@ -278,6 +294,10 @@ function ShellSettings({ csrf }: { csrf: string }) {
       csrf={csrf}
     />
   );
+}
+
+function AppSettings({ csrf }: { csrf: string }) {
+  return <SettingsGroup id="settings-app" title="Allgemein" lead="Angaben, die Meridian über sich selbst braucht. Änderungen gelten sofort und werden im Audit-Log festgehalten." specs={APP_SPECS} csrf={csrf} />;
 }
 
 function EditorSettings({ csrf }: { csrf: string }) {
@@ -824,6 +844,7 @@ export function Settings({ profile }: { profile: Profile }) {
       {settings && <HttpSettings csrf={profile.csrf_token} />}
       {settings && <ShellSettings csrf={profile.csrf_token} />}
       {settings && <EditorSettings csrf={profile.csrf_token} />}
+      {settings && <AppSettings csrf={profile.csrf_token} />}
       {settings && <NotificationChannels csrf={profile.csrf_token} />}
       {targets && <InternalTargets csrf={profile.csrf_token} />}
       {shellTargets && <ShellTargets csrf={profile.csrf_token} />}

@@ -140,7 +140,7 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 
 | Status | Aufgabe | Agent |
 |---|---|---|
-| [~] | Benachrichtigungen (ADR 0007): E-Mail über PHPMailer/SMTP (einrichtbar) und ntfy, Kanal-API und -Oberfläche, Einstellungen je Job (Fehlschlag nach n, Wiederherstellung, Kanalauswahl), Zusteller mit Ausgang und Wiederholung — **fertig**. Offen: Telegram, Webhook, Herzschlag-Überwachung, TLS-Ablauf-Warnung, „deaktiviert wegen zu vieler Fehlschläge“, Link zum Job in der Nachricht (braucht eine öffentliche Adresse als Einstellung) | backend |
+| [~] | Benachrichtigungen (ADR 0007): E-Mail über PHPMailer/SMTP (einrichtbar) und ntfy, Kanal-API und -Oberfläche, Einstellungen je Job (Fehlschlag nach n, Wiederherstellung, Kanalauswahl), Zusteller mit Ausgang und Wiederholung — **fertig**, dazu Webhook, Telegram und der Link zum Job (Einstellung `app.public_url`, Migration 0016). Offen: Herzschlag-Überwachung (eingehende Pings; braucht eigenen Entwurf), TLS-Ablauf-Warnung, „deaktiviert wegen zu vieler Fehlschläge“ | backend |
 | [ ] | Statistiken über Wochen und Monate, Verdichtung alter Läufe | backend |
 | [ ] | **Sekunden-Intervalle (Wunsch Alex):** Modus „Alle n Sekunden“ mit Untergrenze (Vorschlag 10 s) und vom Admin einstellbarer globaler Mindestzeit, Planer im Sekundentakt, Taktband gröber zusammenfassen. Voraussetzung: Verdichtung alter Läufe (Last: 8.000+ Läufe/Tag bei 10 s). Die Cron-Bibliothek kennt keine Sekunden, daher festes Intervall statt Cron | scheduler, backend, frontend |
 | [ ] | Öffentliche Statusseiten | frontend |

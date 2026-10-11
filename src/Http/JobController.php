@@ -333,6 +333,7 @@ final class JobController
         [, $grants] = $auth;
         [$limit, $before, $status] = self::pageParams($request);
         $jobId = null;
+        /** @var mixed $raw */
         $raw = $request->query->all()['job_id'] ?? null;
         if ($raw !== null) {
             $jobId = self::positiveInt($raw);

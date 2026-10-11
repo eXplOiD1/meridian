@@ -6,10 +6,10 @@ import { FormField } from './FormField';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatTime } from '../lib/format';
-import type { NotificationChannel } from '../types';
+import type { ChannelKind, NotificationChannel } from '../types';
 
 interface ChannelForm {
-  type: 'email' | 'ntfy';
+  type: ChannelKind;
   name: string;
   enabled: boolean;
   host: string;
@@ -25,6 +25,8 @@ interface ChannelForm {
   topic: string;
   priority: string;
   token: string;
+  url: string;
+  chatId: string;
 }
 
 const EMPTY: ChannelForm = {
@@ -44,9 +46,11 @@ const EMPTY: ChannelForm = {
   topic: '',
   priority: '3',
   token: '',
+  url: '',
+  chatId: '',
 };
 
-const TYPE_LABEL: Record<NotificationChannel['type'], string> = { email: 'E-Mail (SMTP)', ntfy: 'ntfy' };
+const TYPE_LABEL: Record<NotificationChannel['type'], string> = { email: 'E-Mail (SMTP)', ntfy: 'ntfy', webhook: 'Webhook', telegram: 'Telegram' };
 const ENCRYPTION_LABEL = { none: 'Keine (nur im vertrauenswürdigen Heimnetz)', starttls: 'STARTTLS (meist Port 587)', ssl: 'SSL/TLS (meist Port 465)' } as const;
 const STATUS_LABEL: Record<string, string> = { pending: 'wartet auf Zustellung', sent: 'zugestellt', failed: 'fehlgeschlagen' };
 
@@ -67,6 +71,8 @@ function fromChannel(channel: NotificationChannel): ChannelForm {
     server: c.server ?? 'https://ntfy.sh',
     topic: c.topic ?? '',
     priority: String(c.priority ?? 3),
+    url: c.url ?? '',
+    chatId: c.chat_id ?? '',
   };
 }
 
@@ -86,6 +92,20 @@ function bodyOf(form: ChannelForm): Record<string, unknown> {
     } else if (form.password !== '') {
       body.password = form.password;
     }
+  } else if (form.type === 'webhook') {
+    body.url = form.url.trim();
+    if (form.clearSecret) {
+      body.token = null;
+    } else if (form.token !== '') {
+      body.token = form.token;
+    }
+  } else if (form.type === 'telegram') {
+    body.chat_id = form.chatId.trim();
+    if (form.clearSecret) {
+      body.token = null;
+    } else if (form.token !== '') {
+      body.token = form.token;
+    }
   } else {
     body.server = form.server.trim();
     body.topic = form.topic.trim();
@@ -101,9 +121,16 @@ function bodyOf(form: ChannelForm): Record<string, unknown> {
 
 function summary(channel: NotificationChannel): string {
   const c = channel.config;
-  return channel.type === 'email'
-    ? (c.host ?? '') + ':' + String(c.port ?? '') + ' · an ' + String((c.to ?? []).length) + ' Empfänger'
-    : (c.server ?? '') + ' · Thema ' + (c.topic ?? '');
+  switch (channel.type) {
+    case 'email':
+      return (c.host ?? '') + ':' + String(c.port ?? '') + ' · an ' + String((c.to ?? []).length) + ' Empfänger';
+    case 'webhook':
+      return c.url ?? '';
+    case 'telegram':
+      return 'Chat ' + (c.chat_id ?? '');
+    default:
+      return (c.server ?? '') + ' · Thema ' + (c.topic ?? '');
+  }
 }
 
 /**
@@ -191,7 +218,7 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
   }
 
   const isEmail = form.type === 'email';
-  const secretLabel = isEmail ? 'Passwort' : 'Zugriffstoken (optional)';
+  const secretLabel = isEmail ? 'Passwort' : form.type === 'telegram' ? 'Bot-Token' : 'Zugriffstoken (optional)';
   const stored = editing?.has_secret === true;
 
   return (
@@ -277,6 +304,8 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
               <select {...aria} className="input" name="channel-type" value={form.type} disabled={editing !== null} onChange={(e) => set('type', e.target.value as ChannelForm['type'])}>
                 <option value="email">{TYPE_LABEL.email}</option>
                 <option value="ntfy">{TYPE_LABEL.ntfy}</option>
+                <option value="webhook">{TYPE_LABEL.webhook}</option>
+                <option value="telegram">{TYPE_LABEL.telegram}</option>
               </select>
             )}
           </FormField>
@@ -323,6 +352,24 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
             </div>
             <FormField label="Empfänger" error={errors.to} hint="Eine Adresse pro Zeile, höchstens 10.">
               {(aria) => <textarea {...aria} className="input" name="smtp-to" rows={3} value={form.to} onChange={(e) => set('to', e.target.value)} />}
+            </FormField>
+          </>
+        ) : form.type === 'webhook' ? (
+          <>
+            <FormField label="Adresse (URL)" error={errors.url} hint="Meridian sendet einen JSON-Körper per POST (Ereignis, Job, Status, Zeit, Hinweis, Link, Text). Parameter in der Adresse sind nicht erlaubt; Zugangsdaten gehören ins Token-Feld.">
+              {(aria) => <input {...aria} className="input" name="webhook-url" value={form.url} autoComplete="off" onChange={(e) => set('url', e.target.value)} />}
+            </FormField>
+            <FormField label={secretLabel} error={errors.token} hint={stored ? 'Ein Token ist gespeichert. Leer lassen, um es zu behalten. Es wird als „Authorization: Bearer …“ gesendet.' : 'Wird als „Authorization: Bearer …“ gesendet.'}>
+              {(aria) => <input {...aria} className="input" type="password" name="webhook-token" value={form.token} autoComplete="new-password" disabled={form.clearSecret} onChange={(e) => set('token', e.target.value)} />}
+            </FormField>
+          </>
+        ) : form.type === 'telegram' ? (
+          <>
+            <FormField label="Chat" error={errors.chat_id} hint="Nummer des Chats oder der Gruppe (Gruppen beginnen mit -) oder @kanalname.">
+              {(aria) => <input {...aria} className="input" name="telegram-chat" value={form.chatId} autoComplete="off" onChange={(e) => set('chatId', e.target.value)} />}
+            </FormField>
+            <FormField label={secretLabel} error={errors.token} hint={stored ? 'Ein Token ist gespeichert. Leer lassen, um es zu behalten.' : 'Vom BotFather, Format 123456789:ABC… Der Bot muss im Chat sein.'}>
+              {(aria) => <input {...aria} className="input" type="password" name="telegram-token" value={form.token} autoComplete="new-password" disabled={form.clearSecret} onChange={(e) => set('token', e.target.value)} />}
             </FormField>
           </>
         ) : (

@@ -46,6 +46,8 @@ final class Notifier
         private readonly ChannelStore $channels,
         private readonly array $senders,
         private readonly SecretMasker $masker,
+        /** @var (\Closure(): ?string)|null öffentliche Adresse von Meridian für Links (Einstellung app.public_url) */
+        private readonly ?\Closure $baseUrl = null,
     ) {
     }
 
@@ -200,7 +202,7 @@ final class Notifier
         $result = ['sent' => 0, 'retry' => 0, 'failed' => 0];
         $nowText = Timestamp::format($this->clock->now());
         $due = $this->db->fetchAll(
-            "SELECT id, kind, channel_id, job_name, run_status, occurred_at, detail, failures FROM notification_outbox
+            "SELECT id, kind, channel_id, job_id, job_name, run_status, occurred_at, detail, failures FROM notification_outbox
               WHERE status = 'pending' AND next_attempt_at <= :now ORDER BY id LIMIT :limit",
             ['now' => $nowText, 'limit' => self::BATCH],
         );
@@ -244,6 +246,26 @@ final class Notifier
     }
 
     /**
+     * Link zum Job, wenn eine öffentliche Adresse eingestellt ist (nie bei Testnachrichten und gelöschten Jobs).
+     *
+     * @param array<string, mixed> $row
+     */
+    private function link(array $row): ?string
+    {
+        $jobId = Row::intOrNull($row, 'job_id');
+        if ($this->baseUrl === null || $jobId === null || Row::string($row, 'kind') === 'test') {
+            return null;
+        }
+        $base = ($this->baseUrl)();
+        if ($base === null || $base === '') {
+            return null;
+        }
+        $exists = $this->db->fetchOne('SELECT id FROM jobs WHERE id = :id', ['id' => $jobId]);
+
+        return $exists === null ? null : $base . '/app/#/jobs/' . $jobId;
+    }
+
+    /**
      * @param array<string, mixed> $row
      *
      * @return string|null null = zugestellt, sonst die feste Fehlermeldung
@@ -265,6 +287,7 @@ final class Notifier
             Row::string($row, 'occurred_at'),
             Row::stringOrNull($row, 'detail'),
             Row::int($row, 'failures'),
+            $this->link($row),
         );
         try {
             $secret = $this->channels->secret($channel->id);

@@ -17,6 +17,7 @@ final readonly class Message
         public string $occurredAt,
         public ?string $detail,
         public int $failures,
+        public ?string $link = null,
     ) {
     }
 
@@ -46,7 +47,7 @@ final readonly class Message
             $lines[] = 'Hinweis: ' . $this->detail;
         }
         $lines[] = '';
-        $lines[] = 'Details stehen in Meridian unter „Verlauf“.';
+        $lines[] = $this->link === null ? 'Details stehen in Meridian unter „Verlauf“.' : 'Öffnen: ' . $this->link;
 
         return implode("\n", $lines) . "\n";
     }

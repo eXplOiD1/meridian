@@ -15,6 +15,8 @@ final class ChannelValidator
 
     private const EMAIL_KEYS = ['name', 'type', 'enabled', 'host', 'port', 'encryption', 'username', 'password', 'from', 'from_name', 'to'];
     private const NTFY_KEYS = ['name', 'type', 'enabled', 'server', 'topic', 'priority', 'token'];
+    private const WEBHOOK_KEYS = ['name', 'type', 'enabled', 'url', 'token'];
+    private const TELEGRAM_KEYS = ['name', 'type', 'enabled', 'chat_id', 'token'];
 
     /**
      * @param array<mixed> $input
@@ -39,7 +41,12 @@ final class ChannelValidator
             }
             $type = $given;
         }
-        $allowed = $type === ChannelType::Email ? self::EMAIL_KEYS : self::NTFY_KEYS;
+        $allowed = match ($type) {
+            ChannelType::Email => self::EMAIL_KEYS,
+            ChannelType::Ntfy => self::NTFY_KEYS,
+            ChannelType::Webhook => self::WEBHOOK_KEYS,
+            ChannelType::Telegram => self::TELEGRAM_KEYS,
+        };
         foreach (array_keys($input) as $key) {
             if (!in_array((string) $key, $allowed, true)) {
                 throw new InvalidChannel((string) $key, 'Unbekanntes Feld. Erlaubt sind: ' . implode(', ', $allowed) . '.');
@@ -54,10 +61,15 @@ final class ChannelValidator
         $secretField = $type->secretField();
         $secret = null;
         if (array_key_exists($secretField, $input)) {
-            $secret = self::secret($input[$secretField], $secretField);
+            $secret = self::secret($input[$secretField], $secretField, $type);
         }
 
-        $config = $type === ChannelType::Email ? self::email($input) : self::ntfy($input);
+        $config = match ($type) {
+            ChannelType::Email => self::email($input),
+            ChannelType::Ntfy => self::ntfy($input),
+            ChannelType::Webhook => self::webhook($input),
+            ChannelType::Telegram => self::telegram($input),
+        };
 
         return new ChannelDraft($name, $type, $config, $secret, $enabled);
     }
@@ -136,6 +148,51 @@ final class ChannelValidator
 
     /**
      * @param array<mixed> $input
+     *
+     * @return array<string, mixed>
+     */
+    private static function webhook(array $input): array
+    {
+        $url = $input['url'] ?? null;
+        if (!is_string($url) || strlen($url) > 300 || preg_match('/^[\x21-\x7E]+$/D', $url) !== 1) {
+            throw new InvalidChannel('url', 'Adresse: http:// oder https://, Host und optional Port und Pfad, höchstens 300 Zeichen.');
+        }
+        $parts = parse_url($url);
+        if ($parts === false || !isset($parts['scheme'], $parts['host']) || !in_array($parts['scheme'], ['http', 'https'], true)
+            || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])) {
+            throw new InvalidChannel('url', 'Adresse: http:// oder https://, Host und optional Port und Pfad, ohne Benutzer, Parameter (Query) oder Anker. Zugangsdaten gehören ins Feld „Token“.');
+        }
+        $path = $parts['path'] ?? '';
+        if ($path !== '' && preg_match('#^(/[A-Za-z0-9._~%-]*)+$#D', $path) !== 1) {
+            throw new InvalidChannel('url', 'Pfad: nur Buchstaben, Ziffern und . _ ~ % - /');
+        }
+        $host = self::host($parts['host'], 'url');
+        $port = $parts['port'] ?? ($parts['scheme'] === 'https' ? 443 : 80);
+        if ($port < 1 || $port > 65535) {
+            throw new InvalidChannel('url', 'Adresse: ungültiger Port.');
+        }
+        $isDefaultPort = ($parts['scheme'] === 'https' && $port === 443) || ($parts['scheme'] === 'http' && $port === 80);
+
+        return ['url' => $parts['scheme'] . '://' . (str_contains($host, ':') ? '[' . $host . ']' : $host) . ($isDefaultPort ? '' : ':' . $port) . $path];
+    }
+
+    /**
+     * @param array<mixed> $input
+     *
+     * @return array<string, mixed>
+     */
+    private static function telegram(array $input): array
+    {
+        $chat = $input['chat_id'] ?? null;
+        if (!is_string($chat) || preg_match('/^(-?\d{1,20}|@[A-Za-z][A-Za-z0-9_]{4,31})$/D', $chat) !== 1) {
+            throw new InvalidChannel('chat_id', 'Chat: Nummer wie 123456789 (Gruppen mit -) oder @kanalname.');
+        }
+
+        return ['chat_id' => $chat];
+    }
+
+    /**
+     * @param array<mixed> $input
      */
     private static function text(array $input, string $key, int $min, int $max, ?string $pattern): string
     {
@@ -148,10 +205,13 @@ final class ChannelValidator
         return $value;
     }
 
-    private static function secret(mixed $value, string $field): string
+    private static function secret(mixed $value, string $field, ChannelType $type): string
     {
         if ($value === null) {
             return '';
+        }
+        if ($type === ChannelType::Telegram && (!is_string($value) || preg_match('/^\d{5,12}:[A-Za-z0-9_-]{30,50}$/D', $value) !== 1)) {
+            throw new InvalidChannel($field, 'Bot-Token: Format 123456789:ABC…, wie ihn der BotFather nennt; null löscht den gespeicherten Wert.');
         }
         if (!is_string($value) || $value === '' || strlen($value) > 255 || preg_match('/^[\x21-\x7E ]+$/D', $value) !== 1) {
             throw new InvalidChannel($field, 'Höchstens 255 Zeichen, ohne Steuerzeichen und Umlaute; null löscht den gespeicherten Wert.');
