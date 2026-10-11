@@ -252,6 +252,7 @@ final class AuthController
             'roles' => $roles,
             'language' => $this->users->languageOf($user->id),
             'theme' => $this->users->themeOf($user->id),
+            'job_editor_mode' => $this->users->jobEditorModeOf($user->id),
             'totp_enabled' => $this->twoFactor->isEnabled($user->id),
             'password_change_required' => $user->passwordMustChange,
             'csrf_token' => $this->csrf->tokenFor($session->token),

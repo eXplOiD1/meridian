@@ -201,6 +201,25 @@ final class UserRepository
 
     public const THEMES = ['dark', 'light'];
 
+    public const JOB_EDITOR_MODES = ['simple', 'expert'];
+
+    public function jobEditorModeOf(int $userId): string
+    {
+        $row = $this->db->fetchOne('SELECT job_editor_mode FROM users WHERE id = :id', ['id' => $userId]);
+        $mode = $row === null ? null : Row::stringOrNull($row, 'job_editor_mode');
+
+        return $mode !== null && in_array($mode, self::JOB_EDITOR_MODES, true) ? $mode : 'simple';
+    }
+
+    public function setJobEditorMode(int $userId, string $mode): bool
+    {
+        if (!in_array($mode, self::JOB_EDITOR_MODES, true)) {
+            throw new \InvalidArgumentException('Unbekannter Editor-Modus.');
+        }
+
+        return $this->db->execute('UPDATE users SET job_editor_mode = :mode WHERE id = :id AND deleted_at IS NULL', ['mode' => $mode, 'id' => $userId]) === 1;
+    }
+
     /** Farbschema des Benutzers (ADR 0017); unbekannt → dunkel. */
     public function themeOf(int $userId): string
     {

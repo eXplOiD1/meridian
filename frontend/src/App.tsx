@@ -162,6 +162,7 @@ export function App() {
   }
 
   const { profile } = session;
+  const adoptEditorMode = (mode: 'simple' | 'expert'): void => setSession((current) => current.status === 'in' ? { status: 'in', profile: { ...current.profile, job_editor_mode: mode } } : current);
   // Pflichtwechsel nach Einmalpasswort: nur dieser Schritt und Abmelden, kein Menü, keine anderen Aufrufe.
   if (profile.password_change_required === true) {
     return (
@@ -195,7 +196,7 @@ export function App() {
       {effective.name === 'monitors' && <Monitors profile={profile} />}
       {effective.name === 'status-pages' && <StatusPages profile={profile} />}
       {effective.name === 'job' && <JobDetail key={effective.id} profile={profile} id={effective.id} />}
-      {effective.name === 'job-new' && <JobEdit profile={profile} id={null} />}
+      {effective.name === 'job-new' && <JobEdit profile={profile} id={null} onEditorModeChange={adoptEditorMode} />}
       {effective.name === 'users' && <Users profile={profile} roleId={effective.roleId ?? null} />}
       {effective.name === 'roles' && <Roles profile={profile} />}
       {effective.name === 'role-new' && <RoleEdit key="new" profile={profile} id={null} />}
@@ -203,7 +204,7 @@ export function App() {
       {effective.name === 'user-new' && <UserEdit key="new" profile={profile} id={null} />}
       {effective.name === 'user' && <UserEdit key={effective.id} profile={profile} id={effective.id} />}
       {effective.name === 'categories' && <Categories profile={profile} />}
-      {effective.name === 'job-edit' && <JobEdit key={effective.id} profile={profile} id={effective.id} />}
+      {effective.name === 'job-edit' && <JobEdit key={effective.id} profile={profile} id={effective.id} onEditorModeChange={adoptEditorMode} />}
     </Layout>
   );
 }

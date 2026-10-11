@@ -12,6 +12,7 @@ export interface Profile {
   language?: 'de' | 'en';
   /** Farbschema des Benutzers (ADR 0017). */
   theme?: 'dark' | 'light';
+  job_editor_mode?: 'simple' | 'expert';
   totp_enabled: boolean;
   /** Einmalpasswort noch nicht gewechselt: Der Server gibt dann keine Rechte, nur den Passwortwechsel. */
   password_change_required?: boolean;

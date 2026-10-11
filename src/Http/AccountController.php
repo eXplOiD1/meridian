@@ -49,6 +49,7 @@ final class AccountController
         $kernel->put('auth_profile', '/api/auth/profile', $this->profile(...));
         $kernel->put('auth_language', '/api/auth/language', $this->language(...));
         $kernel->put('auth_theme', '/api/auth/theme', $this->theme(...));
+        $kernel->put('auth_job_editor_mode', '/api/auth/job-editor-mode', $this->jobEditorMode(...));
         $kernel->post('auth_password', '/api/auth/password', $this->password(...));
         $kernel->get('auth_sessions', '/api/auth/sessions', $this->listSessions(...));
         $kernel->post('auth_sessions_end_others', '/api/auth/sessions/end-others', $this->endOthers(...));
@@ -76,8 +77,26 @@ final class AccountController
     }
 
     /**
-     * Oberflächensprache des angemeldeten Benutzers (`de` oder `en`); eine persönliche Einstellung, ohne Passwort.
+     * Job-Editor-Modus des angemeldeten Benutzers; gilt für neue und bestehende Jobs.
      */
+    public function jobEditorMode(#[\SensitiveParameter] Request $request): Response
+    {
+        $own = $this->own($request, mutating: true, allowPasswordChange: false);
+        if ($own instanceof Response) {
+            return $own;
+        }
+        [, $user] = $own;
+        $data = self::body($request, ['job_editor_mode']);
+        $mode = $data['job_editor_mode'];
+        if (!is_string($mode) || !in_array($mode, UserRepository::JOB_EDITOR_MODES, true)) {
+            throw ValidationFailed::field('job_editor_mode', 'Editor-Modus: „simple“ oder „expert“.');
+        }
+        $this->users->setJobEditorMode($user->id, $mode);
+
+        return JsonReply::json(['job_editor_mode' => $mode]);
+    }
+
+    /** Oberflächensprache des angemeldeten Benutzers. */
     public function language(#[\SensitiveParameter] Request $request): Response
     {
         $own = $this->own($request, mutating: true, allowPasswordChange: false);
