@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Meridian\Job;
 
 use Meridian\Auth\Clock;
+use Meridian\Database\Timestamp;
 use Meridian\Http\ValidationFailed;
 use Meridian\Runner\Http\AddressPolicy;
 use Meridian\Runner\Http\HttpPayload;
@@ -39,8 +40,8 @@ final class JobValidator
     /** Obergrenze des Anfragekörpers eines Shell-Jobs (Skript bis 256 KiB, ADR 0004 §4.3). */
     public const MAX_SHELL_BODY_BYTES = 327680;
 
-    private const TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http', 'request'];
-    private const SHELL_TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'shell', 'script'];
+    private const TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'expires_at', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http', 'request'];
+    private const SHELL_TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'expires_at', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'shell', 'script'];
     private const HTTP_KEYS = ['method', 'timeout_seconds', 'expected_status', 'max_redirects', 'store_response'];
     private const REQUEST_KEYS = ['url', 'headers', 'body'];
 
@@ -103,6 +104,7 @@ final class JobValidator
         $cron = $this->cron($input, $existing, $timezone, $errors);
         $isEnabled = $this->bool($input, 'is_enabled', $existing === null ? true : $existing->isEnabled, $errors);
         $catchUp = $this->bool($input, 'catch_up', $existing === null ? false : $existing->catchUp, $errors);
+        $expiresAt = $this->expiresAt($input, $existing, $timezone, $errors);
         $overlap = $this->overlap($input, $existing, $errors);
         $retryCount = $this->integer($input, 'retry_count', $existing === null ? 0 : $existing->retryCount, 0, RetryPolicy::MAX_RETRIES, 'Wiederholungen: ganze Zahl von 0 bis ' . RetryPolicy::MAX_RETRIES . '.', $errors);
         $retryDelay = $this->integer($input, 'retry_delay_seconds', $existing === null ? self::DEFAULT_RETRY_DELAY_SECONDS : $existing->retryDelaySeconds, 1, RetryPolicy::MAX_DELAY_SECONDS, 'Abstand der Wiederholungen: ganze Zahl von 1 bis 3600 (Sekunden).', $errors);
@@ -145,6 +147,7 @@ final class JobValidator
             $retryDelay,
             $config,
             $payload,
+            $expiresAt === false ? null : $expiresAt,
         );
     }
 
@@ -165,6 +168,7 @@ final class JobValidator
         $cron = $this->cron($input, $existing, $timezone, $errors);
         $isEnabled = $this->bool($input, 'is_enabled', $existing === null ? true : $existing->isEnabled, $errors);
         $catchUp = $this->bool($input, 'catch_up', $existing === null ? false : $existing->catchUp, $errors);
+        $expiresAt = $this->expiresAt($input, $existing, $timezone, $errors);
         $overlap = $this->overlap($input, $existing, $errors);
         $retryCount = $this->integer($input, 'retry_count', $existing === null ? 0 : $existing->retryCount, 0, RetryPolicy::MAX_RETRIES, 'Wiederholungen: ganze Zahl von 0 bis ' . RetryPolicy::MAX_RETRIES . '.', $errors);
         $retryDelay = $this->integer($input, 'retry_delay_seconds', $existing === null ? self::DEFAULT_RETRY_DELAY_SECONDS : $existing->retryDelaySeconds, 1, RetryPolicy::MAX_DELAY_SECONDS, 'Abstand der Wiederholungen: ganze Zahl von 1 bis 3600 (Sekunden).', $errors);
@@ -179,7 +183,7 @@ final class JobValidator
             throw new \LogicException('Validierung ohne Fehlermeldung abgebrochen.');
         }
 
-        return new JobDraft($name, JobType::Shell, $categoryId, $categoryName, $cron, $timezone, $isEnabled, $catchUp, $overlap, $retryCount, $retryDelay, $config, $payload);
+        return new JobDraft($name, JobType::Shell, $categoryId, $categoryName, $cron, $timezone, $isEnabled, $catchUp, $overlap, $retryCount, $retryDelay, $config, $payload, $expiresAt === false ? null : $expiresAt);
     }
 
     /**
@@ -334,6 +338,51 @@ final class JobValidator
         }
 
         return $value;
+    }
+
+    /**
+     * `expires_at`: Ortszeit des Jobs ohne Zonenangabe (`2026-12-31T23:59` oder mit Sekunden) oder `null` (läuft
+     * unbegrenzt); gespeichert wird UTC. Fehlt das Feld, bleibt der bisherige Wert. Ein neuer Zeitpunkt muss in der
+     * Zukunft liegen. `false` = Fehler (steht in `$errors`).
+     *
+     * @param array<mixed>          $input
+     * @param array<string, string> $errors
+     */
+    private function expiresAt(#[\SensitiveParameter] array $input, ?JobRecord $existing, ?string $timezone, array &$errors): string|false|null
+    {
+        if (!array_key_exists('expires_at', $input)) {
+            return $existing?->expiresAt;
+        }
+        $raw = $input['expires_at'];
+        if ($raw === null) {
+            return null;
+        }
+        $message = 'Ablaufzeit: Datum und Uhrzeit wie 2026-12-31T23:59 (Ortszeit des Jobs) oder leer lassen.';
+        if (!is_string($raw) || $timezone === null || $timezone === '' || preg_match('/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/D', $raw, $m) !== 1) {
+            $errors['expires_at'] = $message;
+
+            return false;
+        }
+        try {
+            $local = new \DateTimeImmutable($m[1] . '-' . $m[2] . '-' . $m[3] . ' ' . $m[4] . ':' . $m[5] . ':' . ($m[6] ?? '00'), new \DateTimeZone($timezone));
+        } catch (\Exception) {
+            $errors['expires_at'] = $message;
+
+            return false;
+        }
+        if ($local->format('Y-m-d\TH:i:s') !== $m[1] . '-' . $m[2] . '-' . $m[3] . 'T' . $m[4] . ':' . $m[5] . ':' . ($m[6] ?? '00')) {
+            $errors['expires_at'] = $message;
+
+            return false;
+        }
+        $utc = Timestamp::format($local);
+        if ($utc !== $existing?->expiresAt && $local <= $this->clock->now()) {
+            $errors['expires_at'] = 'Die Ablaufzeit muss in der Zukunft liegen.';
+
+            return false;
+        }
+
+        return $utc;
     }
 
     /**

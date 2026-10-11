@@ -93,7 +93,7 @@ final class Planner
     public function reschedule(int $jobId): ?\DateTimeImmutable
     {
         return $this->db->immediate(function () use ($jobId): ?\DateTimeImmutable {
-            $job = $this->db->fetchOne('SELECT cron, timezone, is_enabled FROM jobs WHERE id = :id', ['id' => $jobId]);
+            $job = $this->db->fetchOne('SELECT cron, timezone, is_enabled, expires_at FROM jobs WHERE id = :id', ['id' => $jobId]);
             if ($job === null) {
                 throw new \InvalidArgumentException('Job nicht gefunden.');
             }
@@ -102,6 +102,9 @@ final class Planner
                 try {
                     $next = CronSchedule::forJob($job['cron'], $job['timezone'])->nextAfter($this->clock->now());
                 } catch (\InvalidArgumentException | \RuntimeException) {
+                    $next = null;
+                }
+                if ($next !== null && self::expired($job['expires_at'] ?? null, $next)) {
                     $next = null;
                 }
             }
@@ -127,7 +130,7 @@ final class Planner
 
         $now = $this->clock->now();
         $job = $this->db->fetchOne(
-            'SELECT id, cron, timezone, overlap_policy, catch_up, is_enabled, next_run_at FROM jobs WHERE id = :id',
+            'SELECT id, cron, timezone, overlap_policy, catch_up, is_enabled, expires_at, next_run_at FROM jobs WHERE id = :id',
             ['id' => $jobId],
         );
         // Zwischen Auswahl und Transaktion deaktiviert, gelöscht oder schon geplant: nichts tun.
@@ -141,6 +144,12 @@ final class Planner
             return $this->disableSchedule($jobId, null, $now, self::NOTE_INVALID_SCHEDULE);
         }
         if ($scheduled > $now) {
+            return null;
+        }
+        // Ein Termin nach dem Ablauf des Zeitplans (z. B. nach nachträglich gesetzter Ablaufzeit) läuft nicht mehr.
+        if (self::expired($job['expires_at'] ?? null, $scheduled)) {
+            $this->db->execute('UPDATE jobs SET next_run_at = NULL WHERE id = :id', ['id' => $jobId]);
+
             return null;
         }
 
@@ -160,9 +169,10 @@ final class Planner
         }
 
         $missedBefore = $now->getTimestamp() - $scheduled->getTimestamp() > self::MISSED_AFTER_SECONDS;
+        // Zeitplan abgelaufen: der letzte fällige Lauf wird noch geplant, danach kein weiterer Termin.
         $this->db->execute(
             'UPDATE jobs SET next_run_at = :next WHERE id = :id',
-            ['next' => Timestamp::format($next), 'id' => $jobId],
+            ['next' => self::expired($job['expires_at'] ?? null, $next) ? null : Timestamp::format($next), 'id' => $jobId],
         );
 
         if ($latest !== null) {
@@ -258,5 +268,18 @@ final class Planner
         $this->db->execute('UPDATE jobs SET next_run_at = NULL WHERE id = :id', ['id' => $jobId]);
 
         return $this->insertRun($jobId, RunStatus::Skipped, $scheduled, $now, $note);
+    }
+
+    /** Liegt der Termin nach dem Ende des Zeitplans (`expires_at`, UTC)? Ohne Ablaufzeit nie. */
+    private static function expired(mixed $expiresAt, \DateTimeImmutable $at): bool
+    {
+        if (!is_string($expiresAt)) {
+            return false;
+        }
+        try {
+            return $at > Timestamp::parse($expiresAt);
+        } catch (\InvalidArgumentException) {
+            return false;
+        }
     }
 }

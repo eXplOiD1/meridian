@@ -255,6 +255,15 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
             {overlapLabel(job.overlap_policy)} · Wiederholungen: {job.retry_count}
             {job.catch_up ? ' · verpasste Läufe werden nachgeholt' : ''}
           </dd>
+          {job.expires_at !== null && (
+            <>
+              <dt>Zeitplan läuft ab</dt>
+              <dd>
+                {formatTime(job.expires_at)}
+                {new Date(job.expires_at).getTime() <= Date.now() ? ' · abgelaufen, keine weiteren Läufe' : ''}
+              </dd>
+            </>
+          )}
         </dl>
       </section>
 

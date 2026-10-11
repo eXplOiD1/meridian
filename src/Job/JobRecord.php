@@ -38,6 +38,7 @@ final readonly class JobRecord
         public bool $running,
         public string $createdAt,
         public string $updatedAt,
+        public ?string $expiresAt = null,
     ) {
     }
 }

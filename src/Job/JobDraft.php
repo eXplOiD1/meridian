@@ -35,6 +35,8 @@ final readonly class JobDraft implements \JsonSerializable
         public int $retryDelaySeconds,
         public HttpJobConfig|ShellJobConfig $config,
         #[\SensitiveParameter] public HttpPayload|ShellPayload|null $payload,
+        /** Ende des Zeitplans (UTC, ISO 8601) oder null = läuft unbegrenzt. */
+        public ?string $expiresAt = null,
     ) {
     }
 
