@@ -371,3 +371,31 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .perm-group__legend--danger { color: var(--fehler); }
 .perm__badge { margin-left: 8px; }
 .perm__hint { display: block; }
+
+/* Übersicht: Taktband, Aufmerksamkeit, Summen */
+.takt { margin-top: 20px; }
+.takt__head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.takt__legend { color: var(--schiefer); font-size: 0.8rem; }
+.takt__grid { display: grid; grid-template-columns: minmax(90px, 200px) 1fr; column-gap: 12px; row-gap: 6px; align-items: center; margin-top: 12px; }
+.takt__label { font-size: 0.85rem; color: var(--tafel); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.takt__label:hover { text-decoration: underline; }
+.takt__row, .takt__axis { width: 100%; display: block; }
+.takt__row { height: 22px; }
+.takt__axislabels { display: flex; justify-content: space-between; font-family: var(--schrift-mono); font-size: 0.7rem; color: var(--schiefer); }
+.takt__axislabel { min-width: 0; }
+.takt__tick { fill: var(--linie-stark); }
+.takt__track { fill: var(--emaille); }
+.takt__planned { fill: var(--linie-stark); }
+.takt__ok { fill: var(--ok); }
+.takt__bad { fill: var(--fehler); }
+.takt__now-line { fill: var(--signal); }
+.takt__now { margin: 10px 0 0; font-size: 0.8rem; color: var(--schiefer); }
+.overview-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 20px; }
+@media (min-width: 900px) { .overview-grid { grid-template-columns: 2fr 1fr; } }
+.attention { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.attention__item { padding: 10px 12px; border-radius: var(--radius); background: #fbeceb; border-left: 4px solid var(--fehler); font-size: 0.9rem; }
+.stats { display: grid; gap: 10px; margin: 0; }
+.stats div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.stats dt { color: var(--schiefer); font-size: 0.85rem; }
+.stats dd { margin: 0; font-family: var(--schrift-kopf); font-size: 1.6rem; color: var(--tafel); }
+.stats__bad { color: var(--fehler) !important; }

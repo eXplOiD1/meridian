@@ -120,7 +120,7 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 |---|---|---|
 | [x] | Vite + React unter `frontend/`, Build nach `frontend/dist` (im Image `/app/ui`, vom Kernel unter `/app/` ausgeliefert), Schriften selbst gehostet | frontend |
 | [x] | Scheibe 1 (vorgezogen): Rahmen mit Seitenleiste, Anmeldung mit 2FA, Mein Konto mit 2FA-Einrichtung und QR-Code, Audit-Log, Sperre aufheben, Übersicht mit leerer Abfahrtstafel | frontend |
-| [ ] | Übersicht mit Abfahrtstafel und Taktband | frontend |
+| [x] | Übersicht mit Abfahrtstafel und Taktband („Heute im Takt“, „Braucht Aufmerksamkeit“, „Heute bisher“) über `GET /api/overview`; offen: „braucht länger als üblich“ (Laufzeitvergleich) | frontend |
 | [ ] | Jobliste mit Filtern, Job-Editor mit Zeitplan-Vorschau | frontend |
 | [~] | Verlauf: Seite `#/verlauf` über `GET /api/runs` (alle sichtbaren Jobs, Status-Filter, Seiten); offen: Lauf-Details/Live-Log direkt aus der Liste (bisher Link zum Job) | frontend |
 | [ ] | Benutzer und Rollen mit Rechte-Matrix | frontend |

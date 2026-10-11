@@ -8,7 +8,10 @@ import { TargetText } from '../components/TargetText';
 import { STATE_LABEL, stateOf } from '../lib/jobs';
 import { canViewJobs } from '../lib/permissions';
 import { hrefOf, navigate } from '../lib/useHashRoute';
-import type { JobList, JobSummary, Profile } from '../types';
+import { TaktBand } from '../components/TaktBand';
+import { formatDuration } from '../lib/jobs';
+import { formatTime } from '../lib/format';
+import type { JobList, JobSummary, Overview as OverviewData, Profile } from '../types';
 
 const BOARD_ROWS = 12;
 const REFRESH_MS = 30_000;
@@ -62,9 +65,48 @@ function useUpcoming(enabled: boolean): { jobs: JobSummary[] | null; error: stri
   return { jobs, error };
 }
 
+/** Tagesübersicht („Heute im Takt“, Aufmerksamkeit, Summen) für den lokalen Tag; lädt jede Minute neu. */
+function useToday(enabled: boolean): { data: OverviewData | null; from: Date; error: string | null } {
+  const [data, setData] = useState<OverviewData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [from, setFrom] = useState(() => startOfToday());
+
+  const load = useCallback(async (): Promise<void> => {
+    const start = startOfToday();
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1, 0, 0, 0);
+    try {
+      const query = new URLSearchParams({ from: start.toISOString().replace(/\.\d{3}Z$/, 'Z'), to: end.toISOString().replace(/\.\d{3}Z$/, 'Z') });
+      setData(await request<OverviewData>('GET', '/api/overview?' + query.toString()));
+      setFrom(start);
+      setError(null);
+    } catch (caught) {
+      if (!(caught instanceof ApiError && caught.status === 401)) {
+        setError(errorMessage(caught));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+    void load();
+    const timer = window.setInterval(() => void load(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [enabled, load]);
+
+  return { data, from, error };
+}
+
+function startOfToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+}
+
 export function Overview({ profile }: { profile: Profile }) {
   const mayView = canViewJobs(profile);
   const { jobs, error } = useUpcoming(mayView);
+  const today = useToday(mayView);
 
   return (
     <>
@@ -142,6 +184,41 @@ export function Overview({ profile }: { profile: Profile }) {
           </div>
         )}
       </section>
+      {today.error !== null && <Alert tone="err">{today.error}</Alert>}
+      {today.data !== null && <TaktBand data={today.data} from={today.from} />}
+      {today.data !== null && (
+        <div className="overview-grid">
+          <section className="card" aria-label="Braucht Aufmerksamkeit">
+            <h2>Braucht Aufmerksamkeit</h2>
+            {today.data.attention.length === 0 && <p className="card__lead">Nichts auffällig: Alle aktiven Jobs liefen zuletzt fehlerfrei.</p>}
+            <ul className="attention">
+              {today.data.attention.map((item) => (
+                <li key={item.job.id} className="attention__item">
+                  <a href={hrefOf('jobs/' + String(item.job.id))}>{item.job.name}</a> ist zuletzt {item.status === 'timeout' ? 'wegen Zeitlimit' : ''} fehlgeschlagen
+                  {item.finished_at !== null ? ' (' + formatTime(item.finished_at) + ')' : ''}.
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="card" aria-label="Heute bisher">
+            <h2>Heute bisher</h2>
+            <dl className="stats">
+              <div>
+                <dt>Läufe seit Mitternacht</dt>
+                <dd>{today.data.totals.runs.toLocaleString('de-DE')}</dd>
+              </div>
+              <div>
+                <dt>fehlgeschlagen</dt>
+                <dd className={today.data.totals.failed > 0 ? 'stats__bad' : undefined}>{today.data.totals.failed.toLocaleString('de-DE')}</dd>
+              </div>
+              <div>
+                <dt>mittlere Laufzeit</dt>
+                <dd>{today.data.totals.avg_duration_ms === null ? '–' : formatDuration(today.data.totals.avg_duration_ms)}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+      )}
     </>
   );
 }

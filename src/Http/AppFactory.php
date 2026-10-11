@@ -126,6 +126,8 @@ final class AppFactory
             new RunService($db, $jobs, $access, $audit, $clock),
             new RunCancelService($db, $runs, $access, $audit, $clock),
         ))->register($kernel);
+        // Übersicht „Heute im Takt“: Läufe je Job in Abschnitten, geplante Läufe, Summen.
+        (new OverviewController($sessionAuth, $users, $access, $jobs, new \Meridian\Job\OverviewRepository($db), $clock, $masker))->register($kernel);
         // Gespeicherte Werte zum Bearbeiten (nur bei jobs.reveal_for_edit = on, ADR 0003 N1 / 0004 N1).
         (new JobSourceController($sessionAuth, $csrf, $users, $access, $jobs, $settings, new JobSourceReader($db, $box), $audit, $db, $clock))->register($kernel);
         // Live-Log per Server-Sent Events (ADR 0004 §6.1), begrenzt über live_streams.

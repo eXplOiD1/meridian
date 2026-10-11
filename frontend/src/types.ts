@@ -322,3 +322,21 @@ export interface LogPage {
   status: RunStatus;
   done: boolean;
 }
+
+/** Antwort von `GET /api/overview` („Heute im Takt“). Abschnitte sind `[Index, erfolgreich, Fehler]`. */
+export interface OverviewJob {
+  id: number;
+  name: string;
+  type: 'http' | 'shell';
+  enabled: boolean;
+  buckets: Array<[number, number, number]>;
+  planned: number[];
+  next_run_at: string | null;
+}
+
+export interface Overview {
+  window: { from: string; to: string; bucket_seconds: number; buckets: number; now_bucket: number };
+  jobs: OverviewJob[];
+  totals: { runs: number; failed: number; avg_duration_ms: number | null };
+  attention: Array<{ job: { id: number; name: string }; status: 'failed' | 'timeout'; finished_at: string | null }>;
+}
