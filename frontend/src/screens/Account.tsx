@@ -7,6 +7,7 @@ import { ApiError, request } from '../lib/api';
 import { groupSecret, retryHint } from '../lib/format';
 import { roleNames } from '../lib/permissions';
 import type { Profile } from '../types';
+import { ApiTokens } from '../components/ApiTokens';
 import { DisplayNameCard, PasswordCard, SessionsCard } from './AccountExtras';
 
 interface AccountProps {
@@ -229,6 +230,7 @@ export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
       <PasswordCard profile={profile} onChanged={onChanged} onCsrfToken={onCsrfToken} />
     </div>
     <SessionsCard profile={profile} />
+    <ApiTokens csrf={profile.csrf_token} />
     </div>
   );
 }
