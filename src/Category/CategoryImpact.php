@@ -13,6 +13,7 @@ namespace Meridian\Category;
  */
 final readonly class CategoryImpact
 {
+    /** @param list<string> $recipients */
     public function __construct(
         public int $id,
         public string $name,
@@ -22,6 +23,7 @@ final readonly class CategoryImpact
         public int $internalTargets,
         /** Überwachungen und Statusseiten dieser Kategorie (blockieren das Löschen wie Jobs). */
         public int $watchers = 0,
+        public array $recipients = [],
     ) {
     }
 

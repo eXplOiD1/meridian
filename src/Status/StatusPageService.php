@@ -53,7 +53,11 @@ final class StatusPageService
             if (!array_key_exists('title', $input)) {
                 throw ValidationFailed::field('title', 'Pflichtfeld: Titel der Seite.');
             }
-            if ((int) ($this->db->fetchOne('SELECT COUNT(*) AS n FROM status_pages')['n'] ?? 0) >= self::MAX_PAGES) {
+            $count = $this->db->fetchOne('SELECT COUNT(*) AS n FROM status_pages')['n'] ?? null;
+            if (!is_int($count)) {
+                throw new \LogicException('Anzahl der Statusseiten nicht lesbar.');
+            }
+            if ($count >= self::MAX_PAGES) {
                 throw ValidationFailed::field('title', 'Höchstens ' . self::MAX_PAGES . ' Statusseiten. Nicht benötigte zuerst löschen.');
             }
             $id = $this->pages->insert($draft, $userId, StatusPageRepository::newSlug(), Timestamp::format($this->clock->now()));

@@ -27,8 +27,28 @@ set_exception_handler(static function (\Throwable $e): void {
     exit(70);
 });
 
+$arguments = array_slice($argv, 1);
+if ($arguments !== [] && $arguments !== ['--development-container']) {
+    fwrite(STDERR, "meridian-shell-agent: unbekannte Argumente.\n");
+    exit(64);
+}
+$developmentContainer = $arguments === ['--development-container'];
+if ($developmentContainer && getenv('MERIDIAN_ENV') !== 'dev') {
+    fwrite(STDERR, "meridian-shell-agent: --development-container erfordert MERIDIAN_ENV=dev.\n");
+    exit(64);
+}
+$environment = [];
+foreach (['MERIDIAN_ENV', 'MERIDIAN_KEY_FILE', 'MERIDIAN_DATA_DIR'] as $name) {
+    $value = getenv($name);
+    if (is_string($value)) {
+        $environment[$name] = $value;
+    }
+}
+if ($developmentContainer) {
+    fwrite(STDERR, "meridian-shell-agent: Entwicklungsmodus; Container-Prüfung deaktiviert, Benutzer- und Geheimnisschutz bleiben aktiv.\n");
+}
 $session = new AgentSession(
-    new LocalProcessExecutor(new HostIsolation(), sys_get_temp_dir()),
+    new LocalProcessExecutor(HostIsolation::fromEnvironment($environment, $developmentContainer), sys_get_temp_dir()),
     static function (string $text): void {
         fwrite(STDERR, 'meridian-shell-agent: ' . $text . "\n");
     },

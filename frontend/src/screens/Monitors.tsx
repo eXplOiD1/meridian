@@ -7,7 +7,7 @@ import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatTime } from '../lib/format';
 import { canEditHttp } from '../lib/permissions';
-import type { CategoryRef, Monitor, MonitorKind, MonitorState, Profile } from '../types';
+import type { CategoryRef, Monitor, MonitorKind, MonitorState, NotificationChannelName, Profile } from '../types';
 import { t } from '../i18n';
 
 const UNITS = [
@@ -115,17 +115,18 @@ interface Draft {
   categoryId: string;
   notifyDown: boolean;
   notifyUp: boolean;
-  notifyChannels: 'all' | 'none';
+  notifyChannels: 'all' | 'selected' | 'none';
+  channelIds: number[];
 }
 
 function emptyDraft(categoryId: string): Draft {
-  return { kind: 'heartbeat', target: '', expectedStatus: '200-399', failAfter: '3', name: '', value: '1', unit: 'days', graceValue: '15', graceUnit: 'minutes', categoryId, notifyDown: true, notifyUp: true, notifyChannels: 'all' };
+  return { kind: 'heartbeat', target: '', expectedStatus: '200-399', failAfter: '3', name: '', value: '1', unit: 'days', graceValue: '15', graceUnit: 'minutes', categoryId, notifyDown: true, notifyUp: true, notifyChannels: 'all', channelIds: [] };
 }
 
 function draftOf(m: Monitor): Draft {
   const interval = split(m.interval_seconds);
   const grace = split(m.grace_seconds);
-  return { kind: m.kind, target: '', expectedStatus: m.expected_status ?? '200-399', failAfter: String(m.fail_after ?? 3), name: m.name, value: interval.value, unit: interval.unit, graceValue: m.grace_seconds === 0 ? '0' : grace.value, graceUnit: grace.unit, categoryId: m.category_id === null ? '' : String(m.category_id), notifyDown: m.notify_on_down, notifyUp: m.notify_on_up, notifyChannels: m.notify_channels };
+  return { kind: m.kind, target: '', expectedStatus: m.expected_status ?? '200-399', failAfter: String(m.fail_after ?? 3), name: m.name, value: interval.value, unit: interval.unit, graceValue: m.grace_seconds === 0 ? '0' : grace.value, graceUnit: grace.unit, categoryId: m.category_id === null ? '' : String(m.category_id), notifyDown: m.notify_on_down, notifyUp: m.notify_on_up, notifyChannels: m.notify_channels, channelIds: m.channel_ids ?? [] };
 }
 
 function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, editing, onSubmit, onCancel, onTest, testing, testResult }: {
@@ -142,6 +143,13 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
   testing?: boolean;
   testResult?: TestResult | null;
 }) {
+  const [channels, setChannels] = useState<NotificationChannelName[]>([]);
+  const [channelError, setChannelError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    request<{ channels: NotificationChannelName[] }>('GET', '/api/notifications/channel-names').then((reply) => { if (!cancelled) setChannels(reply.channels); }).catch((caught) => { if (!cancelled) setChannelError(errorMessage(caught)); });
+    return () => { cancelled = true; };
+  }, []);
   const isActive = draft.kind !== 'heartbeat';
   const unitSelect = (value: Unit, onChange: (u: Unit) => void, label: string) => (
     <select className="input input--short" aria-label={label} value={value} onChange={(e) => onChange(e.target.value as Unit)}>
@@ -256,10 +264,25 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
         <input type="checkbox" checked={draft.notifyUp} onChange={(e) => setDraft({ ...draft, notifyUp: e.target.checked })} />
         <span>{isActive ? t('Benachrichtigen, wenn es wieder erreichbar ist') : t('Benachrichtigen, wenn es sich wieder meldet')}</span>
       </label>
-      <label className="check">
-        <input type="checkbox" checked={draft.notifyChannels === 'none'} onChange={(e) => setDraft({ ...draft, notifyChannels: e.target.checked ? 'none' : 'all' })} />
-        <span>{t('Keine Kanäle benutzen (nur Anzeige hier und in der Übersicht)')}</span>
-      </label>
+      <fieldset className="radios">
+        <legend className="field__label">{t('Benachrichtigen über …')}</legend>
+        {(['all', 'selected', 'none'] as const).map((mode) => (
+          <label key={mode} className="check">
+            <input type="radio" name="monitor-notify-channels" checked={draft.notifyChannels === mode} onChange={() => setDraft({ ...draft, notifyChannels: mode })} />
+            <span>{mode === 'all' ? t('alle Kanäle') : mode === 'selected' ? t('nur ausgewählte Kanäle') : t('keine Kanäle')}</span>
+          </label>
+        ))}
+      </fieldset>
+      {errors.notify_channels !== undefined && <p className="field__error">{errors.notify_channels}</p>}
+      {draft.notifyChannels === 'selected' && <div className="stack">
+        {channelError !== null && <Alert tone="err">{channelError}</Alert>}
+        {channelError === null && channels.length === 0 && <p className="hint">{t('Es gibt noch keinen Kanal. Ein Administrator legt sie unter Einstellungen → Benachrichtigungen an.')}</p>}
+        {channels.map((channel) => <label key={channel.id} className="check">
+          <input type="checkbox" checked={draft.channelIds.includes(channel.id)} onChange={(e) => setDraft({ ...draft, channelIds: e.target.checked ? [...draft.channelIds, channel.id] : draft.channelIds.filter((id) => id !== channel.id) })} />
+          <span>{channel.name} ({channel.type}){!channel.enabled ? ' – ' + t('ausgeschaltet') : ''}</span>
+        </label>)}
+        {errors.channel_ids !== undefined && <p className="field__error">{errors.channel_ids}</p>}
+      </div>}
       {testResult !== null && testResult !== undefined && <TestResultAlert result={testResult} />}
       <div className="row">
         <button type="submit" className="btn btn--solid" disabled={busy || draft.name.trim() === ''}>
@@ -297,6 +320,7 @@ function payload(draft: Draft, editing: boolean): { body: Record<string, unknown
     notify_on_down: draft.notifyDown,
     notify_on_up: draft.notifyUp,
     notify_channels: draft.notifyChannels,
+    channel_ids: draft.notifyChannels === 'selected' ? draft.channelIds : [],
   };
   if (!editing) body.kind = draft.kind;
   if (active) {

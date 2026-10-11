@@ -20,6 +20,7 @@ final readonly class NotifySettings
 
     /**
      * @param list<int> $channelIds
+     * @param list<string> $recipients
      */
     public function __construct(
         public bool $onFailure = false,
@@ -32,14 +33,16 @@ final readonly class NotifySettings
         public bool $onDisable = false,
         /** Warnt, wenn das Zertifikat in so vielen Tagen abläuft (null = aus, ADR 0010). */
         public ?int $tlsWarnDays = null,
+        public ?int $runtimeWarnPercent = null,
+        public array $recipients = [],
     ) {
     }
 
     /**
-     * @return array{on_failure: bool, failure_after: int, on_recovery: bool, channels: string, channel_ids: list<int>, disable_after: int|null, on_disable: bool, tls_warn_days: int|null}
+     * @return array{on_failure: bool, failure_after: int, on_recovery: bool, channels: string, channel_ids: list<int>, disable_after: int|null, on_disable: bool, tls_warn_days: int|null, runtime_warn_percent: int|null, recipients: list<string>}
      */
     public function toArray(): array
     {
-        return ['on_failure' => $this->onFailure, 'failure_after' => $this->failureAfter, 'on_recovery' => $this->onRecovery, 'channels' => $this->channels, 'channel_ids' => $this->channelIds, 'disable_after' => $this->disableAfter, 'on_disable' => $this->onDisable, 'tls_warn_days' => $this->tlsWarnDays];
+        return ['on_failure' => $this->onFailure, 'failure_after' => $this->failureAfter, 'on_recovery' => $this->onRecovery, 'channels' => $this->channels, 'channel_ids' => $this->channelIds, 'disable_after' => $this->disableAfter, 'on_disable' => $this->onDisable, 'tls_warn_days' => $this->tlsWarnDays, 'runtime_warn_percent' => $this->runtimeWarnPercent, 'recipients' => $this->recipients];
     }
 }

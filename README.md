@@ -2,34 +2,60 @@
 
 Selbst gehosteter Job-Scheduler für HTTP- und Shell-Jobs, mit Benutzern, Rollen und Rechten pro Kategorie.
 
-> Stand: Phase 1 (Fundament) in Arbeit. Noch nicht für den Betrieb geeignet.
-
-Plan und Aufgaben: [`docs/PLAN.md`](docs/PLAN.md), [`TODO.md`](TODO.md).
+E-Mail-Empfänger lassen sich im SMTP-Kanal, pro Kategorie und pro Job einstellen. Eigene Job-Empfänger ersetzen die Kategorie-Vorgabe; ohne Kategorie-Empfänger gelten die Empfänger des Kanals. Leer bedeutet erben. Die Auswahl gilt für alle gewählten E-Mail-Kanäle. Überwachungen bieten ebenfalls eine Kanalauswahl und übernehmen die Empfänger ihrer Kategorie.
 
 ## Betrieb mit Docker
 
-Es genügt die Datei `compose.yaml`, vorbereitet werden muss nichts. Als Projekt in Docker bereitstellen
-(UGOS-Docker-App) oder auf dem Server:
+Im Job unter „Benachrichtigungen“ lässt sich eine Laufzeitwarnung aktivieren. Meridian vergleicht abgeschlossene erfolgreiche Läufe mit dem Median der letzten 20 erfolgreichen Läufe, sobald mindestens fünf Vergleichswerte vorliegen. 200 Prozent bedeutet doppelte Dauer; einstellbar sind 110 bis 1000 Prozent. Testläufe zählen nicht, und jede Warnung wird einmal pro Lauf eingereiht.
+
+### Installation als Stack oder Docker-Projekt
+
+Für die Installation genügt [compose.yaml](compose.yaml). In einer Docker-Verwaltung mit Compose-Editor, zum Beispiel der UGOS-Docker-App:
+
+1. Die Datei `compose.yaml` öffnen und ihren **gesamten Inhalt** kopieren.
+2. Einen neuen Stack bzw. ein neues Docker-Projekt mit dem Namen `meridian` erstellen.
+3. Den kopierten Inhalt in den Compose-Editor einfügen. Falls die Verwaltung eine Datei verlangt, den Inhalt als `compose.yaml` speichern und diese auswählen.
+4. Im eingefügten Compose-Inhalt unter `web` die Beispiel-Zugangsdaten durch den gewünschten Benutzernamen und ein eigenes Passwort mit mindestens acht Zeichen ersetzen (siehe unten). Den Proxy-Eintrag bei Bedarf anpassen.
+5. Den Stack bereitstellen bzw. das Projekt starten. Die Images werden heruntergeladen und die benötigten Volumes automatisch angelegt.
+6. `http://<IP-des-Docker-Hosts>:8090` öffnen und mit den eingetragenen Zugangsdaten anmelden.
+
+`compose.build.yaml` ist nur die Alternative zum Selbstbauen; für die normale Stack-Installation wird `compose.yaml` verwendet.
+
+### Installation über die Kommandozeile
+
+Die Datei `compose.yaml` auf dem Docker-Host in einem eigenen Ordner speichern, die Beispiel-Zugangsdaten wie unten beschrieben ersetzen und dort ausführen:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-Das Image wird dabei aus GitHub gebaut. Beim ersten Start legt der Container selbst an: den Hauptschlüssel
+Das Image `ghcr.io/exploid1/meridian:latest` folgt dem Branch `main`. Docker-Verwaltungen können neue Images erkennen. Beim ersten Start legt der Container selbst an: den Hauptschlüssel
 (Volume `meridian-secrets`, wird nie überschrieben), die Datenbank (Volume `meridian-data`) und den ersten Admin.
-Ohne Angabe heißt er `admin` und bekommt ein zufälliges Passwort, das einmalig im Log steht
-(`docker compose logs web`). Eigene Zugangsdaten über `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD`
-(mind. 8 Zeichen, oder `MERIDIAN_ADMIN_PASSWORD_FILE`), siehe `.env.example`. Erreichbar unter
-`http://<host>:8090` (Port über `MERIDIAN_PORT`).
+Die Compose-Dateien enthalten diese direkt eingetragenen Beispielwerte unter `services.web.environment`:
 
-Aktualisieren auf die neueste Version:
+```yaml
+MERIDIAN_ADMIN_USER: "admin"
+MERIDIAN_ADMIN_PASSWORD: "BEISPIEL-passwort-bitte-aendern"
+MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"
+```
+
+Vor dem ersten Start den Benutzernamen nach Wunsch und das Beispielpasswort unbedingt durch ein eigenes Passwort mit mindestens acht Zeichen ersetzen. Die Anführungszeichen beibehalten. Dafür ist keine `.env`-Datei und keine zusätzliche Stack-Variable nötig. Erreichbar ist Meridian unter `http://<host>:8090` (Port über `MERIDIAN_PORT`).
+
+`MERIDIAN_TRUSTED_PROXIES` legt fest, von welchen Reverse-Proxys Meridian die weitergeleitete Client-IP übernimmt. Standardmäßig ist das Netz `172.19.0.0/16` eingetragen; dadurch wird dieses Netz nicht automatisch für Docker eingerichtet. Liegt dein Proxy in einem anderen Netz, den Wert durch seine IP oder sein tatsächliches Netz ersetzen. Mehrere Einträge mit Komma trennen. Nur vertrauenswürdige Proxy-Adressen eintragen, möglichst eine einzelne IP. Ohne Reverse-Proxy den Wert auf `""` setzen.
+
+### Aktualisieren
+
+In der Docker-Verwaltung den bestehenden Stack erneut bereitstellen und dabei das erneute Abrufen der Images aktivieren. Die vorhandenen Volumes beibehalten. Über die Kommandozeile:
 
 ```bash
-docker compose build --pull --no-cache && docker compose up -d
+docker compose pull && docker compose up -d
 ```
+
+Zum Selbstbauen aus GitHub dient `compose.build.yaml`: `docker compose -f compose.build.yaml up -d --build`. `MERIDIAN_REPO_REF` wählt dabei einen Branch, Tag oder Commit (Standard `main`).
 
 Benutzer verwalten, Passwort zurücksetzen, Sperren aufheben: siehe [Befehle](#befehle).
 `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD` gelten nur beim allerersten Start, solange es noch keinen Benutzer gibt.
+Bei einer bestehenden Installation ändert das Bearbeiten der Compose-Zugangsdaten das Konto nicht. Das Passwort über „Mein Konto“ oder `user:password` ändern. Nach der ersten Einrichtung können die beiden Admin-Einträge aus der Compose-Datei entfernt werden; das Konto bleibt gespeichert.
 
 Das Volume `meridian-secrets` sicher aufbewahren (Sicherung mitnehmen): ohne den Schlüssel sind gespeicherte
 Geheimnisse verloren.
@@ -55,14 +81,11 @@ Weitere Container freigeben: nur in Meridian unter Einstellungen -> Ausführungs
 stimmen. Meridians eigene Container (`web`, `scheduler`, `worker-http`, `worker-shell`, `docker-proxy`, alles mit dem
 Präfix `meridian-` außer `meridian-sandbox`) lehnt Meridian als Ausführungsort ab.
 
-Das Proxy-Image mit Digest festnageln (nie `:latest`): `MERIDIAN_PROXY_IMAGE=wollomatic/socket-proxy:1.13.1@sha256:<Digest>`
-in der `.env`. Den Digest vorher selbst prüfen und eintragen, z. B. mit `docker buildx imagetools inspect
-wollomatic/socket-proxy:1.13.1`. Hat `/var/run/docker.sock` eine andere Gruppe als root, `MERIDIAN_DOCKER_GID` setzen.
+Das Proxy-Image ist standardmäßig mit Version und Digest festgelegt. `MERIDIAN_PROXY_IMAGE` erlaubt einen eigenen geprüften Digest. Hat `/var/run/docker.sock` eine andere Gruppe als root, `MERIDIAN_DOCKER_GID` setzen.
 
 **Sicherheitshinweis:** Ein Zugang zur Docker-API ist faktisch Root auf dem Host. Der Proxy begrenzt ihn auf Exec in den
 eingetragenen Containern, kann aber den Inhalt einer Anfrage nicht prüfen. Nur Container freigeben, in denen Admins mit
-dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle ausführen dürfen. Beim Update von einer älteren Version die
-`compose.yaml` komplett neu einfügen; die Volumes `meridian-data` und `meridian-secrets` bleiben bestehen.
+dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle ausführen dürfen. Die Volumes `meridian-data` und `meridian-secrets` beim Aktualisieren erhalten.
 
 Sicherung, Wiederherstellung und Aktualisieren: [`docs/BETRIEB.md`](docs/BETRIEB.md).
 
@@ -154,8 +177,8 @@ verzichtet Meridian auf `Secure`, und die Oberfläche zeigt eine Warnung: Passwo
 Außerhalb eines vertrauenswürdigen Heimnetzes Meridian hinter einem HTTPS-Proxy betreiben.
 Nach 5 Fehlversuchen pro Benutzername (50 pro IP) wird gesperrt, die Sperre wächst bis 15 Minuten.
 
-**Hinter einem Reverse-Proxy** (z. B. Nginx Proxy Manager) dessen IP oder Netz in `MERIDIAN_TRUSTED_PROXIES` eintragen,
-z. B. `MERIDIAN_TRUSTED_PROXIES=172.19.0.0/16`, und Meridian neu starten. Kommt eine Anmeldung mit einem Header
+**Hinter einem Reverse-Proxy** (z. B. Nginx Proxy Manager) dessen IP oder Netz in `MERIDIAN_TRUSTED_PROXIES` eintragen.
+In den Compose-Dateien ist dafür bereits `MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"` eingetragen; an das tatsächliche Proxy-Netz anpassen und Meridian neu bereitstellen. Bei der systemd-Installation den Wert in `/etc/meridian/meridian.env` setzen und den Web-Dienst neu starten. Kommt eine Anmeldung mit einem Header
 `X-Forwarded-For` oder `Forwarded` an, ohne dass `MERIDIAN_TRUSTED_PROXIES` gesetzt ist, lehnt Meridian sie ab
 (HTTP 503 mit Hinweis): Sonst sähe die Sperre nach Fehlversuchen nur die IP des Proxys, und alle Clients würden
 gemeinsam gesperrt. `X-Forwarded-For` gilt nur, wenn die Verbindung von einem eingetragenen Proxy kommt; ein
@@ -175,23 +198,73 @@ beim nächsten `migrate` verschärft. Mit `http.display_host = hidden` verbirgt 
 
 ## Oberfläche
 
-Die Weboberfläche (React + Vite, im Stil des Klickdummys „Takt“) liegt unter `frontend/` und wird vom Server unter
-`/app/` ausgeliefert, mit allen Sicherheits-Headern. Das Docker-Image baut sie selbst. Zum Entwickeln:
-
-```bash
-cd frontend && npm ci
-npm run dev        # Entwicklungsserver auf :5173, leitet /api an http://127.0.0.1:8080 weiter
-npm run build      # Produktionsbuild nach frontend/dist
-# Server lokal mit der gebauten Oberfläche (Entwicklungsmodus, weil die Anmeldung sonst HTTPS braucht):
-MERIDIAN_ENV=dev MERIDIAN_UI_DIR=frontend/dist php -S 127.0.0.1:8080 -t public public/index.php
-```
-
-Nach Änderungen an `docker/Dockerfile` den Inline-Teil der `compose.yaml` neu erzeugen: `python3 docker/sync-compose.py`.
+Die Weboberfläche (React + Vite) liegt unter `frontend/` und wird vom Server unter
+`/app/` ausgeliefert, mit allen Sicherheits-Headern. Das Docker-Image baut sie selbst.
 
 ## Betrieb auf Linux mit systemd
 
+Voraussetzungen: ein Linux-Host mit systemd, PHP 8.3 oder neuer für die CLI (mit `pdo_sqlite`, `sodium`, `curl`, `pcntl` und `posix`), Composer, rsync und FrankenPHP unter `/usr/local/bin/frankenphp`. Zum Bauen der Oberfläche wird Node.js 22 oder neuer mit npm benötigt. Der Host-Agent verwendet `setsid` aus `util-linux`; für Ping-Prüfungen wird `iputils-ping` benötigt.
+
+Unter Debian/Ubuntu die Pakete installieren (die PHP-Version der Distribution muss mindestens 8.3 sein):
+
 ```bash
-sudo ./deploy/install.sh
+sudo apt update
+sudo apt install php-cli php-curl php-sqlite3 php-mbstring php-xml \
+  composer git curl ca-certificates rsync sudo util-linux iputils-ping nodejs npm
+php --version
+node --version
 ```
 
-Der Installer fragt nach dem Benutzernamen und dem Passwort des ersten Admins.
+FrankenPHP enthält eine eigene PHP-Laufzeit; die CLI-Pakete werden trotzdem für Scheduler, Worker und Verwaltungsbefehle benötigt. Die passende Linux-Binärdatei von den [offiziellen Releases](https://github.com/php/frankenphp/releases) herunterladen, die dort angegebene SHA-256-Prüfsumme prüfen und installieren. Beispiel für x86_64 mit Version 1.13.0:
+
+```bash
+curl -fL -o frankenphp https://github.com/php/frankenphp/releases/download/v1.13.0/frankenphp-linux-x86_64
+echo 'ddfedcc4597e502aa1b6c91da248fea88163c43b46acd4790c6e39dc1ed89a1f  frankenphp' | sha256sum -c
+sudo install -m 0755 frankenphp /usr/local/bin/frankenphp
+```
+
+Quellcode holen, Oberfläche bauen und installieren:
+
+```bash
+git clone https://github.com/eXplOiD1/meridian.git
+cd meridian
+cd frontend
+npm ci
+npm run build
+cd ..
+sudo bash deploy/install.sh
+```
+
+Der Installer legt Programmcode und Oberfläche unter `/opt/meridian`, Daten unter `/var/lib/meridian` und Konfiguration sowie Hauptschlüssel unter `/etc/meridian` ab. Er erzeugt den Schlüssel nur beim ersten Mal, spielt Migrationen ein und startet Web, Scheduler und HTTP-Worker. Die Dienste lesen den Hauptschlüssel über systemd-Credentials. Bestehende Daten, Schlüssel und Konfiguration bleiben bei erneuter Installation erhalten.
+
+Beim interaktiven Start fragt der Installer nach dem ersten Admin. Bei einer Installation ohne Terminal anschließend selbst anlegen; das Passwort wird verdeckt abgefragt:
+
+```bash
+sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian \
+  php /opt/meridian/bin/meridian user:create admin --role Admin
+```
+
+Die Oberfläche ist unter `http://SERVER:8080/app/` erreichbar. Für Zugriff außerhalb eines vertrauenswürdigen Heimnetzes einen HTTPS-Reverse-Proxy verwenden; dessen IP in `/etc/meridian/meridian.env` als `MERIDIAN_TRUSTED_PROXIES` eintragen und `meridian-web` neu starten.
+
+Shell-Jobs auf dem Host zusätzlich aktivieren:
+
+```bash
+sudo env MERIDIAN_ENABLE_SHELL=1 bash deploy/install.sh
+```
+
+Danach unter Einstellungen → Ausführungsorte **Host-Profil `default`** freigeben. Der Agent läuft für jeden Auftrag über `meridian-shell.socket` als eigener Benutzer `meridian-run`, ohne Zugriff auf Schlüssel oder Datenbank. Der Shell-Worker verbindet sich ausschließlich über den Unix-Socket; Docker ist für Host-Jobs nicht erforderlich.
+
+Installation prüfen:
+
+```bash
+systemctl is-active meridian-web meridian-scheduler meridian-worker-http
+curl -fsS http://127.0.0.1:8080/api/health
+# Bei aktivierten Host-Jobs:
+systemctl is-active meridian-shell.socket meridian-worker-shell
+# Bei Fehlern:
+sudo journalctl -u meridian-web -u meridian-scheduler -u meridian-worker-http -n 50 --no-pager
+sudo journalctl -u meridian-worker-shell --no-pager
+sudo journalctl --unit='meridian-shell@*' --no-pager
+```
+
+Änderungen an `/etc/meridian/meridian.env` werden nach dem Neustart der betreffenden Dienste wirksam. Aktualisieren: Sicherung erstellen, neue Quellen holen, die Oberfläche erneut bauen und den Installer erneut ausführen; bereits aktivierte Host-Jobs bleiben aktiviert. Einzelheiten zu Sicherung und Wiederherstellung stehen in [BETRIEB.md](docs/BETRIEB.md).

@@ -365,7 +365,7 @@ final class JobValidator
         }
         /** @var mixed $given */
         $given = $input['notify'];
-        $shape = 'Muss ein Objekt mit on_failure, failure_after, on_recovery, channels, channel_ids, disable_after, on_disable und tls_warn_days sein.';
+        $shape = 'Muss ein Objekt mit on_failure, failure_after, on_recovery, channels, channel_ids, disable_after, on_disable, tls_warn_days und runtime_warn_percent sein.';
         if (!is_array($given)) {
             $errors['notify'] = $shape;
 
@@ -376,13 +376,13 @@ final class JobValidator
 
             return false;
         }
-        $unknown = array_diff(array_map(strval(...), array_keys($given)), ['on_failure', 'failure_after', 'on_recovery', 'channels', 'channel_ids', 'disable_after', 'on_disable', 'tls_warn_days']);
+        $unknown = array_diff(array_map(strval(...), array_keys($given)), ['on_failure', 'failure_after', 'on_recovery', 'channels', 'channel_ids', 'disable_after', 'on_disable', 'tls_warn_days', 'runtime_warn_percent', 'recipients']);
         if ($unknown !== []) {
-            $errors['notify'] = 'Unbekannte Felder. Erlaubt sind: on_failure, failure_after, on_recovery, channels, channel_ids, disable_after, on_disable, tls_warn_days.';
+            $errors['notify'] = 'Unbekannte Felder. Erlaubt sind: on_failure, failure_after, on_recovery, channels, channel_ids, disable_after, on_disable, tls_warn_days, runtime_warn_percent, recipients.';
 
             return false;
         }
-        $base = $existing?->notify ?? new NotifySettings();
+        $base = $existing->notify ?? new NotifySettings();
         /** @var mixed $onFailure */
         $onFailure = $given['on_failure'] ?? $base->onFailure;
         /** @var mixed $onRecovery */
@@ -412,6 +412,12 @@ final class JobValidator
                 return false;
             }
             $disable = $disableAfter;
+        }
+        /** @var mixed $runtime */
+        $runtime = array_key_exists('runtime_warn_percent', $given) ? $given['runtime_warn_percent'] : $base->runtimeWarnPercent;
+        if ($runtime !== null && (!is_int($runtime) || $runtime < 110 || $runtime > 1000)) {
+            $errors['notify.runtime_warn_percent'] = 'Laufzeitwarnung: ganze Zahl von 110 bis 1000 Prozent oder null.';
+            return false;
         }
         $tls = null;
         if ($tlsDays !== null) {
@@ -452,7 +458,13 @@ final class JobValidator
             sort($list);
         }
 
-        return new NotifySettings($onFailure, $after, $onRecovery, $channels, $list, $disable, $onDisable, $tls);
+        try {
+            $recipients = \Meridian\Notify\Recipients::validate(array_key_exists('recipients', $given) ? $given['recipients'] : $base->recipients, 'notify.recipients');
+        } catch (ValidationFailed $e) {
+            $errors['notify.recipients'] = 'Empfänger: höchstens 10 gültige E-Mail-Adressen. Leer = Kategorie oder Kanal übernehmen.';
+            return false;
+        }
+        return new NotifySettings($onFailure, $after, $onRecovery, $channels, $list, $disable, $onDisable, $tls, $runtime, $recipients);
     }
 
     /**

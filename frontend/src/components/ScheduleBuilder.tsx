@@ -120,6 +120,7 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
   const [initial] = useState(() => detect(cron));
   const [mode, setMode] = useState<Mode>(initial.mode);
   const [parts, setParts] = useState<Parts>(initial.parts);
+  const [secondsDraft, setSecondsDraft] = useState<string | null>(null);
 
   // Wird der Ausdruck im Textfeld von Hand geändert, folgt der Baukasten, soweit er ihn abbilden kann (sonst „Benutzerdefiniert“).
   useEffect(() => {
@@ -190,7 +191,7 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
               type="button"
               className="chip"
               aria-pressed={mode === entry.id}
-              onClick={() => update(entry.id, parts)}
+              onClick={() => { setSecondsDraft(null); update(entry.id, parts); }}
             >
               {t(entry.label)}
             </button>
@@ -201,7 +202,25 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
           {mode === 'seconds' && (
             <label className="field sb__field">
               <span className="field__label">{t('Alle n Sekunden') + ' (' + String(minSeconds) + '–86400)'}</span>
-              <input className="input input--short" inputMode="numeric" value={parts.n} onChange={(e) => patch({ n: clamp(e.target.value, 1, 86400, minSeconds) })} />
+              <input
+                className="input input--short"
+                inputMode="numeric"
+                value={secondsDraft ?? String(parts.n)}
+                onChange={(e) => {
+                  const text = e.target.value;
+                  setSecondsDraft(text);
+                  const value = Number(text);
+                  if (/^[0-9]+$/.test(text) && value >= minSeconds && value <= 86400) {
+                    patch({ n: value });
+                  }
+                }}
+                onBlur={() => {
+                  if (secondsDraft !== null) {
+                    patch({ n: clamp(secondsDraft, minSeconds, 86400, parts.n) });
+                    setSecondsDraft(null);
+                  }
+                }}
+              />
             </label>
           )}
           {(mode === 'minutes' || mode === 'hours') && (

@@ -12,6 +12,7 @@ export interface Profile {
   language?: 'de' | 'en';
   /** Farbschema des Benutzers (ADR 0017). */
   theme?: 'dark' | 'light';
+  job_editor_mode?: 'simple' | 'expert';
   totp_enabled: boolean;
   /** Einmalpasswort noch nicht gewechselt: Der Server gibt dann keine Rechte, nur den Passwortwechsel. */
   password_change_required?: boolean;
@@ -277,6 +278,7 @@ export interface OneTimePasswordReply {
 }
 
 export interface CategoryUsage {
+  recipients: string[];
   id: number;
   name: string;
   jobs: number;
@@ -359,6 +361,7 @@ export interface NotificationChannel {
   type: ChannelKind;
   enabled: boolean;
   config: {
+    language?: 'ui' | 'de' | 'en';
     host?: string;
     port?: number;
     encryption?: 'none' | 'starttls' | 'ssl';
@@ -395,6 +398,8 @@ export interface JobNotify {
   disable_after: number | null;
   on_disable: boolean;
   tls_warn_days: number | null;
+  runtime_warn_percent: number | null;
+  recipients: string[];
 }
 
 /** Antwort von `GET /api/stats` (Läufe je Tag und je Job). */
@@ -443,7 +448,8 @@ export interface Monitor {
   last_ping_at: string | null;
   notify_on_down: boolean;
   notify_on_up: boolean;
-  notify_channels: 'all' | 'none';
+  notify_channels: 'all' | 'selected' | 'none';
+  channel_ids: number[];
   can_edit: boolean;
   created_at: string;
 }

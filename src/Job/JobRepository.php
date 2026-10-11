@@ -207,9 +207,11 @@ final class JobRepository
      */
     private function writeNotify(int $jobId, NotifySettings $notify): void
     {
+        $this->db->execute('UPDATE runs SET runtime_checked = 1 WHERE job_id = :id AND finished_at IS NOT NULL AND EXISTS (SELECT 1 FROM jobs WHERE id = :id AND runtime_warn_percent IS NOT :runtime)', ['id' => $jobId, 'runtime' => $notify->runtimeWarnPercent]);
         $this->db->execute(
             'UPDATE jobs SET notify_on_failure = :failure, notify_failure_after = :after, notify_on_recovery = :recovery, notify_channels = :channels,
-                auto_disable_after = :disable_after, notify_on_disable = :on_disable, tls_warn_days = :tls_days WHERE id = :id',
+                auto_disable_after = :disable_after, notify_on_disable = :on_disable, tls_warn_days = :tls_days,
+                runtime_warn_percent = :runtime, notify_recipients = :recipients WHERE id = :id',
             [
                 'failure' => $notify->onFailure ? 1 : 0,
                 'after' => $notify->failureAfter,
@@ -218,6 +220,8 @@ final class JobRepository
                 'disable_after' => $notify->disableAfter,
                 'on_disable' => $notify->onDisable ? 1 : 0,
                 'tls_days' => $notify->tlsWarnDays,
+                'runtime' => $notify->runtimeWarnPercent,
+                'recipients' => json_encode($notify->recipients, JSON_THROW_ON_ERROR),
                 'id' => $jobId,
             ],
         );
@@ -250,9 +254,9 @@ final class JobRepository
             $channels[Row::int($row, 'job_id')][] = Row::int($row, 'channel_id');
         }
         $out = [];
-        foreach ($this->db->fetchAll('SELECT id, notify_on_failure, notify_failure_after, notify_on_recovery, notify_channels, auto_disable_after, notify_on_disable, tls_warn_days FROM jobs WHERE id IN (SELECT value FROM json_each(:ids))', ['ids' => $json]) as $row) {
+        foreach ($this->db->fetchAll('SELECT id, notify_on_failure, notify_failure_after, notify_on_recovery, notify_channels, auto_disable_after, notify_on_disable, tls_warn_days, runtime_warn_percent, notify_recipients FROM jobs WHERE id IN (SELECT value FROM json_each(:ids))', ['ids' => $json]) as $row) {
             $id = Row::int($row, 'id');
-            $out[$id] = new NotifySettings(Row::bool($row, 'notify_on_failure'), Row::int($row, 'notify_failure_after'), Row::bool($row, 'notify_on_recovery'), Row::string($row, 'notify_channels'), $channels[$id] ?? [], Row::intOrNull($row, 'auto_disable_after'), Row::bool($row, 'notify_on_disable'), Row::intOrNull($row, 'tls_warn_days'));
+            $out[$id] = new NotifySettings(Row::bool($row, 'notify_on_failure'), Row::int($row, 'notify_failure_after'), Row::bool($row, 'notify_on_recovery'), Row::string($row, 'notify_channels'), $channels[$id] ?? [], Row::intOrNull($row, 'auto_disable_after'), Row::bool($row, 'notify_on_disable'), Row::intOrNull($row, 'tls_warn_days'), Row::intOrNull($row, 'runtime_warn_percent'), \Meridian\Notify\Recipients::decode(Row::string($row, 'notify_recipients')));
         }
 
         return $out;

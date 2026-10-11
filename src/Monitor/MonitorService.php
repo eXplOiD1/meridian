@@ -58,7 +58,10 @@ final class MonitorService
             if (!array_key_exists('interval_seconds', $input)) {
                 throw ValidationFailed::field('interval_seconds', 'Pflichtfeld: erwartetes Intervall in Sekunden.');
             }
-            $count = (int) ($this->db->fetchOne('SELECT COUNT(*) AS n FROM monitors')['n'] ?? 0);
+            $count = $this->db->fetchOne('SELECT COUNT(*) AS n FROM monitors')['n'] ?? null;
+            if (!is_int($count)) {
+                throw new \LogicException('Anzahl der Überwachungen nicht lesbar.');
+            }
             if ($count >= self::MAX_MONITORS) {
                 throw ValidationFailed::field('name', 'Höchstens ' . self::MAX_MONITORS . ' Überwachungen. Nicht benötigte zuerst löschen.');
             }
@@ -114,6 +117,7 @@ final class MonitorService
                 'notify_on_down' => $draft->notifyOnDown !== $existing->notifyOnDown,
                 'notify_on_up' => $draft->notifyOnUp !== $existing->notifyOnUp,
                 'notify_channels' => $draft->notifyChannels !== $existing->notifyChannels,
+                'channel_ids' => $draft->channelIds !== $existing->channelIds,
                 'target' => $draft->target !== null,
                 'expected_status' => $draft->expectedStatus !== $existing->expectedStatus,
                 'fail_after' => $draft->failAfter !== $existing->failAfter,

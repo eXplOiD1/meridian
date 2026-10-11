@@ -26,7 +26,7 @@ final class CategoryService
 {
     public const HOURLY_LIMIT = 60;
 
-    private const IMPACT_SQL = 'SELECT c.id, c.name,
+    private const IMPACT_SQL = 'SELECT c.id, c.name, c.notify_recipients,
         (SELECT COUNT(*) FROM jobs j WHERE j.category_id = c.id) AS jobs,
         (SELECT COUNT(*) FROM user_role_categories a WHERE a.category_id = c.id) AS assignments,
         (SELECT COUNT(*) FROM user_role_categories a WHERE a.category_id = c.id
@@ -38,7 +38,7 @@ final class CategoryService
       ORDER BY c.name COLLATE NOCASE, c.id';
 
     private const RECENT_SQL = "SELECT COUNT(*) AS n FROM audit_log
-      WHERE user_id = :user AND action IN ('category.created', 'category.renamed', 'category.deleted') AND created_at > :since";
+      WHERE user_id = :user AND action IN ('category.created', 'category.renamed', 'category.deleted', 'category.recipients_changed') AND created_at > :since";
 
     public function __construct(
         private readonly Connection $db,
@@ -122,6 +122,21 @@ final class CategoryService
         });
     }
 
+    /** @param list<string> $recipients */
+    public function setRecipients(int $id, array $recipients, int $actorId): void
+    {
+        $recipients = \Meridian\Notify\Recipients::validate($recipients, 'recipients');
+        $this->db->immediate(function () use ($id, $recipients, $actorId): void {
+            $this->guardRate($actorId);
+            $current = $this->impact($id) ?? throw CategoryException::notFound();
+            if ($current->recipients === $recipients) {
+                return;
+            }
+            $this->db->execute('UPDATE categories SET notify_recipients = :recipients WHERE id = :id', ['recipients' => json_encode($recipients, JSON_THROW_ON_ERROR), 'id' => $id]);
+            $this->audit->record($actorId, 'category.recipients_changed', 'category:' . $id);
+        });
+    }
+
     /**
      * Löscht die Kategorie, wenn kein Job an ihr hängt.
      *
@@ -166,6 +181,7 @@ final class CategoryService
                 Row::int($row, 'ineffective'),
                 Row::int($row, 'internal_targets'),
                 Row::int($row, 'watchers'),
+                \Meridian\Notify\Recipients::decode(Row::string($row, 'notify_recipients')),
             );
         }
 

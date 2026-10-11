@@ -54,9 +54,12 @@ interface Form {
   notifyDisable: boolean;
   tlsEnabled: boolean;
   tlsDays: string;
+  runtimeEnabled: boolean;
+  runtimePercent: string;
   notifyRecovery: boolean;
   notifyChannels: 'all' | 'selected' | 'none';
   notifyIds: number[];
+  notifyRecipients: string;
   store: StoreResponse;
 }
 
@@ -125,9 +128,12 @@ function formFromJob(job: JobDetail): Form {
     notifyDisable: job.notify.on_disable,
     tlsEnabled: job.notify.tls_warn_days !== null,
     tlsDays: String(job.notify.tls_warn_days ?? 14),
+    runtimeEnabled: job.notify.runtime_warn_percent != null,
+    runtimePercent: String(job.notify.runtime_warn_percent ?? 200),
     notifyRecovery: job.notify.on_recovery,
     notifyChannels: job.notify.channels,
     notifyIds: job.notify.channel_ids,
+    notifyRecipients: (job.notify.recipients ?? []).join('\n'),
     store: http?.store_response ?? 'inherit',
   };
 }
@@ -156,9 +162,12 @@ function initialForm(limits: JobLimits | null, categories: CategoryRef[]): Form 
     notifyDisable: true,
     tlsEnabled: false,
     tlsDays: '14',
+    runtimeEnabled: false,
+    runtimePercent: '200',
     notifyRecovery: false,
     notifyChannels: 'all',
     notifyIds: [],
+    notifyRecipients: '',
     store: 'inherit',
   };
 }
@@ -224,7 +233,7 @@ function SchedulePreview({ cron, timezone }: { cron: string; timezone: string })
   );
 }
 
-export function JobEdit({ profile, id }: { profile: Profile; id: string | null }) {
+export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile; id: string | null; onEditorModeChange: (mode: 'simple' | 'expert') => void }) {
   const editing = id !== null;
   const [job, setJob] = useState<JobDetail | null>(null);
   const [categories, setCategories] = useState<CategoryRef[] | null>(null);
@@ -246,23 +255,19 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const [revealed, setRevealed] = useState(false);
   const [tabState, setTab] = useState<TabId>('general');
   // Einfach zeigt nur „Allgemein“; Experte alle Reiter. Die Werte der verborgenen Reiter bleiben im Formular erhalten.
-  const [mode, setModeState] = useState<'simple' | 'expert'>(() => {
-    if (editing) {
-      return 'expert';
-    }
-    try {
-      return window.localStorage.getItem('meridian.jobeditor.mode') === 'expert' ? 'expert' : 'simple';
-    } catch {
-      return 'simple';
-    }
-  });
+  const [mode, setModeState] = useState<'simple' | 'expert'>(profile.job_editor_mode ?? 'simple');
+  const [modeSaving, setModeSaving] = useState(false);
   const tab: TabId = mode === 'simple' ? 'general' : tabState;
-  function setMode(next: 'simple' | 'expert'): void {
-    setModeState(next);
+  async function setMode(next: 'simple' | 'expert'): Promise<void> {
+    setModeSaving(true);
     try {
-      window.localStorage.setItem('meridian.jobeditor.mode', next);
-    } catch {
-      // ohne Speicher gilt die Wahl nur für diese Seite
+      await request('PUT', '/api/auth/job-editor-mode', { csrf: profile.csrf_token, body: { job_editor_mode: next } });
+      setModeState(next);
+      onEditorModeChange(next);
+    } catch (error) {
+      setFormError(errorMessage(error));
+    } finally {
+      setModeSaving(false);
     }
   }
   const [channelNames, setChannelNames] = useState<NotificationChannelName[]>([]);
@@ -442,7 +447,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const inheritLabel = t('Wie global ({state})', { state: limits.response_storage === 'on' ? t('an') : t('aus') });
 
   const shownKeys = new Set([
-    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'notify', 'notify.failure_after', 'notify.disable_after', 'notify.tls_warn_days', 'notify.channels', 'notify.channel_ids', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
+    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'notify', 'notify.failure_after', 'notify.disable_after', 'notify.tls_warn_days', 'notify.runtime_warn_percent', 'notify.channels', 'notify.channel_ids', 'notify.recipients', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
     'http.timeout_seconds', 'http.expected_status', 'http.max_redirects', 'http.store_response', 'request.url', 'request.body',
     'shell.target', 'shell.interpreter', 'shell.user', 'shell.workdir', 'shell.timeout_seconds', 'script.source',
   ]);
@@ -592,8 +597,10 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
         on_recovery: form.notifyRecovery,
         channels: form.notifyChannels,
         channel_ids: form.notifyChannels === 'selected' ? form.notifyIds : [],
+        recipients: form.notifyRecipients.split(/\r?\n/).map((address) => address.trim()).filter(Boolean),
         disable_after: form.disableEnabled ? (/^\d+$/.test(form.disableAfter) ? Number.parseInt(form.disableAfter, 10) : form.disableAfter) : null,
         on_disable: form.notifyDisable,
+        runtime_warn_percent: form.runtimeEnabled ? (/^\d+$/.test(form.runtimePercent) ? Number.parseInt(form.runtimePercent, 10) : form.runtimePercent) : null,
         tls_warn_days: form.tlsEnabled && !shellActive ? (/^\d+$/.test(form.tlsDays) ? Number.parseInt(form.tlsDays, 10) : form.tlsDays) : null,
       },
       overlap_policy: form.overlap,
@@ -700,8 +707,8 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       <div className="modebar">
         <div className="modebar__text">{mode === 'simple' ? t('Einfach: die wichtigsten Angaben. Weitere Optionen findest du im Experten-Modus.') : t('Experte: alle Optionen in Reitern. Nichts geht beim Umschalten verloren.')}</div>
         <div className="modebar__buttons" role="group" aria-label={t('Ansicht des Editors')}>
-          <button type="button" className="modebar__btn" aria-pressed={mode === 'simple'} onClick={() => setMode('simple')}>{t('Einfach')}</button>
-          <button type="button" className="modebar__btn" aria-pressed={mode === 'expert'} onClick={() => setMode('expert')}>{t('Experte')}</button>
+          <button type="button" className="modebar__btn" aria-pressed={mode === 'simple'} disabled={modeSaving} onClick={() => void setMode('simple')}>{t('Einfach')}</button>
+          <button type="button" className="modebar__btn" aria-pressed={mode === 'expert'} disabled={modeSaving} onClick={() => void setMode('expert')}>{t('Experte')}</button>
         </div>
       </div>
       {mode === 'expert' && (
@@ -1137,6 +1144,15 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
               </label>
             </div>
           )}
+          <label className="check">
+            <input type="checkbox" checked={form.runtimeEnabled} onChange={(e) => set('runtimeEnabled', e.target.checked)} />
+            <span>{t('Mich benachrichtigen, wenn der Job länger als üblich braucht')}</span>
+          </label>
+          {form.runtimeEnabled && (
+            <FormField label={t('Warnen ab … Prozent der üblichen Laufzeit')} error={errors['notify.runtime_warn_percent']} hint={t('110 bis 1000. 200 bedeutet doppelt so lange. Vergleich mit dem Median der letzten 20 erfolgreichen Läufe, ab fünf Vergleichswerten. Testläufe zählen nicht. Die Warnung erfolgt nach dem Lauf.')}>
+              {(aria) => <input {...aria} className="input" name="runtime-percent" inputMode="numeric" value={form.runtimePercent} onChange={(e) => set('runtimePercent', e.target.value)} />}
+            </FormField>
+          )}
           {!shellActive && (
             <>
               <label className="check">
@@ -1150,6 +1166,9 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
               )}
             </>
           )}
+          <FormField label={t('E-Mail-Empfänger für diesen Job')} error={errors['notify.recipients']} hint={t('Eine Adresse pro Zeile, höchstens 10. Leer = Empfänger der Kategorie, sonst des SMTP-Kanals. Eigene Empfänger ersetzen die Vorgabe und gelten für alle gewählten E-Mail-Kanäle.')}>
+            {(aria) => <textarea {...aria} className="input" name="notify-recipients" rows={3} value={form.notifyRecipients} onChange={(e) => set('notifyRecipients', e.target.value)} />}
+          </FormField>
           <fieldset className="radios">
             <legend className="field__label">{t('Benachrichtigen über …')}</legend>
             {(['all', 'selected', 'none'] as const).map((mode) => (

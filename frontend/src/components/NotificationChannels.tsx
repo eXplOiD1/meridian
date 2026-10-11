@@ -11,6 +11,7 @@ import { t } from '../i18n';
 
 interface ChannelForm {
   type: ChannelKind;
+  language: 'ui' | 'de' | 'en';
   name: string;
   enabled: boolean;
   host: string;
@@ -32,6 +33,7 @@ interface ChannelForm {
 
 const EMPTY: ChannelForm = {
   type: 'email',
+  language: 'ui',
   name: '',
   enabled: true,
   host: '',
@@ -60,6 +62,7 @@ function fromChannel(channel: NotificationChannel): ChannelForm {
   return {
     ...EMPTY,
     type: channel.type,
+    language: c.language ?? 'ui',
     name: channel.name,
     enabled: channel.enabled,
     host: c.host ?? '',
@@ -79,7 +82,7 @@ function fromChannel(channel: NotificationChannel): ChannelForm {
 
 /** Der Request-Körper: Passwort/Token nur, wenn neu eingegeben (`null` löscht, fehlend lässt es unverändert). */
 function bodyOf(form: ChannelForm): Record<string, unknown> {
-  const body: Record<string, unknown> = { type: form.type, name: form.name, enabled: form.enabled };
+  const body: Record<string, unknown> = { type: form.type, name: form.name, enabled: form.enabled, language: form.language };
   if (form.type === 'email') {
     body.host = form.host.trim();
     body.port = /^\d+$/.test(form.port) ? Number.parseInt(form.port, 10) : form.port;
@@ -310,6 +313,13 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
             {(aria) => <input {...aria} className="input" name="channel-name" value={form.name} maxLength={60} onChange={(e) => set('name', e.target.value)} />}
           </FormField>
         </div>
+        <FormField label={t('Benachrichtigungssprache')} error={errors.language} hint={t('Standard: folgt der gespeicherten UI-Sprache deines Kontos.')}>
+          {(aria) => <select {...aria} className="input" name="notification-language" value={form.language} onChange={(e) => set('language', e.target.value as 'ui' | 'de' | 'en')}>
+            <option value="ui">{t('Wie meine UI-Sprache')}</option>
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+          </select>}
+        </FormField>
         {isEmail ? (
           <>
             <div className="grid-2">

@@ -38,7 +38,7 @@ const SPECS: SettingSpec[] = [
     numberLabel: 'Sekunden',
     extra: () => (
       <Alert tone="info">
-        {t('Alle Jobs laufen derzeit nacheinander. Ein Lauf mit langem Zeitlimit kann andere Läufe so lange aufhalten; Termine, die dabei mehr als 5 Minuten überfällig werden, gelten als verpasst.')}</Alert>
+        {t('HTTP-Jobs und Shell-Jobs laufen in getrennten Workern. Die Anzahl gleichzeitiger Läufe wird beim Start der Worker festgelegt.') }</Alert>
     ),
   },
   {
@@ -360,6 +360,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<InternalTarget | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -389,7 +390,23 @@ function InternalTargets({ csrf }: { csrf: string }) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  async function add(event: FormEvent): Promise<void> {
+  function startEdit(target: InternalTarget): void {
+    setEditing(target);
+    setErrors({});
+    setFormError(null);
+    setNotice(null);
+    setForm({ kind: target.kind, value: target.value, port: target.port === 0 ? '' : String(target.port), categoryId: target.category === null ? '' : String(target.category.id), note: target.note });
+    document.getElementById('settings-targets-add')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  function cancelEdit(): void {
+    setEditing(null);
+    setErrors({});
+    setFormError(null);
+    setForm(EMPTY_FORM);
+  }
+
+  async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
     setBusy(true);
     setErrors({});
@@ -399,13 +416,14 @@ function InternalTargets({ csrf }: { csrf: string }) {
     // Leer = alle Ports (0). Ziffern als Zahl; sonstiges unverändert, damit der Server die feste Meldung liefert.
     const port = portText === '' ? 0 : /^[0-9]{1,6}$/.test(portText) ? Number.parseInt(portText, 10) : portText;
     try {
-      const result = await request<{ target: InternalTarget }>('POST', '/api/settings/internal-targets', {
+      const result = await request<{ target: InternalTarget }>(editing === null ? 'POST' : 'PUT', '/api/settings/internal-targets' + (editing === null ? '' : '/' + String(editing.id)), {
         csrf,
         body: { kind: form.kind, value: form.value.replace(/[\s\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, ''), port, category_id: form.categoryId === '' ? null : Number.parseInt(form.categoryId, 10), note: form.note.trim() },
       });
-      setTargets((current) => [...(current ?? []), result.target]);
+      setTargets((current) => editing === null ? [...(current ?? []), result.target] : current?.map((target) => target.id === editing.id ? result.target : target) ?? current);
+      setEditing(null);
       setForm({ ...EMPTY_FORM, kind: form.kind });
-      setNotice(t('Freigabe angelegt. Sie gilt ab dem nächsten Lauf.'));
+      setNotice(editing === null ? t('Freigabe angelegt. Sie gilt ab dem nächsten Lauf.') : t('Freigabe geändert. Sie gilt ab dem nächsten Lauf.'));
     } catch (caught) {
       if (caught instanceof ApiError && Object.keys(caught.fields).length > 0) {
         setErrors(caught.fields);
@@ -425,6 +443,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
     try {
       await request<null>('DELETE', '/api/settings/internal-targets/' + String(target.id), { csrf });
       setTargets((current) => current?.filter((entry) => entry.id !== target.id) ?? current);
+      if (editing?.id === target.id) { cancelEdit(); }
       setNotice(t('Freigabe entfernt. Sie gilt ab dem nächsten Lauf nicht mehr.'));
     } catch (caught) {
       setFormError(errorMessage(caught));
@@ -477,15 +496,19 @@ function InternalTargets({ csrf }: { csrf: string }) {
                     {formatTime(target.created_at)}
                     {target.created_by !== null && <span className="hint"> · {target.created_by.display_name}</span>}
                   </td>
-                  <td>
-                    <Confirm
-                      label={t('Entfernen')}
-                      accessibleName={t('Freigabe {name} entfernen', { name: target.value })}
-                      question={t('Freigabe entfernen?')}
-                      confirmLabel={t('Ja, entfernen')}
-                      busy={busy}
-                      onConfirm={() => void remove(target)}
-                    />
+                  <td className="targets__action-cell">
+                    <div className="targets__actions">
+                      <button type="button" className="btn btn--ghost" disabled={busy} aria-label={t('Freigabe {name} bearbeiten', { name: target.value })} onClick={() => startEdit(target)}>{t('Bearbeiten')}</button>
+                      <Confirm
+                        label={t('Entfernen')}
+                        accessibleName={t('Freigabe {name} entfernen', { name: target.value })}
+                        question={t('Freigabe entfernen?')}
+                        confirmLabel={t('Ja, entfernen')}
+                        busy={busy}
+                        disabled={busy}
+                        onConfirm={() => void remove(target)}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -500,8 +523,8 @@ function InternalTargets({ csrf }: { csrf: string }) {
         </div>
       )}
 
-      <form className="form targets__form" onSubmit={(event) => void add(event)} aria-labelledby="settings-targets-add">
-        <h3 id="settings-targets-add">{t('Freigabe hinzufügen')}</h3>
+      <form className="form targets__form" onSubmit={(event) => void save(event)} aria-labelledby="settings-targets-add">
+        <h3 id="settings-targets-add">{editing === null ? t('Freigabe hinzufügen') : t('Freigabe bearbeiten')}</h3>
         {formError !== null && <Alert tone="err">{formError}</Alert>}
         <div className="grid-2">
           <FormField label={t('Art')} error={errors.kind}>
@@ -545,8 +568,9 @@ function InternalTargets({ csrf }: { csrf: string }) {
         {errors.body !== undefined && <Alert tone="err">{errors.body}</Alert>}
         <div className="row">
           <button type="submit" className="btn btn--solid" disabled={busy || form.value.trim() === ''}>
-            {busy ? t('Speichert …') : t('Freigabe anlegen')}
+            {busy ? t('Speichert …') : editing === null ? t('Freigabe anlegen') : t('Änderung speichern')}
           </button>
+          {editing !== null && <button type="button" className="btn btn--ghost" disabled={busy} onClick={cancelEdit}>{t('Abbrechen')}</button>}
         </div>
       </form>
     </section>
@@ -748,17 +772,20 @@ function ShellTargets({ csrf }: { csrf: string }) {
                     {formatTime(target.created_at)}
                     {target.created_by !== null && <span className="hint"> · {target.created_by.display_name}</span>}
                   </td>
-                  <td>
-                    <button type="button" className="btn btn--ghost" disabled={busy} aria-label={t('Ausführungsort {name} bearbeiten', { name: target.name })} onClick={() => startEdit(target)}>
-                      {t('Bearbeiten')}</button>{' '}
-                    <Confirm
-                      label={t('Entfernen')}
-                      accessibleName={t('Ausführungsort {name} entfernen', { name: target.name })}
-                      question={t('Ausführungsort entfernen?')}
-                      confirmLabel={t('Ja, entfernen')}
-                      busy={busy}
-                      onConfirm={() => void remove(target)}
-                    />
+                  <td className="targets__action-cell">
+                    <div className="targets__actions">
+                      <button type="button" className="btn btn--ghost" disabled={busy} aria-label={t('Ausführungsort {name} bearbeiten', { name: target.name })} onClick={() => startEdit(target)}>
+                        {t('Bearbeiten')}</button>
+                      <Confirm
+                        label={t('Entfernen')}
+                        accessibleName={t('Ausführungsort {name} entfernen', { name: target.name })}
+                        question={t('Ausführungsort entfernen?')}
+                        disabled={busy}
+                        confirmLabel={t('Ja, entfernen')}
+                        busy={busy}
+                        onConfirm={() => void remove(target)}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}

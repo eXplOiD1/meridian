@@ -6,6 +6,7 @@ namespace Meridian\Monitor;
 
 final readonly class MonitorDraft
 {
+    /** @param list<int> $channelIds */
     public function __construct(
         public string $name,
         public ?int $categoryId,
@@ -22,6 +23,7 @@ final readonly class MonitorDraft
         public ?string $displayTarget = null,
         public string $expectedStatus = '200-399',
         public int $failAfter = 3,
+        public array $channelIds = [],
     ) {
     }
 }
