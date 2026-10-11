@@ -1,0 +1,32 @@
+name: Full tests on Linux
+on:
+  push:
+    branches: [main, claude/great-clarke-ubr0vc]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: full-tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite, sodium, curl, mbstring, pcntl, posix
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist
+        env:
+          COMPOSER: composer.dev.json
+      - run: vendor/bin/phpunit -c phpunit.xml --log-junit test-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-test-results
+          path: test-results.xml
+          retention-days: 7

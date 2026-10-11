@@ -33,7 +33,7 @@
         }
     },
     "scripts": {
-        "test": "phpunit --bootstrap vendor/autoload.php tests/Release",
+        "test": "phpunit -c phpunit.xml",
         "analyse": "phpstan analyse -c phpstan.neon --no-progress"
     }
 }
