@@ -1,5 +1,11 @@
 /** Englische Fassungen; Schlüssel ist der deutsche Quelltext. Fehlt ein Eintrag, bleibt die Oberfläche deutsch. */
 export const EN: Record<string, string> = {
+  'Einfach: die wichtigsten Angaben. Weitere Optionen findest du im Experten-Modus.': 'Simple: the essentials. More options are in expert mode.',
+  'Experte: alle Optionen in Reitern. Nichts geht beim Umschalten verloren.': 'Expert: all options in tabs. Nothing is lost when you switch.',
+  'Ansicht des Editors': 'Editor view',
+  'Einfach': 'Simple',
+  'Experte': 'Expert',
+  'In den erweiterten Optionen steht ein Fehler. Wechsle in den Experten-Modus, um ihn zu beheben.': 'There is an error in the advanced options. Switch to expert mode to fix it.',
   'Minute': 'minute',
   'Minuten': 'minutes',
   'Stunden': 'hours',
