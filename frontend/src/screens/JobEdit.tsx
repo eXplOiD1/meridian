@@ -12,7 +12,7 @@ import { canEditHttp, canEditShell } from '../lib/permissions';
 import { setPendingRun } from '../lib/pending';
 import { triggerRun } from '../lib/runs';
 import { hrefOf, navigate } from '../lib/useHashRoute';
-import type { CategoryRef, HttpMethod, JobDetail, JobLimits, JobSource, JobType, OverlapPolicy, Profile, StoreResponse } from '../types';
+import type { CategoryRef, HttpMethod, JobDetail, JobLimits, JobSource, JobType, NotificationChannelName, OverlapPolicy, Profile, StoreResponse } from '../types';
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
 const WITH_BODY: HttpMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
@@ -44,6 +44,12 @@ interface Form {
   /** „Zeitplan läuft ab“: Schalter und Ortszeit des Jobs (`2026-12-31T23:59`, Eingabefeld datetime-local). */
   expiresEnabled: boolean;
   expiresLocal: string;
+  /** Benachrichtigungen (ADR 0007 N4). */
+  notifyFailure: boolean;
+  notifyAfter: string;
+  notifyRecovery: boolean;
+  notifyChannels: 'all' | 'selected' | 'none';
+  notifyIds: number[];
   store: StoreResponse;
 }
 
@@ -105,6 +111,11 @@ function formFromJob(job: JobDetail): Form {
     catchUp: job.catch_up,
     expiresEnabled: job.expires_at !== null,
     expiresLocal: localDateTime(job.expires_at, job.timezone),
+    notifyFailure: job.notify.on_failure,
+    notifyAfter: String(job.notify.failure_after),
+    notifyRecovery: job.notify.on_recovery,
+    notifyChannels: job.notify.channels,
+    notifyIds: job.notify.channel_ids,
     store: http?.store_response ?? 'inherit',
   };
 }
@@ -126,6 +137,11 @@ function initialForm(limits: JobLimits | null, categories: CategoryRef[]): Form 
     catchUp: false,
     expiresEnabled: false,
     expiresLocal: '',
+    notifyFailure: false,
+    notifyAfter: '1',
+    notifyRecovery: false,
+    notifyChannels: 'all',
+    notifyIds: [],
     store: 'inherit',
   };
 }
@@ -210,6 +226,22 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   /** true: gespeicherte Werte wurden geladen und stehen in den Feldern. */
   const [revealed, setRevealed] = useState(false);
   const [tab, setTab] = useState<TabId>('general');
+  const [channelNames, setChannelNames] = useState<NotificationChannelName[]>([]);
+
+  // Auswahl der Kanäle für „nur ausgewählte“: nur Namen und Art, nie Zugangsdaten.
+  useEffect(() => {
+    let cancelled = false;
+    request<{ channels: NotificationChannelName[] }>('GET', '/api/notifications/channel-names')
+      .then((data) => {
+        if (!cancelled) {
+          setChannelNames(data.channels);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [sourceNote, setSourceNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -368,7 +400,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const inheritLabel = 'Wie global (' + (limits.response_storage === 'on' ? 'an' : 'aus') + ')';
 
   const shownKeys = new Set([
-    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
+    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'notify', 'notify.failure_after', 'notify.channels', 'notify.channel_ids', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
     'http.timeout_seconds', 'http.expected_status', 'http.max_redirects', 'http.store_response', 'request.url', 'request.body',
     'shell.target', 'shell.interpreter', 'shell.user', 'shell.workdir', 'shell.timeout_seconds', 'script.source',
   ]);
@@ -380,6 +412,9 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
     if (key.startsWith('http.timeout') || key.startsWith('shell.timeout') || key === 'http.expected_status' || key === 'http.max_redirects' || key === 'http.store_response' || key === 'overlap_policy' || key.startsWith('retry_') || key.startsWith('request.headers') || key === 'request.body' || key.startsWith('script.env')) {
       return 'advanced';
     }
+    if (key.startsWith('notify')) {
+      return 'notify';
+    }
     return 'general';
   };
   const errorTabs = new Set<TabId>(Object.keys(errors).map(tabOf));
@@ -389,7 +424,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
     { id: 'notify', label: 'Benachrichtigungen' },
   ];
   function onTabKey(event: KeyboardEvent<HTMLButtonElement>, current: TabId): void {
-    const usable = tabLabels.filter((t) => t.id !== 'notify').map((t) => t.id);
+    const usable = tabLabels.map((t) => t.id);
     const i = usable.indexOf(current);
     let next: TabId | null = null;
     if (event.key === 'ArrowRight') next = usable[(i + 1) % usable.length] ?? null;
@@ -425,7 +460,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
     if (keys.length === 0) {
       return;
     }
-    const target = keys.some((k) => tabOf(k) === 'general') ? 'general' : 'advanced';
+    const target: TabId = keys.some((k) => tabOf(k) === 'general') ? 'general' : keys.some((k) => tabOf(k) === 'advanced') ? 'advanced' : 'notify';
     setTab(target);
     window.setTimeout(() => {
       document.querySelector<HTMLElement>('#jobpanel-' + target + ' [aria-invalid="true"]')?.focus();
@@ -479,6 +514,13 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       is_enabled: form.isEnabled,
       catch_up: form.catchUp,
       expires_at: form.expiresEnabled ? form.expiresLocal : null,
+      notify: {
+        on_failure: form.notifyFailure,
+        failure_after: /^\d+$/.test(form.notifyAfter) ? Number.parseInt(form.notifyAfter, 10) : form.notifyAfter,
+        on_recovery: form.notifyRecovery,
+        channels: form.notifyChannels,
+        channel_ids: form.notifyChannels === 'selected' ? form.notifyIds : [],
+      },
       overlap_policy: form.overlap,
       retry_count: retryCount,
       retry_delay_seconds: retryDelay,
@@ -581,29 +623,23 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       )}
 
       <div className="etabs" role="tablist" aria-label="Job-Einstellungen">
-        {tabLabels.map((t) =>
-          t.id === 'notify' ? (
-            <button key={t.id} type="button" role="tab" id="jobtab-notify" className="etab" aria-selected="false" aria-disabled="true" aria-controls="jobpanel-notify" tabIndex={-1} disabled>
-              {t.label} <span className="etab__soon">bald</span>
-            </button>
-          ) : (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              id={'jobtab-' + t.id}
-              className="etab"
-              aria-selected={tab === t.id}
-              aria-controls={'jobpanel-' + t.id}
-              tabIndex={tab === t.id ? 0 : -1}
-              onClick={() => setTab(t.id)}
-              onKeyDown={(e) => onTabKey(e, t.id)}
-            >
-              {t.label}
-              {errorTabs.has(t.id) && <span className="etab__err" role="img" aria-label="enthält Fehler" />}
-            </button>
-          ),
-        )}
+        {tabLabels.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            id={'jobtab-' + t.id}
+            className="etab"
+            aria-selected={tab === t.id}
+            aria-controls={'jobpanel-' + t.id}
+            tabIndex={tab === t.id ? 0 : -1}
+            onClick={() => setTab(t.id)}
+            onKeyDown={(e) => onTabKey(e, t.id)}
+          >
+            {t.label}
+            {errorTabs.has(t.id) && <span className="etab__err" role="img" aria-label="enthält Fehler" />}
+          </button>
+        ))}
       </div>
 
       <div role="tabpanel" id="jobpanel-general" aria-labelledby="jobtab-general" className="etabpanel" hidden={tab !== 'general'}>
@@ -947,10 +983,52 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       </section>
       </div>
 
-      <div role="tabpanel" id="jobpanel-notify" aria-labelledby="jobtab-notify" className="etabpanel" hidden>
+      <div role="tabpanel" id="jobpanel-notify" aria-labelledby="jobtab-notify" className="etabpanel" hidden={tab !== 'notify'}>
         <section className="card" aria-label="Benachrichtigungen">
           <h2>Benachrichtigungen</h2>
-          <p className="hint">Kommt bald.</p>
+          <p className="hint">Meldet Meridian, wenn dieser Job fehlschlägt und wenn er wieder läuft. Die Kanäle (E-Mail, ntfy) richtet ein Administrator unter Einstellungen ein.</p>
+          <label className="check">
+            <input type="checkbox" checked={form.notifyFailure} onChange={(e) => set('notifyFailure', e.target.checked)} />
+            <span>Mich benachrichtigen, wenn die Ausführung fehlschlägt</span>
+          </label>
+          {form.notifyFailure && (
+            <FormField label="Benachrichtigung nach … Fehlschlägen in Folge" error={errors['notify.failure_after']} hint="Ein Fehlschlag zählt erst, wenn kein Wiederholungsversuch mehr folgt. Gemeldet wird einmal je Serie.">
+              {(aria) => <input {...aria} className="input" name="notify-after" inputMode="numeric" value={form.notifyAfter} onChange={(e) => set('notifyAfter', e.target.value)} />}
+            </FormField>
+          )}
+          <label className="check">
+            <input type="checkbox" checked={form.notifyRecovery} onChange={(e) => set('notifyRecovery', e.target.checked)} />
+            <span>Mich benachrichtigen, wenn die Ausführung wieder erfolgreich ist, nachdem sie fehlschlug</span>
+          </label>
+          <fieldset className="radios">
+            <legend className="field__label">Benachrichtigen über …</legend>
+            {(['all', 'selected', 'none'] as const).map((mode) => (
+              <label key={mode} className="check">
+                <input type="radio" name="notify-channels" checked={form.notifyChannels === mode} onChange={() => set('notifyChannels', mode)} />
+                <span>{mode === 'all' ? 'alle Kanäle' : mode === 'selected' ? 'nur ausgewählte Kanäle' : 'keine Kanäle'}</span>
+              </label>
+            ))}
+          </fieldset>
+          {errors['notify.channels'] !== undefined && <p className="field__error">{errors['notify.channels']}</p>}
+          {form.notifyChannels === 'selected' && (
+            <div className="stack">
+              {channelNames.length === 0 && <p className="hint">Es gibt noch keinen Kanal. Ein Administrator legt sie unter Einstellungen → Benachrichtigungen an.</p>}
+              {channelNames.map((channel) => (
+                <label key={channel.id} className="check">
+                  <input
+                    type="checkbox"
+                    checked={form.notifyIds.includes(channel.id)}
+                    onChange={(e) => set('notifyIds', e.target.checked ? [...form.notifyIds, channel.id] : form.notifyIds.filter((id) => id !== channel.id))}
+                  />
+                  <span>
+                    {channel.name} ({channel.type === 'email' ? 'E-Mail' : 'ntfy'}){!channel.enabled ? ' – ausgeschaltet' : ''}
+                  </span>
+                </label>
+              ))}
+              {errors['notify.channel_ids'] !== undefined && <p className="field__error">{errors['notify.channel_ids']}</p>}
+            </div>
+          )}
+          {errors.notify !== undefined && <p className="field__error">{errors.notify}</p>}
         </section>
       </div>
 
