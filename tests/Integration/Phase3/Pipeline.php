@@ -219,20 +219,138 @@ trait Pipeline
         Assert::assertNotNull($row);
 
         return [
+            'status' => is_string($row['status']) ? $row['status'] : '',
+            'note' => is_string($row['note']) ? $row['note'] : null,
+            'output' => is_string($row['output']) ? $row['output'] : null,
+            'http_status' => is_int($row['http_status']) ? $row['http_status'] : null,
+            'trigger' => is_string($row['trigger']) ? $row['trigger'] : '',
+        ];
+    }
 
+    // ------------------------------------------------------------------------------------------------ Scheduler
 
+    /**
+     * Der echte Dienst: `bin/meridian scheduler:run --once -vvv` mit expliziter Umgebung. Stdout, Stderr und das
+     * PHP-Fehlerprotokoll des Prozesses wandern in die Sammlung.
+     *
+     * @param array<string, string> $env zusätzliche Umgebungsvariablen (z. B. HTTP_PROXY)
+     *
+     * @return array{code: int, out: string, err: string}
+     */
+    private function schedulerProcess(array $env = [], string $verbosity = '-vvv'): array
+    {
+        $result = $this->cli(['scheduler:run', '--once', '--inline-worker', $verbosity], $env, 'scheduler');
+        if ($result['code'] !== 0) {
+            Assert::fail('scheduler:run endete mit Exit ' . $result['code'] . ': ' . $result['err'] . $result['out']);
+        }
 
+        return $result;
+    }
 
+    /**
+     * @param list<string>          $args
+     * @param array<string, string> $env
+     *
+     * @return array{code: int, out: string, err: string}
+     */
+    private function cli(array $args, array $env = [], string $surface = 'cli'): array
+    {
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'error_log=' . $this->errorLog, '-d', 'log_errors=1', '-d', 'display_errors=1', '-d', 'error_reporting=-1', '-d', 'zend.exception_ignore_args=0', dirname(__DIR__, 3) . '/bin/meridian', ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            $env + ['PATH' => '/usr/bin:/bin', 'MERIDIAN_DATA_DIR' => $this->dir, 'MERIDIAN_KEY_FILE' => $this->keyFile],
+        );
+        Assert::assertIsResource($process);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $code = proc_close($process);
+        $this->capture($surface . '-stdout', $out);
+        $this->capture($surface . '-stderr', $err);
 
+        return ['code' => $code, 'out' => $out, 'err' => $err];
+    }
 
+    /**
+     * Ein Takt im Prozess mit dem echten HttpRunner, dem echten CurlTransport und dem übergebenen Resolver
+     * (Test-DNS für Rebinding und Namen).
+     *
+     * @return list<RunEvent>
+     */
+    private function schedulerTick(HostResolver $resolver): array
+    {
+        $clock = new SystemClock();
+        $db = $this->db();
+        $lease = new SchedulerLease($db, $clock, SchedulerLease::newOwnerId());
+        $runners = new RunnerRegistry();
+        $runners->register(JobType::Http, new HttpRunner(
+            new DbHttpJobSource($db),
+            $this->box(),
+            new StoredHttpRunSettings(new Settings($db, $clock)),
+            new TargetGuard($resolver, new AddressPolicy(new DbInternalTargetSource($db))),
+            new CurlTransport('Meridian/test'),
+        ));
+        $scheduler = new Scheduler(
+            $lease,
+            new Planner($db, $clock, $lease),
+            new \Meridian\Schedule\StaleRuns($db, $clock, $lease),
+            new Worker($db, $clock, new \Meridian\Schedule\WorkerIdentity($lease->owner(), JobType::Http), [JobType::Http], $runners, new DbRunAuthorizer($db, new UserRepository($db, new PasswordHasher()))),
+        );
+        try {
+            return $scheduler->tick(static fn (): bool => false);
+        } finally {
+            $scheduler->shutdown();
+        }
+    }
 
+    // ------------------------------------------------------------------------------------------------ Sammeln
 
+    /**
+     * Liest alle Lese-Endpunkte für alle Rollen und legt die Antworten in die Sammlung.
+     *
+     * @param list<int> $jobIds
+     * @param list<int> $runIds
+     */
+    private function sweepApi(array $jobIds, array $runIds): void
+    {
+        foreach (['admin', 'operator', 'operatorA', 'observer'] as $who) {
+            foreach (['/api/jobs', '/api/jobs?sort=next_run', '/api/jobs/limits', '/api/categories', '/api/auth/me', '/api/schedule/preview?cron=*/5%20*%20*%20*%20*&timezone=Europe/Berlin&count=3'] as $path) {
+                $this->req($who, 'GET', $path);
+            }
+            foreach ($jobIds as $jobId) {
+                $this->req($who, 'GET', '/api/jobs/' . $jobId);
+                $this->req($who, 'GET', '/api/jobs/' . $jobId . '/runs?limit=100');
+            }
+            foreach ($runIds as $runId) {
+                $this->req($who, 'GET', '/api/runs/' . $runId);
+            }
+        }
+        foreach (['/api/audit?limit=200', '/api/settings', '/api/settings/internal-targets'] as $path) {
+            $this->req('admin', 'GET', $path);
+        }
+        // Dieselben Endpunkte ohne Anmeldung: Fehlertexte dürfen nichts verraten.
+        foreach ($jobIds as $jobId) {
+            $this->req(null, 'GET', '/api/jobs/' . $jobId);
+        }
+    }
 
+    /**
+     * Jede Tabelle mit festem SQL-Literal (die Zuordnung zwingt dazu, neue Tabellen hier nachzutragen, sonst
+     * schlägt der Test fehl).
+     *
+     * @return array<string, literal-string>
+     */
+    private static function dumpQueries(): array
+    {
+        return [
             'api_tokens' => 'SELECT * FROM api_tokens',
             'audit_log' => 'SELECT * FROM audit_log',
             'categories' => 'SELECT * FROM categories',
             'http_internal_targets' => 'SELECT * FROM http_internal_targets',
-            'http_status' => is_int($row['http_status']) ? $row['http_status'] : null,
             'job_channels' => 'SELECT * FROM job_channels',
             'job_notify_state' => 'SELECT * FROM job_notify_state',
             'job_tls' => 'SELECT * FROM job_tls',
@@ -240,10 +358,8 @@ trait Pipeline
             'live_streams' => 'SELECT * FROM live_streams',
             'login_failures' => 'SELECT * FROM login_failures',
             'monitors' => 'SELECT * FROM monitors',
-            'note' => is_string($row['note']) ? $row['note'] : null,
             'notification_channels' => 'SELECT * FROM notification_channels',
             'notification_outbox' => 'SELECT * FROM notification_outbox',
-            'output' => is_string($row['output']) ? $row['output'] : null,
             'recovery_codes' => 'SELECT * FROM recovery_codes',
             'role_permissions' => 'SELECT * FROM role_permissions',
             'roles' => 'SELECT * FROM roles',
@@ -257,126 +373,10 @@ trait Pipeline
             'shell_targets' => 'SELECT * FROM shell_targets',
             'status_page_items' => 'SELECT * FROM status_page_items',
             'status_pages' => 'SELECT * FROM status_pages',
-'status' => is_string($row['status']) ? $row['status'] : '',
-            'trigger' => is_string($row['trigger']) ? $row['trigger'] : '',
             'user_role_categories' => 'SELECT * FROM user_role_categories',
             'user_roles' => 'SELECT * FROM user_roles',
             'users' => 'SELECT * FROM users',
             'workers' => 'SELECT * FROM workers',
-        );
-        );
-        ));
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            [PHP_BINARY, '-d', 'error_log=' . $this->errorLog, '-d', 'log_errors=1', '-d', 'display_errors=1', '-d', 'error_reporting=-1', '-d', 'zend.exception_ignore_args=0', dirname(__DIR__, 3) . '/bin/meridian', ...$args],
-        ];
-    {
-    {
-    {
-    {
-    {
-    }
-        }
-    }
-    }
-        }
-    }
-            }
-            }
-            }
-        }
-        }
-        }
-    }
-        } finally {
-     *
-     *
-     *
-     *
-     *
-     *
-     * (Test-DNS für Rebinding und Namen).
-     * @param array<string, string> $env
-     * @param array<string, string> $env zusätzliche Umgebungsvariablen (z. B. HTTP_PROXY)
-     * @param list<int> $jobIds
-     * @param list<int> $runIds
-     * @param list<string>          $args
-     * @return array{code: int, out: string, err: string}
-     * @return array{code: int, out: string, err: string}
-     * @return array<string, literal-string>
-     * @return list<RunEvent>
-     * Der echte Dienst: `bin/meridian scheduler:run --once -vvv` mit expliziter Umgebung. Stdout, Stderr und das
-     * Ein Takt im Prozess mit dem echten HttpRunner, dem echten CurlTransport und dem übergebenen Resolver
-     * Jede Tabelle mit festem SQL-Literal (die Zuordnung zwingt dazu, neue Tabellen hier nachzutragen, sonst
-     * Liest alle Lese-Endpunkte für alle Rollen und legt die Antworten in die Sammlung.
-     * PHP-Fehlerprotokoll des Prozesses wandern in die Sammlung.
-     * schlägt der Test fehl).
-     */
-     */
-     */
-     */
-     */
-    /**
-    /**
-    /**
-    /**
-    /**
-    // ------------------------------------------------------------------------------------------------ Sammeln
-    // ------------------------------------------------------------------------------------------------ Scheduler
-        // Dieselben Endpunkte ohne Anmeldung: Fehlertexte dürfen nichts verraten.
-        $clock = new SystemClock();
-        $code = proc_close($process);
-        $db = $this->db();
-            $env + ['PATH' => '/usr/bin:/bin', 'MERIDIAN_DATA_DIR' => $this->dir, 'MERIDIAN_KEY_FILE' => $this->keyFile],
-        $err = (string) stream_get_contents($pipes[2]);
-        $lease = new SchedulerLease($db, $clock, SchedulerLease::newOwnerId());
-            $lease,
-        $out = (string) stream_get_contents($pipes[1]);
-            $pipes,
-        $process = proc_open(
-        $result = $this->cli(['scheduler:run', '--once', '--inline-worker', $verbosity], $env, 'scheduler');
-        $runners = new RunnerRegistry();
-        $runners->register(JobType::Http, new HttpRunner(
-        $scheduler = new Scheduler(
-            $scheduler->shutdown();
-            $this->box(),
-        $this->capture($surface . '-stderr', $err);
-        $this->capture($surface . '-stdout', $out);
-            $this->req('admin', 'GET', $path);
-                $this->req($who, 'GET', '/api/jobs/' . $jobId . '/runs?limit=100');
-                $this->req($who, 'GET', '/api/jobs/' . $jobId);
-                $this->req($who, 'GET', '/api/runs/' . $runId);
-                $this->req($who, 'GET', $path);
-            $this->req(null, 'GET', '/api/jobs/' . $jobId);
-        Assert::assertIsResource($process);
-            Assert::fail('scheduler:run endete mit Exit ' . $result['code'] . ': ' . $result['err'] . $result['out']);
-        fclose($pipes[0]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        foreach (['/api/audit?limit=200', '/api/settings', '/api/settings/internal-targets'] as $path) {
-            foreach (['/api/jobs', '/api/jobs?sort=next_run', '/api/jobs/limits', '/api/categories', '/api/auth/me', '/api/schedule/preview?cron=*/5%20*%20*%20*%20*&timezone=Europe/Berlin&count=3'] as $path) {
-        foreach (['admin', 'operator', 'operatorA', 'observer'] as $who) {
-            foreach ($jobIds as $jobId) {
-        foreach ($jobIds as $jobId) {
-            foreach ($runIds as $runId) {
-        if ($result['code'] !== 0) {
-            new \Meridian\Schedule\StaleRuns($db, $clock, $lease),
-            new \Meridian\Schedule\Worker($db, $clock, new \Meridian\Schedule\WorkerIdentity($lease->owner(), \Meridian\Runner\JobType::Http), [\Meridian\Runner\JobType::Http], $runners, new DbRunAuthorizer($db, new UserRepository($db, new PasswordHasher()))),
-            new CurlTransport('Meridian/test'),
-            new DbHttpJobSource($db),
-            new Planner($db, $clock, $lease),
-            new StoredHttpRunSettings(new Settings($db, $clock)),
-            new TargetGuard($resolver, new AddressPolicy(new DbInternalTargetSource($db))),
-            null,
-    private function cli(array $args, array $env = [], string $surface = 'cli'): array
-    private function schedulerProcess(array $env = [], string $verbosity = '-vvv'): array
-    private function schedulerTick(HostResolver $resolver): array
-    private function sweepApi(array $jobIds, array $runIds): void
-    private static function dumpQueries(): array
-        return [
-        return ['code' => $code, 'out' => $out, 'err' => $err];
-        return $result;
-            return $scheduler->tick(static fn (): bool => false);
-        try {
         ];
     }
 
