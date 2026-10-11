@@ -13,6 +13,7 @@ import { setPendingRun } from '../lib/pending';
 import { triggerRun } from '../lib/runs';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import { basicAuthValue, parseCurl } from '../lib/curl';
+import { t } from '../i18n';
 import type { CategoryRef, HttpMethod, JobDetail, JobLimits, JobSource, JobType, NotificationChannelName, OverlapPolicy, Profile, StoreResponse } from '../types';
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
@@ -243,7 +244,27 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const [nextKey, setNextKey] = useState(1);
   /** true: gespeicherte Werte wurden geladen und stehen in den Feldern. */
   const [revealed, setRevealed] = useState(false);
-  const [tab, setTab] = useState<TabId>('general');
+  const [tabState, setTab] = useState<TabId>('general');
+  // Einfach zeigt nur „Allgemein“; Experte alle Reiter. Die Werte der verborgenen Reiter bleiben im Formular erhalten.
+  const [mode, setModeState] = useState<'simple' | 'expert'>(() => {
+    if (editing) {
+      return 'expert';
+    }
+    try {
+      return window.localStorage.getItem('meridian.jobeditor.mode') === 'expert' ? 'expert' : 'simple';
+    } catch {
+      return 'simple';
+    }
+  });
+  const tab: TabId = mode === 'simple' ? 'general' : tabState;
+  function setMode(next: 'simple' | 'expert'): void {
+    setModeState(next);
+    try {
+      window.localStorage.setItem('meridian.jobeditor.mode', next);
+    } catch {
+      // ohne Speicher gilt die Wahl nur für diese Seite
+    }
+  }
   const [channelNames, setChannelNames] = useState<NotificationChannelName[]>([]);
 
   // Auswahl der Kanäle für „nur ausgewählte“: nur Namen und Art, nie Zugangsdaten.
@@ -509,6 +530,9 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       return;
     }
     const target: TabId = keys.some((k) => tabOf(k) === 'general') ? 'general' : keys.some((k) => tabOf(k) === 'advanced') ? 'advanced' : 'notify';
+    if (target !== 'general') {
+      setModeState('expert');
+    }
     setTab(target);
     window.setTimeout(() => {
       document.querySelector<HTMLElement>('#jobpanel-' + target + ' [aria-invalid="true"]')?.focus();
@@ -673,6 +697,14 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
         </Alert>
       )}
 
+      <div className="modebar">
+        <div className="modebar__text">{mode === 'simple' ? t('Einfach: die wichtigsten Angaben. Weitere Optionen findest du im Experten-Modus.') : t('Experte: alle Optionen in Reitern. Nichts geht beim Umschalten verloren.')}</div>
+        <div className="modebar__buttons" role="group" aria-label={t('Ansicht des Editors')}>
+          <button type="button" className="modebar__btn" aria-pressed={mode === 'simple'} onClick={() => setMode('simple')}>{t('Einfach')}</button>
+          <button type="button" className="modebar__btn" aria-pressed={mode === 'expert'} onClick={() => setMode('expert')}>{t('Experte')}</button>
+        </div>
+      </div>
+      {mode === 'expert' && (
       <div className="etabs" role="tablist" aria-label="Job-Einstellungen">
         {tabLabels.map((t) => (
           <button
@@ -692,7 +724,11 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
           </button>
         ))}
       </div>
+      )}
 
+      {mode === 'simple' && errorTabs.size > 0 && !errorTabs.has('general') && (
+        <Alert tone="err">{t('In den erweiterten Optionen steht ein Fehler. Wechsle in den Experten-Modus, um ihn zu beheben.')}</Alert>
+      )}
       <div role="tabpanel" id="jobpanel-general" aria-labelledby="jobtab-general" className="etabpanel" hidden={tab !== 'general'}>
             <section className="card" aria-label="Allgemein">
         <h2>Allgemein</h2>
