@@ -228,7 +228,7 @@ final class Settings
 
                 return $value;
             case SettingKey::AuthSessionDays:
-                if (!is_int($value) || $value < self::SESSION_NEVER || $value > self::MAX_SESSION_DAYS) {
+                if (!is_int($value) || $value < self::SESSION_STANDARD || $value > self::MAX_SESSION_DAYS) {
                     throw new InvalidSetting('Sitzungsdauer: 0 (niemals ablaufen) oder ganze Zahl von 1 bis ' . self::MAX_SESSION_DAYS . ' (Tage). Zurücksetzen stellt den Standard wieder her.');
                 }
 
