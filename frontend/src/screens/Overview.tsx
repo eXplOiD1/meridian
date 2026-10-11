@@ -11,6 +11,7 @@ import { hrefOf, navigate } from '../lib/useHashRoute';
 import { TaktBand } from '../components/TaktBand';
 import { formatDuration } from '../lib/jobs';
 import { formatTime } from '../lib/format';
+import { t } from '../i18n';
 import type { JobList, JobSummary, Overview as OverviewData, Profile } from '../types';
 
 const BOARD_ROWS = 12;
@@ -103,6 +104,77 @@ function startOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
 }
 
+
+/** Restzeit bis zum nächsten Lauf als kurzer Text (nur aus echten Daten). */
+function countdown(iso: string | null, now: number): { value: string; unit: string } | null {
+  if (iso === null) {
+    return null;
+  }
+  const ms = new Date(iso).getTime() - now;
+  if (Number.isNaN(ms)) {
+    return null;
+  }
+  if (ms < 60_000) {
+    return { value: '<1', unit: t('Minute') };
+  }
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 120) {
+    return { value: String(minutes), unit: t('Minuten') };
+  }
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? { value: String(hours), unit: t('Stunden') } : { value: String(Math.round(hours / 24)), unit: t('Tage') };
+}
+
+/** Kopfbereich: Lage in einem Satz, nächster Lauf als Ring. Alle Werte kommen aus der API, nichts ist erfunden. */
+function Hero({ jobs, attention, mayView }: { jobs: JobSummary[] | null; attention: number | null; mayView: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const next = jobs !== null ? jobs.find((job) => job.next_run_at !== null) : undefined;
+  const left = next !== undefined ? countdown(next.next_run_at, now) : null;
+  let headline = t('Alles im Takt.');
+  if (!mayView) {
+    headline = t('Willkommen bei Meridian.');
+  } else if (attention !== null && attention > 0) {
+    headline = attention === 1 ? t('Ein Job braucht deine Aufmerksamkeit.') : t('{n} Jobs brauchen deine Aufmerksamkeit.', { n: attention });
+  } else if (jobs !== null && jobs.length === 0) {
+    headline = t('Bereit für den ersten Job.');
+  }
+  return (
+    <section className="hero" aria-label={t('Lage')}>
+      <div>
+        <div className="hero__eyebrow"><span className={'dot ' + (attention !== null && attention > 0 ? 'dot--err' : 'dot--now')} aria-hidden="true" />{t('Lage jetzt')}</div>
+        <h2>{headline}</h2>
+        <p>
+          {!mayView
+            ? t('Deine Rolle darf keine Jobs ansehen.')
+            : next !== undefined
+              ? t('Der nächste Lauf ist „{name}“ um {time}.', { name: next.name, time: formatNext(next.next_run_at) })
+              : t('Es ist kein aktiver Job geplant.')}
+        </p>
+        {mayView && (
+          <div className="hero__actions">
+            <a className="btn btn--solid" href={hrefOf('jobs')}>{t('Alle Jobs')}</a>
+            <a className="btn btn--ghost" href={hrefOf('verlauf')}>{t('Verlauf ansehen')}</a>
+          </div>
+        )}
+      </div>
+      {mayView && (
+        <div className="hero__next">
+          <div className="orbit" role="img" aria-label={left !== null ? t('Nächster Lauf in {n} {unit}', { n: left.value, unit: left.unit }) : t('Kein Lauf geplant')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+            <span>{t('Nächster Lauf')}</span>
+            <strong>{left !== null ? left.value : '–'}</strong>
+            <small>{left !== null ? left.unit : ''}</small>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function Overview({ profile }: { profile: Profile }) {
   const mayView = canViewJobs(profile);
   const { jobs, error } = useUpcoming(mayView);
@@ -125,6 +197,7 @@ export function Overview({ profile }: { profile: Profile }) {
           .
         </Alert>
       )}
+      <Hero jobs={jobs} attention={today.data !== null ? today.data.attention.length : null} mayView={mayView} />
       <section className="board" aria-label="Nächste Läufe">
         <div className="board__head">
           <div>
