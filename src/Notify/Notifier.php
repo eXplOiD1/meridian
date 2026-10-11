@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Meridian\Notify;
 
+use Meridian\Auth\AuditLog;
 use Meridian\Auth\Clock;
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
@@ -19,6 +20,8 @@ use Meridian\Security\SecretMasker;
  *  2. {@see self::deliver()}: fällige Einträge übernehmen (atomar, mehrere Prozesse stellen nie doppelt zu) und senden;
  *     bei Fehlern nach 1, 5 und 30 Minuten erneut, danach `failed`.
  *  3. {@see self::prune()}: Erledigtes nach 30 Tagen löschen.
+ *  Dazu (ADR 0010): Jobs mit `auto_disable_after` werden nach der Fehlerserie deaktiviert (Audit ohne Benutzer, optional Nachricht),
+ *  und {@see self::evaluateTls()} warnt vor ablaufenden Zertifikaten.
  *
  * Ein Fehlschlag zählt erst, wenn kein Wiederholungsversuch mehr folgt (`attempt` > `retry_count`). Läufe, die älter als
  * {@see self::FRESH_SECONDS} sind, zählen für die Serie, lösen aber keine Nachricht mehr aus (kein Nachholen alter Fehler).
@@ -57,7 +60,7 @@ final class Notifier
     public function tick(): array
     {
         $lines = [];
-        $queued = $this->evaluate();
+        $queued = $this->evaluate() + $this->evaluateTls();
         if ($queued > 0) {
             $lines[] = 'Benachrichtigungen eingereiht: ' . $queued . '.';
         }
@@ -76,7 +79,7 @@ final class Notifier
     public function evaluate(): int
     {
         $queued = 0;
-        $jobs = $this->db->fetchAll('SELECT id FROM jobs WHERE notify_on_failure = 1 OR notify_on_recovery = 1 ORDER BY id');
+        $jobs = $this->db->fetchAll('SELECT id FROM jobs WHERE notify_on_failure = 1 OR notify_on_recovery = 1 OR auto_disable_after IS NOT NULL ORDER BY id');
         foreach ($jobs as $row) {
             $jobId = Row::int($row, 'id');
             $queued += $this->db->immediate(fn (): int => $this->evaluateJob($jobId));
@@ -88,7 +91,7 @@ final class Notifier
     private function evaluateJob(int $jobId): int
     {
         $job = $this->db->fetchOne(
-            'SELECT id, name, retry_count, notify_on_failure, notify_failure_after, notify_on_recovery, notify_channels FROM jobs WHERE id = :id',
+            'SELECT id, name, retry_count, is_enabled, notify_on_failure, notify_failure_after, notify_on_recovery, notify_channels, auto_disable_after, notify_on_disable FROM jobs WHERE id = :id',
             ['id' => $jobId],
         );
         if ($job === null) {
@@ -112,6 +115,8 @@ final class Notifier
         $now = $this->clock->now();
         $retries = Row::int($job, 'retry_count');
         $after = Row::int($job, 'notify_failure_after');
+        $disableAfter = Row::intOrNull($job, 'auto_disable_after');
+        $enabled = Row::bool($job, 'is_enabled');
         $queued = 0;
         foreach ($runs as $run) {
             $last = Row::int($run, 'id');
@@ -141,6 +146,12 @@ final class Notifier
                 $queued += $this->enqueue($job, 'failure', $run, $failures);
                 $notified = true;
             }
+            if ($enabled && $disableAfter !== null && $failures >= $disableAfter && $fresh) {
+                $queued += $this->autoDisable($job, $run, $failures);
+                $enabled = false;
+                $failures = 0;
+                $notified = false;
+            }
         }
         $this->db->execute(
             'INSERT INTO job_notify_state (job_id, last_run_id, consecutive_failures, notified) VALUES (:job, :last, :failures, :notified)
@@ -152,10 +163,79 @@ final class Notifier
     }
 
     /**
+     * Deaktiviert den Job nach einer Fehlerserie (nur wenn der Besitzer es für diesen Job eingestellt hat) und meldet es.
+     *
+     * @param array<string, mixed> $job
+     * @param array<string, mixed> $run
+     */
+    private function autoDisable(array $job, array $run, int $failures): int
+    {
+        $jobId = Row::int($job, 'id');
+        $now = Timestamp::format($this->clock->now());
+        $this->db->execute('UPDATE jobs SET is_enabled = 0, next_run_at = NULL, updated_at = :now WHERE id = :id AND is_enabled = 1', ['now' => $now, 'id' => $jobId]);
+        (new AuditLog($this->db, $this->clock, $this->masker))->record(null, 'job.auto_disabled', 'job:' . $jobId . ' nach ' . $failures . ' Fehlschlägen in Folge');
+        if (!Row::bool($job, 'notify_on_disable')) {
+            return 0;
+        }
+
+        return $this->enqueue($job, 'disabled', $run, $failures);
+    }
+
+    /**
+     * Warnt einmal je Ablaufdatum, wenn das beim Lauf gesehene Zertifikat in höchstens `tls_warn_days` Tagen abläuft.
+     *
+     * @return int Anzahl neu eingereihter Nachrichten
+     */
+    public function evaluateTls(): int
+    {
+        $now = $this->clock->now();
+        $rows = $this->db->fetchAll(
+            'SELECT j.id, j.name, j.notify_channels, j.tls_warn_days, t.expires_at, t.notified_for FROM jobs j JOIN job_tls t ON t.job_id = j.id
+              WHERE j.tls_warn_days IS NOT NULL AND j.is_enabled = 1 ORDER BY j.id',
+        );
+        $queued = 0;
+        foreach ($rows as $row) {
+            $expires = Row::string($row, 'expires_at');
+            if (Row::stringOrNull($row, 'notified_for') === $expires) {
+                continue;
+            }
+            try {
+                $expiresAt = Timestamp::parse($expires);
+            } catch (\InvalidArgumentException) {
+                continue;
+            }
+            $days = (int) floor(($expiresAt->getTimestamp() - $now->getTimestamp()) / 86400);
+            if ($days > Row::int($row, 'tls_warn_days')) {
+                continue;
+            }
+            $jobId = Row::int($row, 'id');
+            $queued += $this->db->immediate(function () use ($row, $jobId, $expires, $days, $now): int {
+                $claimed = $this->db->execute('UPDATE job_tls SET notified_for = :exp WHERE job_id = :id AND (notified_for IS NULL OR notified_for <> :exp)', ['exp' => $expires, 'id' => $jobId]);
+                if ($claimed !== 1) {
+                    return 0;
+                }
+                $detail = $days < 0 ? 'Das Zertifikat ist am ' . $expires . ' (UTC) abgelaufen.' : 'Das Zertifikat läuft am ' . $expires . ' (UTC) ab, in ' . $days . ' Tag(en).';
+
+                return $this->enqueueRaw($row, 'tls_expiry', null, null, Timestamp::format($now), $detail, 0);
+            });
+        }
+
+        return $queued;
+    }
+
+    /**
      * @param array<string, mixed> $job
      * @param array<string, mixed> $run
      */
     private function enqueue(array $job, string $kind, array $run, int $failures): int
+    {
+        return $this->enqueueRaw($job, $kind, Row::int($run, 'id'), Row::string($run, 'status'), Row::stringOrNull($run, 'finished_at'), Row::stringOrNull($run, 'note'), $failures);
+    }
+
+    /**
+     * @param array<string, mixed> $job
+     */
+    private function enqueueRaw(array $job, string $kind, ?int $runId, ?string $runStatus, ?string $occurredAt, ?string $note, int $failures): int
     {
         $jobId = Row::int($job, 'id');
         $mode = Row::string($job, 'notify_channels');
@@ -166,7 +246,7 @@ final class Notifier
             ? $this->db->fetchAll('SELECT c.id FROM notification_channels c JOIN job_channels j ON j.channel_id = c.id WHERE j.job_id = :job AND c.is_enabled = 1 ORDER BY c.id', ['job' => $jobId])
             : $this->db->fetchAll('SELECT id FROM notification_channels WHERE is_enabled = 1 ORDER BY id');
         $now = Timestamp::format($this->clock->now());
-        $detail = Row::stringOrNull($run, 'note');
+        $detail = $note;
         if ($detail !== null) {
             $detail = $this->masker->mask(mb_strcut($detail, 0, self::DETAIL_BYTES));
         }
@@ -180,9 +260,9 @@ final class Notifier
                     'channel' => Row::int($channel, 'id'),
                     'job' => $jobId,
                     'name' => Row::string($job, 'name'),
-                    'run' => Row::int($run, 'id'),
-                    'status' => Row::string($run, 'status'),
-                    'at' => Row::stringOrNull($run, 'finished_at') ?? $now,
+                    'run' => $runId,
+                    'status' => $runStatus,
+                    'at' => $occurredAt ?? $now,
                     'detail' => $detail,
                     'failures' => $failures,
                     'now' => $now,

@@ -26,6 +26,8 @@ final readonly class Message
         return match ($this->kind) {
             'failure' => 'Meridian: ' . $this->jobName . ' ist fehlgeschlagen',
             'recovery' => 'Meridian: ' . $this->jobName . ' läuft wieder',
+            'disabled' => 'Meridian: ' . $this->jobName . ' wurde deaktiviert',
+            'tls_expiry' => 'Meridian: Zertifikat von ' . $this->jobName . ' läuft bald ab',
             default => 'Meridian: Testnachricht',
         };
     }
@@ -36,7 +38,11 @@ final readonly class Message
             return "Das ist eine Testnachricht von Meridian.\nWenn du sie liest, funktioniert dieser Kanal.\n";
         }
         $lines = [];
-        if ($this->kind === 'failure') {
+        if ($this->kind === 'disabled') {
+            $lines[] = 'Der Job „' . $this->jobName . '“ wurde automatisch deaktiviert, nachdem er ' . $this->failures . ' Mal in Folge fehlgeschlagen ist. Er läuft erst wieder, wenn du ihn in Meridian aktivierst.';
+        } elseif ($this->kind === 'tls_expiry') {
+            $lines[] = 'Das TLS-Zertifikat des Ziels von „' . $this->jobName . '“ läuft bald ab.';
+        } elseif ($this->kind === 'failure') {
             $label = $this->runStatus === 'timeout' ? 'wegen Zeitlimit abgebrochen' : 'fehlgeschlagen';
             $lines[] = 'Der Job „' . $this->jobName . '“ ist ' . $label . ($this->failures > 1 ? ' (' . $this->failures . ' Fehlschläge in Folge)' : '') . '.';
         } else {

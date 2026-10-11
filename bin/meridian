@@ -33,6 +33,7 @@ use Meridian\Runner\Http\AddressPolicy;
 use Meridian\Runner\Http\CurlTransport;
 use Meridian\Runner\Http\DbHttpJobSource;
 use Meridian\Runner\Http\DbInternalTargetSource;
+use Meridian\Runner\Http\DbTlsExpirySink;
 use Meridian\Runner\Http\HttpRunner;
 use Meridian\Runner\Http\InfrastructureTargets;
 use Meridian\Runner\Http\StoredHttpRunSettings;
@@ -125,6 +126,7 @@ if (is_dir($config->dataDir)) {
                 new StoredHttpRunSettings(new Settings($db, $clock)),
                 new TargetGuard(new SystemHostResolver(), new AddressPolicy(new DbInternalTargetSource($db), InfrastructureTargets::fromConfig($config))),
                 new CurlTransport('Meridian/' . $config->version),
+                tls: new DbTlsExpirySink($db, $clock),
             ));
         }
         // Shell (ADR 0004 §5.3): nie ein lokaler Prozess im Worker (E2) — nur Docker-Exec über den Socket-Proxy

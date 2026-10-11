@@ -341,7 +341,7 @@ export interface Overview {
   window: { from: string; to: string; bucket_seconds: number; buckets: number; now_bucket: number };
   jobs: OverviewJob[];
   totals: { runs: number; failed: number; avg_duration_ms: number | null };
-  attention: Array<{ job: { id: number; name: string }; status: 'failed' | 'timeout'; finished_at: string | null }>;
+  attention: Array<{ job: { id: number; name: string }; status: 'failed' | 'timeout' | 'slow'; finished_at: string | null; running_seconds: number | null; usual_seconds: number | null }>;
 }
 
 export type ChannelKind = 'email' | 'ntfy' | 'webhook' | 'telegram';
@@ -386,6 +386,9 @@ export interface JobNotify {
   on_recovery: boolean;
   channels: 'all' | 'selected' | 'none';
   channel_ids: number[];
+  disable_after: number | null;
+  on_disable: boolean;
+  tls_warn_days: number | null;
 }
 
 /** Antwort von `GET /api/stats` (Läufe je Tag und je Job). */

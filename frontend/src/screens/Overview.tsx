@@ -194,8 +194,10 @@ export function Overview({ profile }: { profile: Profile }) {
             <ul className="attention">
               {today.data.attention.map((item) => (
                 <li key={item.job.id} className="attention__item">
-                  <a href={hrefOf('jobs/' + String(item.job.id))}>{item.job.name}</a> ist zuletzt {item.status === 'timeout' ? 'wegen Zeitlimit' : ''} fehlgeschlagen
-                  {item.finished_at !== null ? ' (' + formatTime(item.finished_at) + ')' : ''}.
+                  <a href={hrefOf('jobs/' + String(item.job.id))}>{item.job.name}</a>{' '}
+                  {item.status === 'slow'
+                    ? 'läuft schon ' + String(Math.round((item.running_seconds ?? 0) / 60)) + ' min, üblich sind etwa ' + String(Math.max(1, Math.round((item.usual_seconds ?? 0) / 60))) + ' min (braucht länger als üblich).'
+                    : 'ist zuletzt ' + (item.status === 'timeout' ? 'wegen Zeitlimit ' : '') + 'fehlgeschlagen' + (item.finished_at !== null ? ' (' + formatTime(item.finished_at) + ').' : '.')}
                 </li>
               ))}
             </ul>

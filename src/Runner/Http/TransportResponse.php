@@ -30,6 +30,7 @@ final readonly class TransportResponse implements \JsonSerializable
         public int $bodyBytes,
         public bool $bodyLimitReached,
         public int $durationMs,
+        public ?int $tlsExpiresAt = null,
     ) {
         $this->secret = new Sealed([$location, $body]);
     }
@@ -60,6 +61,7 @@ final readonly class TransportResponse implements \JsonSerializable
             'error' => $this->error?->value,
             'body_bytes' => $this->bodyBytes,
             'duration_ms' => $this->durationMs,
+            'tls_expires_at' => $this->tlsExpiresAt,
         ];
     }
 
