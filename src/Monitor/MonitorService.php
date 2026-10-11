@@ -117,6 +117,7 @@ final class MonitorService
                 'notify_on_down' => $draft->notifyOnDown !== $existing->notifyOnDown,
                 'notify_on_up' => $draft->notifyOnUp !== $existing->notifyOnUp,
                 'notify_channels' => $draft->notifyChannels !== $existing->notifyChannels,
+                'channel_ids' => $draft->channelIds !== $existing->channelIds,
                 'target' => $draft->target !== null,
                 'expected_status' => $draft->expectedStatus !== $existing->expectedStatus,
                 'fail_after' => $draft->failAfter !== $existing->failAfter,

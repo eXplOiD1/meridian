@@ -54,6 +54,7 @@ final class CategoryController
         $kernel->get('categories_manage_impact', '/api/categories/manage/{id}/impact', $this->impact(...), ['id' => self::ID]);
         $kernel->post('categories_manage_create', '/api/categories/manage', $this->create(...));
         $kernel->put('categories_manage_rename', '/api/categories/manage/{id}', $this->rename(...), ['id' => self::ID]);
+        $kernel->put('categories_manage_recipients', '/api/categories/manage/{id}/recipients', $this->recipients(...), ['id' => self::ID]);
         $kernel->delete('categories_manage_delete', '/api/categories/manage/{id}', $this->delete(...), ['id' => self::ID]);
     }
 
@@ -112,6 +113,26 @@ final class CategoryController
         }
 
         return JsonReply::json(['category' => $this->present($this->service->impact($id) ?? throw new \LogicException('Kategorie fehlt nach dem Umbenennen.'))]);
+    }
+
+    public function recipients(#[\SensitiveParameter] Request $request): Response
+    {
+        $actor = $this->authorize($request, true);
+        if ($actor instanceof Response) {
+            return $actor;
+        }
+        $data = JsonBody::object($request->getContent(), 4096, 4);
+        if ($data === null || array_keys($data) !== ['recipients']) {
+            throw ValidationFailed::field('body', 'JSON-Objekt mit dem Feld recipients erwartet.');
+        }
+        $recipients = \Meridian\Notify\Recipients::validate($data['recipients'], 'recipients');
+        $id = (int) $request->attributes->getString('id');
+        try {
+            $this->service->setRecipients($id, $recipients, $actor);
+        } catch (CategoryException $e) {
+            return $this->refuse($e);
+        }
+        return JsonReply::json(['category' => $this->present($this->service->impact($id) ?? throw new \LogicException('Kategorie fehlt.'))]);
     }
 
     public function delete(#[\SensitiveParameter] Request $request): Response
@@ -192,6 +213,7 @@ final class CategoryController
         return [
             'id' => $impact->id,
             'name' => $this->masker->mask($impact->name),
+            'recipients' => $impact->recipients,
             'jobs' => $impact->jobs,
             'assignments' => $impact->assignments,
             'assignments_ineffective' => $impact->assignmentsIneffective,

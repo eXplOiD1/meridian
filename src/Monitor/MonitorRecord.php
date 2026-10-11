@@ -9,6 +9,7 @@ namespace Meridian\Monitor;
  */
 final readonly class MonitorRecord
 {
+    /** @param list<int> $channelIds */
     public function __construct(
         public int $id,
         public string $name,
@@ -33,6 +34,7 @@ final readonly class MonitorRecord
         public ?bool $lastCheckOk = null,
         public ?int $lastLatencyMs = null,
         public ?string $lastCheckNote = null,
+        public array $channelIds = [],
     ) {
     }
 }

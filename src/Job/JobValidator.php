@@ -376,9 +376,9 @@ final class JobValidator
 
             return false;
         }
-        $unknown = array_diff(array_map(strval(...), array_keys($given)), ['on_failure', 'failure_after', 'on_recovery', 'channels', 'channel_ids', 'disable_after', 'on_disable', 'tls_warn_days', 'runtime_warn_percent']);
+        $unknown = array_diff(array_map(strval(...), array_keys($given)), ['on_failure', 'failure_after', 'on_recovery', 'channels', 'channel_ids', 'disable_after', 'on_disable', 'tls_warn_days', 'runtime_warn_percent', 'recipients']);
         if ($unknown !== []) {
-            $errors['notify'] = 'Unbekannte Felder. Erlaubt sind: on_failure, failure_after, on_recovery, channels, channel_ids, disable_after, on_disable, tls_warn_days, runtime_warn_percent.';
+            $errors['notify'] = 'Unbekannte Felder. Erlaubt sind: on_failure, failure_after, on_recovery, channels, channel_ids, disable_after, on_disable, tls_warn_days, runtime_warn_percent, recipients.';
 
             return false;
         }
@@ -458,7 +458,13 @@ final class JobValidator
             sort($list);
         }
 
-        return new NotifySettings($onFailure, $after, $onRecovery, $channels, $list, $disable, $onDisable, $tls, $runtime);
+        try {
+            $recipients = \Meridian\Notify\Recipients::validate(array_key_exists('recipients', $given) ? $given['recipients'] : $base->recipients, 'notify.recipients');
+        } catch (ValidationFailed $e) {
+            $errors['notify.recipients'] = 'Empfänger: höchstens 10 gültige E-Mail-Adressen. Leer = Kategorie oder Kanal übernehmen.';
+            return false;
+        }
+        return new NotifySettings($onFailure, $after, $onRecovery, $channels, $list, $disable, $onDisable, $tls, $runtime, $recipients);
     }
 
     /**

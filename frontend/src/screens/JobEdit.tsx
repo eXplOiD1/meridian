@@ -59,6 +59,7 @@ interface Form {
   notifyRecovery: boolean;
   notifyChannels: 'all' | 'selected' | 'none';
   notifyIds: number[];
+  notifyRecipients: string;
   store: StoreResponse;
 }
 
@@ -132,6 +133,7 @@ function formFromJob(job: JobDetail): Form {
     notifyRecovery: job.notify.on_recovery,
     notifyChannels: job.notify.channels,
     notifyIds: job.notify.channel_ids,
+    notifyRecipients: (job.notify.recipients ?? []).join('\n'),
     store: http?.store_response ?? 'inherit',
   };
 }
@@ -165,6 +167,7 @@ function initialForm(limits: JobLimits | null, categories: CategoryRef[]): Form 
     notifyRecovery: false,
     notifyChannels: 'all',
     notifyIds: [],
+    notifyRecipients: '',
     store: 'inherit',
   };
 }
@@ -444,7 +447,7 @@ export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile;
   const inheritLabel = t('Wie global ({state})', { state: limits.response_storage === 'on' ? t('an') : t('aus') });
 
   const shownKeys = new Set([
-    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'notify', 'notify.failure_after', 'notify.disable_after', 'notify.tls_warn_days', 'notify.runtime_warn_percent', 'notify.channels', 'notify.channel_ids', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
+    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'notify', 'notify.failure_after', 'notify.disable_after', 'notify.tls_warn_days', 'notify.runtime_warn_percent', 'notify.channels', 'notify.channel_ids', 'notify.recipients', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
     'http.timeout_seconds', 'http.expected_status', 'http.max_redirects', 'http.store_response', 'request.url', 'request.body',
     'shell.target', 'shell.interpreter', 'shell.user', 'shell.workdir', 'shell.timeout_seconds', 'script.source',
   ]);
@@ -594,6 +597,7 @@ export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile;
         on_recovery: form.notifyRecovery,
         channels: form.notifyChannels,
         channel_ids: form.notifyChannels === 'selected' ? form.notifyIds : [],
+        recipients: form.notifyRecipients.split(/\r?\n/).map((address) => address.trim()).filter(Boolean),
         disable_after: form.disableEnabled ? (/^\d+$/.test(form.disableAfter) ? Number.parseInt(form.disableAfter, 10) : form.disableAfter) : null,
         on_disable: form.notifyDisable,
         runtime_warn_percent: form.runtimeEnabled ? (/^\d+$/.test(form.runtimePercent) ? Number.parseInt(form.runtimePercent, 10) : form.runtimePercent) : null,
@@ -1162,6 +1166,9 @@ export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile;
               )}
             </>
           )}
+          <FormField label={t('E-Mail-Empfänger für diesen Job')} error={errors['notify.recipients']} hint={t('Eine Adresse pro Zeile, höchstens 10. Leer = Empfänger der Kategorie, sonst des SMTP-Kanals. Eigene Empfänger ersetzen die Vorgabe und gelten für alle gewählten E-Mail-Kanäle.')}>
+            {(aria) => <textarea {...aria} className="input" name="notify-recipients" rows={3} value={form.notifyRecipients} onChange={(e) => set('notifyRecipients', e.target.value)} />}
+          </FormField>
           <fieldset className="radios">
             <legend className="field__label">{t('Benachrichtigen über …')}</legend>
             {(['all', 'selected', 'none'] as const).map((mode) => (

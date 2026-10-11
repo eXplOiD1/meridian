@@ -34,8 +34,9 @@ interface RowProps {
 }
 
 function Row({ category, csrf, onChanged }: RowProps) {
-  const [mode, setMode] = useState<'view' | 'rename' | 'delete'>('view');
+  const [mode, setMode] = useState<'view' | 'rename' | 'delete' | 'recipients'>('view');
   const [name, setName] = useState(category.name);
+  const [recipients, setRecipients] = useState((category.recipients ?? []).join('\n'));
   const [preview, setPreview] = useState<CategoryUsage | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,23 @@ function Row({ category, csrf, onChanged }: RowProps) {
     } catch (caught) {
       setFieldError(fieldErrors(caught).name);
       setError(fieldErrors(caught).name === undefined ? errorMessage(caught) : null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveRecipients(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setFieldError(undefined);
+    try {
+      await request('PUT', '/api/categories/manage/' + String(category.id) + '/recipients', { csrf, body: { recipients: recipients.split(/\r?\n/).map((address) => address.trim()).filter(Boolean) } });
+      setMode('view');
+      await onChanged();
+    } catch (caught) {
+      setFieldError(fieldErrors(caught).recipients);
+      setError(fieldErrors(caught).recipients === undefined ? errorMessage(caught) : null);
     } finally {
       setBusy(false);
     }
@@ -104,22 +122,14 @@ function Row({ category, csrf, onChanged }: RowProps) {
       <tr>
         <td>
           {mode === 'rename' ? (
-            <form className="inline-edit" onSubmit={(event) => void rename(event)}>
+            <form onSubmit={(event) => void rename(event)}>
               <FormField label={t('Neuer Name für {name}', { name: category.name })} error={fieldError}>
-                {(aria) => <input {...aria} className="input" name="name" autoComplete="off" required autoFocus value={name} onChange={(e) => setName(e.target.value)} />}
+                {(aria) => <div className="row category-rename">
+                  <input {...aria} className="input" name="name" autoComplete="off" required autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+                  <button type="submit" className="btn btn--solid btn--small" disabled={busy || name === '' || name === category.name}>{t('Speichern')}</button>
+                  <button type="button" className="btn btn--ghost btn--small" disabled={busy} onClick={() => { setMode('view'); setName(category.name); setFieldError(undefined); }}>{t('Abbrechen')}</button>
+                </div>}
               </FormField>
-              <button type="submit" className="btn btn--solid btn--small" disabled={busy || name === '' || name === category.name}>
-                {t('Speichern')}</button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--small"
-                onClick={() => {
-                  setMode('view');
-                  setName(category.name);
-                  setFieldError(undefined);
-                }}
-              >
-                {t('Abbrechen')}</button>
             </form>
           ) : (
             <strong>{category.name}</strong>
@@ -130,6 +140,8 @@ function Row({ category, csrf, onChanged }: RowProps) {
           <div className="row">
             <button type="button" className="btn btn--ghost btn--small" disabled={busy || mode !== 'view'} aria-label={category.name + ' umbenennen'} onClick={() => setMode('rename')}>
               {t('Umbenennen')}</button>
+            <button type="button" className="btn btn--ghost btn--small" disabled={busy || mode !== 'view'} onClick={() => { setRecipients((category.recipients ?? []).join('\n')); setFieldError(undefined); setError(null); setMode('recipients'); }}>
+              {t('E-Mail-Empfänger')}</button>
             <button
               type="button"
               className="btn btn--ghost btn--small btn--danger-text"
@@ -148,6 +160,21 @@ function Row({ category, csrf, onChanged }: RowProps) {
           )}
         </td>
       </tr>
+      {mode === 'recipients' && (
+        <tr>
+          <td colSpan={5}>
+            <form className="stack" onSubmit={(event) => void saveRecipients(event)}>
+              <FormField label={t('E-Mail-Empfänger für Kategorie „{name}“', { name: category.name })} error={fieldError} hint={t('Eine Adresse pro Zeile, höchstens 10. Leer = Empfänger des SMTP-Kanals. Jobs mit eigenen Empfängern haben Vorrang.')}>
+                {(aria) => <textarea {...aria} className="input" name="category-recipients" rows={3} autoFocus value={recipients} onChange={(e) => setRecipients(e.target.value)} />}
+              </FormField>
+              <div className="row">
+                <button type="submit" className="btn btn--solid btn--small" disabled={busy}>{t('Speichern')}</button>
+                <button type="button" className="btn btn--ghost btn--small" disabled={busy} onClick={() => setMode('view')}>{t('Abbrechen')}</button>
+              </div>
+            </form>
+          </td>
+        </tr>
+      )}
       {mode === 'delete' && preview !== null && (
         <tr>
           <td colSpan={5}>
