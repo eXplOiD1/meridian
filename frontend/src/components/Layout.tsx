@@ -54,15 +54,15 @@ function groups(profile: Profile): NavGroup[] {
     { path: '', label: t('Übersicht'), icon: 'home', current: (r) => r.name === 'home' },
     jobs
       ? { path: 'jobs', label: t('Jobs'), icon: 'jobs', current: (r) => r.name === 'jobs' || r.name === 'job-new' || r.name === 'job' || r.name === 'job-edit' }
-      : { path: null, label: t('Jobs'), icon: 'jobs', hint: t('bald') },
-    jobs ? { path: 'verlauf', label: t('Verlauf'), icon: 'history', current: (r) => r.name === 'history' } : { path: null, label: t('Verlauf'), icon: 'history', hint: t('bald') },
+      : { path: null, label: t('Jobs'), icon: 'jobs', hint: t('Kein Zugriff') },
+    jobs ? { path: 'verlauf', label: t('Verlauf'), icon: 'history', current: (r) => r.name === 'history' } : { path: null, label: t('Verlauf'), icon: 'history', hint: t('Kein Zugriff') },
   ];
   const observe: NavEntry[] = [
-    jobs ? { path: 'statistik', label: t('Statistik'), icon: 'stats', current: (r) => r.name === 'stats' } : { path: null, label: t('Statistik'), icon: 'stats', hint: t('bald') },
-    jobs ? { path: 'ueberwachung', label: t('Überwachung'), icon: 'monitor', current: (r) => r.name === 'monitors' } : { path: null, label: t('Überwachung'), icon: 'monitor', hint: t('bald') },
+    jobs ? { path: 'statistik', label: t('Statistik'), icon: 'stats', current: (r) => r.name === 'stats' } : { path: null, label: t('Statistik'), icon: 'stats', hint: t('Kein Zugriff') },
+    jobs ? { path: 'ueberwachung', label: t('Überwachung'), icon: 'monitor', current: (r) => r.name === 'monitors' } : { path: null, label: t('Überwachung'), icon: 'monitor', hint: t('Kein Zugriff') },
     canEditStatusPages(profile)
       ? { path: 'statusseiten', label: t('Statusseiten'), icon: 'status', current: (r) => r.name === 'status-pages' }
-      : { path: null, label: t('Statusseiten'), icon: 'status', hint: t('bald') },
+      : { path: null, label: t('Statusseiten'), icon: 'status', hint: t('Kein Zugriff') },
   ];
   const admin: NavEntry[] = [];
   if (canSeeUsersArea(profile)) {
