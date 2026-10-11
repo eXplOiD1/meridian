@@ -15,6 +15,7 @@ final class NotificationLanguageTest extends TestCase {
         $headers=['Origin'=>'https://meridian.test','X-CSRF-Token'=>$this->csrfOf($login)];
         self::assertSame(200,$this->call('PUT','/api/auth/language',['language'=>'en'],$headers,$cookies)->getStatusCode());
         self::assertSame('en',$this->db()->fetchOne('SELECT language FROM users WHERE username = :name',['name'=>'admin'])['language']);
+        self::assertSame('en', $this->json($this->call('GET', '/api/auth/me', [], [], $cookies))['language']);
         $body=['name'=>'Language test','type'=>'ntfy','server'=>'https://ntfy.sh','topic'=>'meridian-language-test','priority'=>3];
         $response=$this->call('POST','/api/notifications/channels',$body,$headers,$cookies);
         self::assertSame(201,$response->getStatusCode(),$response->getContent());
@@ -46,5 +47,13 @@ final class NotificationLanguageTest extends TestCase {
                 self::assertStringContainsString(HttpRunner::NOTE_TLS,$de->text());
             }
         }
+    }
+    public function testEnglishDiagnosticsAndCustomContent(): void {
+        self::assertSame('No reply to the ping.', \Meridian\Notify\MessageDetail::english(\Meridian\Monitor\Probe\NetworkProbe::NOTE_PING));
+        self::assertSame('Connection to the Docker proxy was lost.', \Meridian\Notify\MessageDetail::english(\Meridian\Runner\Shell\ExecFailed::CONNECTION_LOST));
+        self::assertSame('Exited with code 2.', \Meridian\Notify\MessageDetail::english('Beendet mit Exit-Code 2.'));
+        self::assertSame('Unexpected status code 503 (expected: 200-299).', \Meridian\Notify\MessageDetail::english('Unerwarteter Statuscode 503 (erwartet: 200-299).'));
+        self::assertSame('No heartbeat received yet (expected about every 5 min).', \Meridian\Notify\MessageDetail::english('Es kam noch kein Lebenszeichen (erwartet etwa alle 5 Min).'));
+        self::assertSame('My own detail', \Meridian\Notify\MessageDetail::english('My own detail'));
     }
 }
