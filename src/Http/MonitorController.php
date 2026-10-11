@@ -12,13 +12,14 @@ use Meridian\Security\AccessControl;
 use Meridian\Security\AccessDenied;
 use Meridian\Security\Permission;
 use Meridian\Security\SecretMasker;
+use Meridian\Settings\Settings;
 use Meridian\User\UserRepository;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Herzschlag-Überwachungen (ADR 0011): `GET/POST /api/monitors`, `PUT/DELETE /api/monitors/{id}`, `POST /api/monitors/{id}/token`.
+ * Überwachungen (Herzschlag ADR 0011, aktive Prüfungen ADR 0018): `GET/POST /api/monitors`, `PUT/DELETE /api/monitors/{id}`, `POST /api/monitors/{id}/token`.
  *
  * Lesen mit `jobs.view` (auf die erlaubten Kategorien gekappt, leerer Bereich → 403); Anlegen, Ändern, Löschen und Token
  * erneuern mit `jobs.edit_http` in der Kategorie. Nicht sichtbar → 404. Das Ping-Token kommt genau einmal in der Antwort auf
@@ -36,6 +37,7 @@ final class MonitorController
         private readonly MonitorRepository $monitors,
         private readonly MonitorService $service,
         private readonly SecretMasker $masker,
+        private readonly Settings $settings,
     ) {
     }
 
@@ -62,8 +64,10 @@ final class MonitorController
         }
         $can = $this->access->scope($grants, Permission::EditHttpJobs);
 
+        $hideHost = $this->settings->httpDisplay()->hidesHost();
+
         return JsonReply::json([
-            'monitors' => array_map(fn (MonitorRecord $m): array => $this->present($m, $can->contains($m->categoryName)), $this->monitors->list($scope)),
+            'monitors' => array_map(fn (MonitorRecord $m): array => $this->present($m, $can->contains($m->categoryName), $hideHost), $this->monitors->list($scope)),
             'min_interval_seconds' => \Meridian\Monitor\MonitorValidator::MIN_INTERVAL,
         ]);
     }
@@ -77,7 +81,13 @@ final class MonitorController
         [$session, $grants] = $auth;
         $created = $this->service->create($session->userId, $grants, self::body($request));
 
-        return JsonReply::json(['monitor' => $this->present($created['record'], true), 'ping_token' => $created['plain'], 'note' => self::NOTE], 201);
+        $body = ['monitor' => $this->present($created['record'], true, $this->settings->httpDisplay()->hidesHost())];
+        if ($created['record']->kind === \Meridian\Monitor\MonitorKind::Heartbeat) {
+            $body['ping_token'] = $created['plain'];
+            $body['note'] = self::NOTE;
+        }
+
+        return JsonReply::json($body, 201);
     }
 
     public function update(#[\SensitiveParameter] Request $request): Response
@@ -89,7 +99,7 @@ final class MonitorController
         [$session, $grants] = $auth;
         $record = $this->service->update($session->userId, $grants, self::id($request), self::body($request));
 
-        return $record === null ? JsonReply::error(404, 'Überwachung nicht gefunden.') : JsonReply::json(['monitor' => $this->present($record, true)]);
+        return $record === null ? JsonReply::error(404, 'Überwachung nicht gefunden.') : JsonReply::json(['monitor' => $this->present($record, true, $this->settings->httpDisplay()->hidesHost())]);
     }
 
     public function delete(#[\SensitiveParameter] Request $request): Response
@@ -120,9 +130,18 @@ final class MonitorController
     /**
      * @return array<string, mixed>
      */
-    private function present(MonitorRecord $m, bool $canEdit): array
+    private function present(MonitorRecord $m, bool $canEdit, bool $hideHost): array
     {
         return [
+            'kind' => $m->kind->value,
+            'target' => $this->displayTarget($m, $hideHost),
+            'expected_status' => $m->kind === \Meridian\Monitor\MonitorKind::Http ? $m->expectedStatus : null,
+            'fail_after' => $m->kind->isActive() ? $m->failAfter : null,
+            'consecutive_failures' => $m->kind->isActive() ? $m->consecutiveFailures : null,
+            'last_check_at' => $m->lastCheckAt,
+            'last_check_ok' => $m->lastCheckOk,
+            'last_latency_ms' => $m->lastLatencyMs,
+            'last_check_note' => $m->lastCheckNote === null ? null : $this->masker->mask($m->lastCheckNote),
             'id' => $m->id,
             'name' => $this->masker->mask($m->name),
             'category_id' => $m->categoryId,
@@ -176,5 +195,20 @@ final class MonitorController
     private static function id(#[\SensitiveParameter] Request $request): int
     {
         return (int) $request->attributes->getString('id');
+    }
+
+    /**
+     * Ziel ohne Pfad und Query (so gespeichert); bei „Host in der URL-Anzeige verbergen“ nur die Art mit festem Platzhalter.
+     */
+    private function displayTarget(MonitorRecord $m, bool $hideHost): ?string
+    {
+        if (!$m->kind->isActive() || $m->displayTarget === null) {
+            return null;
+        }
+        if ($hideHost) {
+            return $m->kind === \Meridian\Monitor\MonitorKind::Http ? (str_starts_with($m->displayTarget, 'https://') ? 'https://' : 'http://') . SecretMasker::MASK : SecretMasker::MASK;
+        }
+
+        return $this->masker->mask($m->displayTarget);
     }
 }

@@ -145,7 +145,7 @@ final class AppFactory
         (new ShellTargetController($sessionAuth, $csrf, $users, $access, $audit, new ShellTargetStore($db, $clock), $masker))->register($kernel);
         // Herzschlag-Überwachung (ADR 0011): Verwaltung mit Sitzung, Ping ohne Sitzung (Token ist die Berechtigung).
         $monitors = new \Meridian\Monitor\MonitorRepository($db);
-        (new MonitorController($sessionAuth, $csrf, $users, $access, $monitors, new \Meridian\Monitor\MonitorService($db, $monitors, new \Meridian\Monitor\MonitorValidator($categories), $access, $audit, $clock), $masker))->register($kernel);
+        (new MonitorController($sessionAuth, $csrf, $users, $access, $monitors, new \Meridian\Monitor\MonitorService($db, $monitors, new \Meridian\Monitor\MonitorValidator($categories), $access, $audit, $clock, $box), $masker, new \Meridian\Settings\Settings($db, $clock)))->register($kernel);
         (new PingController($monitors, $clock))->register($kernel);
         // Statusseiten (ADR 0012): Verwaltung mit status_pages.edit, die Seite selbst ist öffentlich (geheimer Link).
         $statusPages = new \Meridian\Status\StatusPageRepository($db);

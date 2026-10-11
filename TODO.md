@@ -150,4 +150,5 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 | [x] | Einstellbare Sitzungsdauer (ADR 0015) | backend, frontend |
 | [x] | Mehrsprachigkeit de/en (ADR 0016): Umschalter, Speicherung je Benutzer, alle Bildschirme über `t()`; Servermeldungen bleiben deutsch, soweit nicht in `en.ts` eingetragen | frontend |
 | [x] | Redesign „Material Aurora“ (ADR 0017): Tokens dunkel/hell je Benutzer, feste Sidebar, Mobil-Schublade, Übersicht mit Lage-Kopf, Job-Editor Einfach/Experte, Einstellungen mit „Mehr erfahren“; Inventar `docs/redesign/funktionsinventar.md`, Abnahme `docs/redesign/abnahme.md` | frontend |
+| [x] | Aktive Überwachung: Web-Adresse, TCP-Port, Ping, Ausfall nach n Fehlversuchen (ADR 0018) | backend, frontend |
 | [ ] | Abschluss-Review vor Version 1.0 (nach dem Redesign) | sicherheit |

@@ -168,6 +168,10 @@ services:
     command: ["php", "bin/meridian", "worker:run", "--type=http", "-v"]
     init: true
     stop_grace_period: 40s
+    # Ping der aktiven Überwachung (ADR 0018) ohne Capability: Der Kernel erlaubt ICMP-Datagram-Sockets für alle Gruppen
+    # (gilt nur im Netz-Namensraum dieses Containers). Ohne das meldet die Überwachung „Ping nicht verfügbar“.
+    sysctls:
+      net.ipv4.ping_group_range: "0 2147483647"
     volumes:
       - meridian-data:/var/lib/meridian
       - meridian-secrets:/etc/meridian:ro

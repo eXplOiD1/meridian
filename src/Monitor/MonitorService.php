@@ -14,6 +14,7 @@ use Meridian\Security\AccessDenied;
 use Meridian\Security\Permission;
 use Meridian\Security\PingToken;
 use Meridian\Security\RoleGrant;
+use Meridian\Security\SecretBox;
 
 /**
  * Überwachungen anlegen, ändern, löschen, Token erneuern (ADR 0011). Recht: `jobs.edit_http` in der Kategorie der
@@ -32,6 +33,7 @@ final class MonitorService
         private readonly AccessControl $access,
         private readonly AuditLog $audit,
         private readonly Clock $clock,
+        private readonly SecretBox $box,
     ) {
     }
 
@@ -64,8 +66,8 @@ final class MonitorService
                 throw ValidationFailed::field('name', 'Es gibt schon eine Überwachung mit diesem Namen.');
             }
             $token = PingToken::issue();
-            $id = $this->monitors->insert($draft, $userId, $token['hash'], Timestamp::format($this->clock->now()));
-            $this->audit->record($userId, 'monitor.created', 'monitor:' . $id . ' ' . $draft->name);
+            $id = $this->monitors->insert($draft, $userId, $token['hash'], Timestamp::format($this->clock->now()), $draft->target === null ? null : $this->box->encrypt($draft->target));
+            $this->audit->record($userId, 'monitor.created', 'monitor:' . $id . ' ' . $draft->name . ' (' . $draft->kind->value . ')');
             $record = $this->monitors->findVisible($id, $editScope) ?? throw new \LogicException('Überwachung fehlt nach dem Anlegen.');
 
             return ['record' => $record, 'plain' => $token['plain']];
@@ -97,8 +99,11 @@ final class MonitorService
             }
             $rearm = ($draft->isEnabled && !$existing->isEnabled)
                 || $draft->intervalSeconds !== $existing->intervalSeconds
-                || $draft->graceSeconds !== $existing->graceSeconds;
-            $this->monitors->update($id, $draft, $rearm, Timestamp::format($this->clock->now()));
+                || $draft->graceSeconds !== $existing->graceSeconds
+                || $draft->target !== null
+                || $draft->failAfter !== $existing->failAfter
+                || $draft->expectedStatus !== $existing->expectedStatus;
+            $this->monitors->update($id, $draft, $rearm, Timestamp::format($this->clock->now()), $draft->target === null ? null : $this->box->encrypt($draft->target));
             $changed = [];
             foreach ([
                 'name' => $draft->name !== $existing->name,
@@ -109,6 +114,9 @@ final class MonitorService
                 'notify_on_down' => $draft->notifyOnDown !== $existing->notifyOnDown,
                 'notify_on_up' => $draft->notifyOnUp !== $existing->notifyOnUp,
                 'notify_channels' => $draft->notifyChannels !== $existing->notifyChannels,
+                'target' => $draft->target !== null,
+                'expected_status' => $draft->expectedStatus !== $existing->expectedStatus,
+                'fail_after' => $draft->failAfter !== $existing->failAfter,
             ] as $field => $differs) {
                 if ($differs) {
                     $changed[] = $field;
@@ -162,6 +170,9 @@ final class MonitorService
         return $this->db->immediate(function () use ($userId, $grants, $id, $viewScope): ?string {
             $existing = $this->monitors->findVisible($id, $viewScope);
             if ($existing === null) {
+                return null;
+            }
+            if ($existing->kind !== MonitorKind::Heartbeat) {
                 return null;
             }
             $this->access->require($grants, self::EDIT, $existing->categoryName);
