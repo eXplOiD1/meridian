@@ -1,5 +1,6 @@
 /** Englische Fassungen; Schlüssel ist der deutsche Quelltext. Fehlt ein Eintrag, bleibt die Oberfläche deutsch. */
 export const EN: Record<string, string> = {
+  "Interne Ziele": "Internal targets",
   "alle Kategorien": "all categories",
   "Wie global ({state})": "As global ({state})",
   "an": "on",
