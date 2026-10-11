@@ -782,7 +782,11 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
                   </div>
                 </details>
               )}
-              {curlNote !== null && <Alert tone={curlNote.tone === 'ok' ? 'info' : 'err'}>{curlNote.text}</Alert>}
+              {curlNote !== null && (
+                <div className="curlnote" role="status">
+                  <Alert tone={curlNote.tone === 'ok' ? 'info' : 'err'}>{curlNote.text}</Alert>
+                </div>
+              )}
               <FormField
                 label="URL"
                 error={errors['request.url'] ?? errors.request}
