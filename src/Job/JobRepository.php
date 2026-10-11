@@ -33,7 +33,7 @@ final class JobRepository
      * `payload_enc` wird nie ausgewählt.
      */
     private const QUERY = 'SELECT j.id, j.name, j.type, j.category_id, c.name AS category_name, j.owner_id, u.display_name AS owner_name,
-            j.cron, j.timezone, j.config_json, j.overlap_policy, j.retry_count, j.retry_delay_seconds, j.catch_up, j.is_enabled,
+            j.cron, j.timezone, j.expires_at, j.config_json, j.overlap_policy, j.retry_count, j.retry_delay_seconds, j.catch_up, j.is_enabled,
             j.next_run_at, j.created_at, j.updated_at
        FROM jobs j
        LEFT JOIN categories c ON c.id = j.category_id
@@ -116,9 +116,9 @@ final class JobRepository
         $now = Timestamp::format($this->clock->now());
         $this->db->execute(
             'INSERT INTO jobs (name, type, category_id, owner_id, cron, timezone, config_json, payload_enc, overlap_policy,
-                               retry_count, retry_delay_seconds, catch_up, is_enabled, next_run_at, created_at, updated_at)
+                               retry_count, retry_delay_seconds, catch_up, is_enabled, expires_at, next_run_at, created_at, updated_at)
              VALUES (:name, :type, :category, :owner, :cron, :timezone, :config, :payload, :overlap,
-                     :retry_count, :retry_delay, :catch_up, :enabled, NULL, :created, :updated)',
+                     :retry_count, :retry_delay, :catch_up, :enabled, :expires, NULL, :created, :updated)',
             [
                 'name' => $draft->name,
                 'type' => $draft->type->value,
@@ -132,6 +132,7 @@ final class JobRepository
                 'retry_count' => $draft->retryCount,
                 'retry_delay' => $draft->retryDelaySeconds,
                 'catch_up' => $draft->catchUp ? 1 : 0,
+                'expires' => $draft->expiresAt,
                 'enabled' => $draft->isEnabled ? 1 : 0,
                 'created' => $now,
                 'updated' => $now,
@@ -151,7 +152,7 @@ final class JobRepository
         $this->db->execute(
             'UPDATE jobs SET name = :name, category_id = :category, cron = :cron, timezone = :timezone, config_json = :config,
                              payload_enc = COALESCE(:payload, payload_enc), overlap_policy = :overlap, retry_count = :retry_count,
-                             retry_delay_seconds = :retry_delay, catch_up = :catch_up, is_enabled = :enabled,
+                             retry_delay_seconds = :retry_delay, catch_up = :catch_up, is_enabled = :enabled, expires_at = :expires,
                              next_run_at = CASE WHEN :reset = 1 THEN NULL ELSE next_run_at END, updated_at = :updated
               WHERE id = :id',
             [
@@ -165,6 +166,7 @@ final class JobRepository
                 'retry_count' => $draft->retryCount,
                 'retry_delay' => $draft->retryDelaySeconds,
                 'catch_up' => $draft->catchUp ? 1 : 0,
+                'expires' => $draft->expiresAt,
                 'enabled' => $draft->isEnabled ? 1 : 0,
                 'reset' => $resetSchedule ? 1 : 0,
                 'updated' => Timestamp::format($this->clock->now()),
@@ -233,6 +235,7 @@ final class JobRepository
                 $states[$id]['running'] ?? false,
                 Row::string($row, 'created_at'),
                 Row::string($row, 'updated_at'),
+                Row::stringOrNull($row, 'expires_at'),
             );
         }
 

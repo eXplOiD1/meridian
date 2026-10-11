@@ -97,7 +97,7 @@ final class JobService
             // Auch in der neuen Kategorie (A → B braucht das Recht in B).
             $this->access->require($grants, $permission, $draft->categoryName);
 
-            $scheduleChanged = $draft->cron !== $existing->cron || $draft->timezone !== $existing->timezone || $draft->isEnabled !== $existing->isEnabled;
+            $scheduleChanged = $draft->cron !== $existing->cron || $draft->timezone !== $existing->timezone || $draft->isEnabled !== $existing->isEnabled || $draft->expiresAt !== $existing->expiresAt;
             $this->jobs->update($id, $draft, $scheduleChanged);
             $changed = self::changedFields($existing, $draft);
             if ($changed !== []) {
@@ -205,6 +205,7 @@ final class JobService
         $add($new->timezone !== $old->timezone, 'timezone');
         $add($new->isEnabled !== $old->isEnabled, 'is_enabled');
         $add($new->catchUp !== $old->catchUp, 'catch_up');
+        $add($new->expiresAt !== $old->expiresAt, 'expires_at');
         $add($new->overlapPolicy !== $old->overlapPolicy, 'overlap_policy');
         $add($new->retryCount !== $old->retryCount, 'retry_count');
         $add($new->retryDelaySeconds !== $old->retryDelaySeconds, 'retry_delay_seconds');

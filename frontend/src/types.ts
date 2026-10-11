@@ -63,6 +63,8 @@ export interface JobSummary {
   retry_count: number;
   retry_delay_seconds: number;
   catch_up: boolean;
+  /** Ende des Zeitplans (UTC) oder null. */
+  expires_at: string | null;
   last_run: LastRun | null;
   running: boolean;
   can: { edit: boolean; run: boolean };

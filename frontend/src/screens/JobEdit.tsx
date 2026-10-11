@@ -41,7 +41,24 @@ interface Form {
   retryDelay: string;
   overlap: OverlapPolicy;
   catchUp: boolean;
+  /** „Zeitplan läuft ab“: Schalter und Ortszeit des Jobs (`2026-12-31T23:59`, Eingabefeld datetime-local). */
+  expiresEnabled: boolean;
+  expiresLocal: string;
   store: StoreResponse;
+}
+
+/** UTC-Zeitpunkt als Ortszeit in `timezone` für `<input type="datetime-local">` (`2026-12-31T23:59`); leer ohne Wert. */
+function localDateTime(iso: string | null, timezone: string): string {
+  if (iso === null) {
+    return '';
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+  const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? '00';
+  return get('year') + '-' + get('month') + '-' + get('day') + 'T' + get('hour') + ':' + get('minute');
 }
 
 /**
@@ -86,6 +103,8 @@ function formFromJob(job: JobDetail): Form {
     retryDelay: String(job.retry_delay_seconds),
     overlap: job.overlap_policy,
     catchUp: job.catch_up,
+    expiresEnabled: job.expires_at !== null,
+    expiresLocal: localDateTime(job.expires_at, job.timezone),
     store: http?.store_response ?? 'inherit',
   };
 }
@@ -105,6 +124,8 @@ function initialForm(limits: JobLimits | null, categories: CategoryRef[]): Form 
     retryDelay: '60',
     overlap: 'skip',
     catchUp: false,
+    expiresEnabled: false,
+    expiresLocal: '',
     store: 'inherit',
   };
 }
@@ -347,7 +368,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const inheritLabel = 'Wie global (' + (limits.response_storage === 'on' ? 'an' : 'aus') + ')';
 
   const shownKeys = new Set([
-    'name', 'category_id', 'cron', 'timezone', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
+    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
     'http.timeout_seconds', 'http.expected_status', 'http.max_redirects', 'http.store_response', 'request.url', 'request.body',
     'shell.target', 'shell.interpreter', 'shell.user', 'shell.workdir', 'shell.timeout_seconds', 'script.source',
   ]);
@@ -457,6 +478,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       timezone: form.timezone,
       is_enabled: form.isEnabled,
       catch_up: form.catchUp,
+      expires_at: form.expiresEnabled ? form.expiresLocal : null,
       overlap_policy: form.overlap,
       retry_count: retryCount,
       retry_delay_seconds: retryDelay,
@@ -748,6 +770,15 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
           </FormField>
         </div>
         <SchedulePreview cron={form.cron} timezone={form.timezone} />
+        <label className="check">
+          <input type="checkbox" checked={form.expiresEnabled} onChange={(e) => set('expiresEnabled', e.target.checked)} />
+          <span>Zeitplan läuft ab: danach werden keine weiteren Läufe geplant</span>
+        </label>
+        {form.expiresEnabled && (
+          <FormField label={'Letzter Zeitpunkt (Ortszeit ' + form.timezone + ')'} error={errors.expires_at}>
+            {(aria) => <input {...aria} className="input" type="datetime-local" name="expires_at" value={form.expiresLocal} onChange={(e) => set('expiresLocal', e.target.value)} />}
+          </FormField>
+        )}
         <label className="check">
           <input type="checkbox" checked={form.catchUp} onChange={(e) => set('catchUp', e.target.checked)} />
           <span>Verpassten Lauf nachholen (einmal), wenn der Scheduler zur Zeit nicht lief</span>

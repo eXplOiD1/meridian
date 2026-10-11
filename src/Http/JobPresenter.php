@@ -192,6 +192,7 @@ final class JobPresenter
             'retry_count' => $job->retryCount,
             'retry_delay_seconds' => $job->retryDelaySeconds,
             'catch_up' => $job->catchUp,
+            'expires_at' => $job->expiresAt,
             'last_run' => $job->lastRun === null ? null : $this->lastRun($job->lastRun),
             'running' => $job->running,
             'can' => [
