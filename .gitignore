@@ -13,14 +13,17 @@
 # Entwicklungswerkzeuge: bleiben nur lokal, nicht im Repository
 /.claude/
 /CLAUDE.md
-/tests/
-/phpstan.neon
+/tests/*
+!/tests/Release/
+!/tests/Support/
+
 /psalm.xml
 /phpunit.xml
 /.gitleaks.toml
 /.pre-commit-config.yaml
-/.github/
+/.github/*
+!/.github/workflows/
 /Meridian.zip
-/composer.dev.json
+
 /composer.dev.lock
 .phpunit.result.cache

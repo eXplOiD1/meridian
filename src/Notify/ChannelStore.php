@@ -94,9 +94,10 @@ final class ChannelStore
             $this->assertNameFree($draft->name, null);
             $now = Timestamp::format($this->clock->now());
             $this->db->execute(
-                'INSERT INTO notification_channels (name, type, config_json, secret_enc, is_enabled, created_at, updated_at)
-                 VALUES (:name, :type, :config, :secret, :enabled, :now, :now)',
+                'INSERT INTO notification_channels (name, type, config_json, secret_enc, is_enabled, created_at, updated_at, language_user_id)
+                 VALUES (:name, :type, :config, :secret, :enabled, :now, :now, :user)',
                 [
+                    'user' => $userId,
                     'name' => $draft->name,
                     'type' => $draft->type->value,
                     'config' => json_encode($draft->config, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -124,10 +125,11 @@ final class ChannelStore
             }
             $this->assertNameFree($draft->name, $id);
             $this->db->execute(
-                'UPDATE notification_channels SET name = :name, config_json = :config, is_enabled = :enabled, updated_at = :now,
+                'UPDATE notification_channels SET name = :name, config_json = :config, language_user_id = :user, is_enabled = :enabled, updated_at = :now,
                         secret_enc = CASE WHEN :change = 0 THEN secret_enc WHEN :secret IS NULL THEN NULL ELSE :secret END
                   WHERE id = :id',
                 [
+                    'user' => $userId,
                     'name' => $draft->name,
                     'config' => json_encode($draft->config, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
                     'enabled' => $draft->isEnabled ? 1 : 0,
@@ -139,7 +141,7 @@ final class ChannelStore
             );
             // Nur Feldnamen ins Audit, nie Werte.
             $changed = [];
-            foreach (['host', 'port', 'encryption', 'username', 'from', 'from_name', 'to', 'server', 'topic', 'priority', 'url', 'chat_id'] as $key) {
+            foreach (['language', 'host', 'port', 'encryption', 'username', 'from', 'from_name', 'to', 'server', 'topic', 'priority', 'url', 'chat_id'] as $key) {
                 if (($existing->config[$key] ?? null) !== ($draft->config[$key] ?? null)) {
                     $changed[] = $key;
                 }
@@ -157,6 +159,21 @@ final class ChannelStore
 
             return $this->mustFind($id);
         });
+    }
+
+    /** Sprache beim Versand frisch lesen; „ui“ folgt dem Konto, das den Kanal zuletzt gespeichert hat. */
+    public function languageFor(ChannelRecord $channel): string
+    {
+        $choice = $channel->config['language'] ?? 'ui';
+        if ($choice === 'de' || $choice === 'en') {
+            return $choice;
+        }
+        $row = $this->db->fetchOne(
+            'SELECT u.language FROM notification_channels c LEFT JOIN users u ON u.id = c.language_user_id WHERE c.id = :id',
+            ['id' => $channel->id],
+        );
+
+        return ($row['language'] ?? null) === 'en' ? 'en' : 'de';
     }
 
     public function remove(int $id, int $userId, AuditLog $audit): bool

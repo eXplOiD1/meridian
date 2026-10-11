@@ -359,6 +359,7 @@ export interface NotificationChannel {
   type: ChannelKind;
   enabled: boolean;
   config: {
+    language?: 'ui' | 'de' | 'en';
     host?: string;
     port?: number;
     encryption?: 'none' | 'starttls' | 'ssl';
