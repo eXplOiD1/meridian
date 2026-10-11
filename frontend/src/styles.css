@@ -582,3 +582,9 @@ code, pre, kbd, samp, .mono, .cron, .input--mono, .input--mono-plain, .input--ar
   font-variant-ligatures: none;
   font-feature-settings: 'liga' 0, 'calt' 0;
 }
+
+/* Lauf-Details klappen direkt unter der gewählten Zeile auf. */
+.table tbody tr.rundetail-row > td { display: block; padding: 4px 0 18px; border-bottom: 1px solid var(--line-strong); }
+.table--runs tr.is-selected > td { background: var(--soft); }
+.rundetail-row .rundetail { border-top: 0; padding-top: 6px; }
+@media (min-width: 768px) { .table tbody tr.rundetail-row > td { display: table-cell; } }
