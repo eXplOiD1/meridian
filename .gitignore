@@ -2,6 +2,7 @@
 /var/
 /frontend/node_modules/
 /frontend/dist/
+/ui/
 .env
 *.key
 *.sqlite
@@ -20,3 +21,6 @@
 /.pre-commit-config.yaml
 /.github/
 /Meridian.zip
+/composer.dev.json
+/composer.dev.lock
+.phpunit.result.cache

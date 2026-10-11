@@ -30,6 +30,11 @@ final readonly class RoleGrant
             return true;
         }
 
+        // Gefährliche Rechte (Shell-Jobs, Benutzerverwaltung) gibt eine beschränkte Rolle nie frei.
+        if ($permission->isDangerous()) {
+            return false;
+        }
+
         // Rechte ohne Kategoriebezug (z. B. Benutzerverwaltung) gibt eine
         // kategoriebeschränkte Rolle nie frei.
         return $category !== null && in_array($category, $this->categories, true);

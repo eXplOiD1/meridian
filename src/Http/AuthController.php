@@ -1,0 +1,314 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Meridian\Http;
+
+use Meridian\Auth\AuthService;
+use Meridian\Auth\Clock;
+use Meridian\Auth\CsrfGuard;
+use Meridian\Auth\LoginStatus;
+use Meridian\Auth\Session;
+use Meridian\Auth\SessionManager;
+use Meridian\Auth\TooManyAttempts;
+use Meridian\Auth\TwoFactor;
+use Meridian\Config;
+use Meridian\Security\Permission;
+use Meridian\Security\SecretMasker;
+use Meridian\User\UserAccount;
+use Meridian\User\UserRepository;
+use Symfony\Component\HttpFoundation\Cookie;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Anmelden, Abmelden und „wer bin ich“. Die Sitzung liegt in einem HttpOnly-Cookie,
+ * ändernde Anfragen brauchen zusätzlich das CSRF-Token aus /api/auth/me bzw. der Anmeldung.
+ */
+final class AuthController
+{
+    private const MAX_BODY = 4096;
+    private const MAX_CODE = 32;
+
+    public function __construct(
+        private readonly Config $config,
+        private readonly AuthService $auth,
+        private readonly SessionAuth $sessionAuth,
+        private readonly CsrfGuard $csrf,
+        private readonly UserRepository $users,
+        private readonly Clock $clock,
+        private readonly TwoFactor $twoFactor,
+        private readonly SecretMasker $masker,
+    ) {
+    }
+
+    public function register(Kernel $kernel): void
+    {
+        $kernel->post('auth_login', '/api/auth/login', $this->login(...));
+        $kernel->post('auth_logout', '/api/auth/logout', $this->logout(...));
+        $kernel->get('auth_me', '/api/auth/me', $this->me(...));
+        $kernel->post('auth_2fa_setup', '/api/auth/2fa/setup', $this->twoFactorSetup(...));
+        $kernel->post('auth_2fa_enable', '/api/auth/2fa/enable', $this->twoFactorEnable(...));
+        $kernel->post('auth_2fa_disable', '/api/auth/2fa/disable', $this->twoFactorDisable(...));
+    }
+
+    public function login(#[\SensitiveParameter] Request $request): Response
+    {
+        // Ohne Sitzung gibt es kein Token; die Herkunftsprüfung schützt vor fremden Anmeldeformularen.
+        if (!$this->csrf->originMatches($request)) {
+            return self::error(403, 'Ungültige Herkunft der Anfrage.');
+        }
+
+        // Proxy-Header ohne MERIDIAN_TRUSTED_PROXIES: ablehnen, bevor ein Passwort geprüft wird (Variante A).
+        $ip = ClientIp::forThrottle($request, $this->config);
+        if ($ip instanceof Response) {
+            return $ip;
+        }
+
+        $credentials = $this->credentials($request);
+        if ($credentials === null) {
+            return self::error(400, 'Ungültige Anfrage: JSON mit username und password erwartet.');
+        }
+
+        $agent = $request->headers->get('User-Agent');
+        $result = $this->auth->login($credentials['username'], $credentials['password'], $ip, $credentials['totp_code'], $agent);
+        if ($result->status === LoginStatus::Locked) {
+            $response = self::error(429, 'Zu viele Fehlversuche. Bitte später erneut versuchen.');
+            $response->headers->set('Retry-After', (string) $result->retryAfter);
+
+            return $response;
+        }
+        if ($result->status === LoginStatus::TotpRequired) {
+            // Erst nach richtigem Passwort: die Oberfläche fragt dann den Code ab.
+            return self::json(['error' => 'Zweiter Faktor erforderlich.', 'totp_required' => true], 401);
+        }
+        if ($result->status !== LoginStatus::Success || $result->session === null) {
+            return self::error(401, AuthService::MESSAGE_INVALID);
+        }
+
+        $response = $this->profile($result->session) ?? self::error(401, AuthService::MESSAGE_INVALID);
+        $response->headers->setCookie($this->cookie($request, $result->session->token));
+
+        return $response;
+    }
+
+    public function logout(#[\SensitiveParameter] Request $request): Response
+    {
+        // Auch bei offenem Pflicht-Passwortwechsel (ADR 0005, E6).
+        $session = $this->sessionAuth->authenticateAllowingPasswordChange($request);
+        if ($session === null) {
+            return self::error(401, 'Nicht angemeldet.');
+        }
+        if (!$this->csrf->check($request, $session->token)) {
+            return JsonReply::csrfFailed();
+        }
+
+        $this->auth->logout($session);
+        $response = self::json(['status' => 'ok']);
+        $response->headers->setCookie($this->expiredCookie($request));
+
+        return $response;
+    }
+
+    public function me(#[\SensitiveParameter] Request $request): Response
+    {
+        // Auch bei offenem Pflicht-Passwortwechsel: die Oberfläche zeigt dann nur „Passwort festlegen“.
+        $session = $this->sessionAuth->authenticateAllowingPasswordChange($request);
+        if ($session === null) {
+            return self::error(401, 'Nicht angemeldet.');
+        }
+
+        return $this->profile($session) ?? self::error(401, 'Nicht angemeldet.');
+    }
+
+    /**
+     * Einrichtung: liefert das Secret genau einmal im Klartext, damit es in die App übernommen werden kann.
+     * Betrifft nur das eigene Konto, deshalb kein Recht aus AccessControl, aber Sitzung und CSRF.
+     */
+    public function twoFactorSetup(#[\SensitiveParameter] Request $request): Response
+    {
+        $user = $this->ownAccount($request);
+        if ($user instanceof Response) {
+            return $user;
+        }
+
+        $setup = $this->auth->startTwoFactorSetup($user);
+        if ($setup === null) {
+            return self::error(409, 'Die Zwei-Faktor-Anmeldung ist bereits aktiv. Zum Neueinrichten zuerst deaktivieren.');
+        }
+
+        return self::json(['secret' => $setup['secret'], 'otpauth_uri' => $setup['uri']]);
+    }
+
+    public function twoFactorEnable(#[\SensitiveParameter] Request $request): Response
+    {
+        $user = $this->ownAccount($request);
+        if ($user instanceof Response) {
+            return $user;
+        }
+
+        $ip = ClientIp::forThrottle($request, $this->config);
+        if ($ip instanceof Response) {
+            return $ip;
+        }
+        $data = $this->body($request);
+        if ($data === null || !isset($data['code'], $data['password']) || !is_string($data['code']) || !is_string($data['password']) || strlen($data['code']) > self::MAX_CODE) {
+            return self::error(400, 'Ungültige Anfrage: JSON mit password und code erwartet.');
+        }
+
+        try {
+            $recovery = $this->auth->enableTwoFactor($user, $data['password'], $data['code'], $ip);
+        } catch (TooManyAttempts $e) {
+            return self::tooMany($e);
+        }
+        if ($recovery === null) {
+            return self::error(400, 'Passwort oder Code falsch. Erst /api/auth/2fa/setup aufrufen und den aktuellen Code der App eingeben.');
+        }
+
+        return self::json(['status' => 'ok', 'recovery_codes' => $recovery]);
+    }
+
+    public function twoFactorDisable(#[\SensitiveParameter] Request $request): Response
+    {
+        $user = $this->ownAccount($request);
+        if ($user instanceof Response) {
+            return $user;
+        }
+
+        $ip = ClientIp::forThrottle($request, $this->config);
+        if ($ip instanceof Response) {
+            return $ip;
+        }
+        $data = $this->body($request);
+        if ($data === null || !isset($data['password'], $data['code']) || !is_string($data['password']) || !is_string($data['code']) || strlen($data['code']) > self::MAX_CODE) {
+            return self::error(400, 'Ungültige Anfrage: JSON mit password und code erwartet.');
+        }
+
+        try {
+            $disabled = $this->auth->disableTwoFactor($user, $data['password'], $data['code'], $ip);
+        } catch (TooManyAttempts $e) {
+            return self::tooMany($e);
+        }
+        if (!$disabled) {
+            return self::error(400, 'Passwort oder Code falsch.');
+        }
+
+        return self::json(['status' => 'ok']);
+    }
+
+    /**
+     * Sitzung, CSRF und aktives Konto für Aktionen am eigenen Konto.
+     */
+    private function ownAccount(#[\SensitiveParameter] Request $request): UserAccount|Response
+    {
+        $session = $this->authenticate($request);
+        if ($session === null) {
+            return self::error(401, 'Nicht angemeldet.');
+        }
+        if (!$this->csrf->check($request, $session->token)) {
+            return JsonReply::csrfFailed();
+        }
+
+        $user = $this->users->findById($session->userId);
+
+        return $user !== null && $user->isActive ? $user : self::error(401, 'Nicht angemeldet.');
+    }
+
+    private static function tooMany(TooManyAttempts $e): Response
+    {
+        $response = self::error(429, $e->getMessage());
+        $response->headers->set('Retry-After', (string) $e->retryAfter);
+
+        return $response;
+    }
+
+    private function authenticate(#[\SensitiveParameter] Request $request): ?Session
+    {
+        return $this->sessionAuth->authenticate($request);
+    }
+
+    private function profile(Session $session): ?JsonResponse
+    {
+        $user = $this->users->findById($session->userId);
+        if ($user === null || !$user->isActive) {
+            return null;
+        }
+
+        // Rechte bei jeder Anfrage frisch laden, nie aus der Sitzung. Bei Pflichtwechsel leer (fail-closed).
+        $roles = [];
+        foreach ($this->users->grantsFor($user->id) as $grant) {
+            $roles[] = [
+                // Rollennamen sind seit ADR 0006 freier Text: maskiert wie jeder andere (Regel 4).
+                'role' => $this->masker->mask($grant->role),
+                'permissions' => array_map(static fn (Permission $p): string => $p->value, $grant->permissions),
+                'categories' => $grant->categories === null ? null : array_map($this->masker->mask(...), $grant->categories),
+            ];
+        }
+
+        return self::json([
+            // Anzeigename ist freier Text des Benutzers: maskiert wie in jeder anderen Antwort (Regel 4).
+            'user' => ['id' => $user->id, 'username' => $user->username, 'display_name' => $this->masker->mask($user->displayName)],
+            'roles' => $roles,
+            'language' => $this->users->languageOf($user->id),
+            'theme' => $this->users->themeOf($user->id),
+            'totp_enabled' => $this->twoFactor->isEnabled($user->id),
+            'password_change_required' => $user->passwordMustChange,
+            'csrf_token' => $this->csrf->tokenFor($session->token),
+        ]);
+    }
+
+    /**
+     * @return array{username: string, password: string, totp_code: string|null}|null
+     */
+    private function credentials(#[\SensitiveParameter] Request $request): ?array
+    {
+        $data = $this->body($request);
+        if ($data === null || !isset($data['username'], $data['password']) || !is_string($data['username']) || !is_string($data['password'])) {
+            return null;
+        }
+
+        $code = null;
+        if (isset($data['totp_code'])) {
+            if (!is_string($data['totp_code']) || strlen($data['totp_code']) > self::MAX_CODE) {
+                return null;
+            }
+            $code = $data['totp_code'];
+        }
+
+        return ['username' => $data['username'], 'password' => $data['password'], 'totp_code' => $code];
+    }
+
+    /**
+     * @return array<mixed>|null
+     */
+    private function body(#[\SensitiveParameter] Request $request): ?array
+    {
+        return JsonBody::object($request->getContent(), self::MAX_BODY);
+    }
+
+    private function cookie(#[\SensitiveParameter] Request $request, #[\SensitiveParameter] string $token): Cookie
+    {
+        $expires = $this->clock->now()->modify('+' . $this->sessionAuth->cookieSeconds() . ' seconds');
+
+        return Cookie::create($this->sessionAuth->cookieName($request), $token, $expires, '/', null, $request->isSecure(), true, false, Cookie::SAMESITE_STRICT);
+    }
+
+    private function expiredCookie(#[\SensitiveParameter] Request $request): Cookie
+    {
+        return Cookie::create($this->sessionAuth->cookieName($request), '', 1, '/', null, $request->isSecure(), true, false, Cookie::SAMESITE_STRICT);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private static function json(array $data, int $status = 200): JsonResponse
+    {
+        return JsonReply::json($data, $status);
+    }
+
+    private static function error(int $status, string $message): JsonResponse
+    {
+        return JsonReply::error($status, $message);
+    }
+}

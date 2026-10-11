@@ -12,6 +12,9 @@ namespace Meridian\Database;
  */
 final class Connection
 {
+    /** Eigene Buchführung: PDO::inTransaction() erkennt ein per exec() begonnenes BEGIN IMMEDIATE nicht. */
+    private bool $inTransaction = false;
+
     private function __construct(private readonly \PDO $pdo)
     {
     }
@@ -24,6 +27,8 @@ final class Connection
             \PDO::ATTR_EMULATE_PREPARES => false,
             \PDO::ATTR_STRINGIFY_FETCHES => false,
         ]);
+        $version = $pdo->query('SELECT sqlite_version()');
+        self::requireSqliteVersion($version === false ? '' : (string) $version->fetchColumn());
         $pdo->exec('PRAGMA foreign_keys = ON');
         $pdo->exec('PRAGMA busy_timeout = 5000');
         if ($path !== ':memory:') {
@@ -31,6 +36,17 @@ final class Connection
         }
 
         return new self($pdo);
+    }
+
+    /**
+     * Die atomare Fehlversuch-Zählung braucht RETURNING (SQLite ab 3.35). Mit einer älteren Version würde jeder
+     * Fehlversuch einen Fehler werfen und nie gezählt: deshalb lieber sofort mit klarer Meldung abbrechen.
+     */
+    public static function requireSqliteVersion(string $found): void
+    {
+        if ($found === '' || version_compare($found, '3.35.0', '<')) {
+            throw new \RuntimeException('Meridian braucht SQLite 3.35 oder neuer, gefunden: ' . ($found === '' ? 'unbekannt' : $found) . '. PHP bzw. das Betriebssystem aktualisieren (das Docker-Image bringt eine passende Version mit).');
+        }
     }
 
     public static function inMemory(): self
@@ -45,7 +61,8 @@ final class Connection
     public function execute(string $sql, array $params = []): int
     {
         $statement = $this->prepare($sql);
-        $statement->execute($params);
+        self::bind($statement, $params);
+        $statement->execute();
 
         return $statement->rowCount();
     }
@@ -59,7 +76,8 @@ final class Connection
     public function fetchAll(string $sql, array $params = []): array
     {
         $statement = $this->prepare($sql);
-        $statement->execute($params);
+        self::bind($statement, $params);
+        $statement->execute();
 
         /** @var list<array<string, mixed>> */
         return $statement->fetchAll();
@@ -79,6 +97,24 @@ final class Connection
     }
 
     /**
+     * Bindet jeden Wert mit seinem Typ. PDOStatement::execute($params) würde alles als Text binden; dann wäre
+     * z. B. `:flag = 1` in SQLite nie wahr (Text ist ungleich Zahl, wenn keine Spalte die Affinität vorgibt).
+     *
+     * @param array<string, string|int|float|bool|null> $params
+     */
+    private static function bind(\PDOStatement $statement, array $params): void
+    {
+        foreach ($params as $name => $value) {
+            $statement->bindValue(':' . ltrim($name, ':'), $value, match (true) {
+                is_int($value) => \PDO::PARAM_INT,
+                is_bool($value) => \PDO::PARAM_BOOL,
+                $value === null => \PDO::PARAM_NULL,
+                default => \PDO::PARAM_STR,
+            });
+        }
+    }
+
+    /**
      * @param literal-string $sql
      */
     private function prepare(string $sql): \PDOStatement
@@ -90,6 +126,15 @@ final class Connection
         }
 
         return $statement;
+    }
+
+    /**
+     * Läuft gerade eine Transaktion ({@see transaction()} oder {@see immediate()})? Für Prüfungen, die nur
+     * innerhalb der schreibenden Transaktion Sinn ergeben (z. B. `AdminInvariant`).
+     */
+    public function inTransaction(): bool
+    {
+        return $this->inTransaction;
     }
 
     public function lastInsertId(): int
@@ -108,15 +153,44 @@ final class Connection
     }
 
     /**
+     * Wie {@see transaction()}, aber mit sofortigem Schreibzugriff (BEGIN IMMEDIATE): Lesen, Entscheiden und
+     * Schreiben sind gegenüber allen anderen Schreibern atomar. Gebraucht, wo aus dem gelesenen Wert abgeleitet
+     * wird, was geschrieben wird (z. B. Zähler mit Sperre). Andere Schreiber warten bis zum busy_timeout.
+     *
      * @template T
      *
      * @param callable(self): T $work
      *
      * @return T
      */
-    public function transaction(callable $work): mixed
+    public function immediate(#[\SensitiveParameter] callable $work): mixed
+    {
+        $this->pdo->exec('BEGIN IMMEDIATE');
+        $this->inTransaction = true;
+        try {
+            $result = $work($this);
+            $this->pdo->exec('COMMIT');
+
+            return $result;
+        } catch (\Throwable $e) {
+            $this->pdo->exec('ROLLBACK');
+            throw $e;
+        } finally {
+            $this->inTransaction = false;
+        }
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(self): T $work
+     *
+     * @return T
+     */
+    public function transaction(#[\SensitiveParameter] callable $work): mixed
     {
         $this->pdo->beginTransaction();
+        $this->inTransaction = true;
         try {
             $result = $work($this);
             $this->pdo->commit();
@@ -125,6 +199,8 @@ final class Connection
         } catch (\Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
+        } finally {
+            $this->inTransaction = false;
         }
     }
 }

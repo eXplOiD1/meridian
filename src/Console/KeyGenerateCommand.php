@@ -14,11 +14,13 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'key:generate', description: 'Erzeugt den Hauptschlüssel als Datei mit Rechten 0600')]
 final class KeyGenerateCommand extends Command
 {
+    #[\Override]
     protected function configure(): void
     {
         $this->addArgument('path', InputArgument::REQUIRED, 'Zieldatei, z. B. /etc/meridian/master.key');
     }
 
+    #[\Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $path = $input->getArgument('path');
@@ -28,15 +30,18 @@ final class KeyGenerateCommand extends Command
             return self::INVALID;
         }
 
-        if (file_exists($path)) {
-            $output->writeln('<error>Datei existiert bereits. Ein bestehender Schlüssel wird nie überschrieben.</error>');
-
-            return self::FAILURE;
-        }
-
         $previous = umask(0o077);
         try {
-            if (file_put_contents($path, KeyLoader::generate() . "\n") === false) {
+            // Modus "x": legt die Datei nur an, wenn es sie noch nicht gibt (atomar, überschreibt nie).
+            $handle = @fopen($path, 'x');
+            if ($handle === false) {
+                $output->writeln('<error>Die Datei existiert bereits oder ist nicht beschreibbar. Ein bestehender Schlüssel wird nie überschrieben.</error>');
+
+                return self::FAILURE;
+            }
+            $written = fwrite($handle, KeyLoader::generate() . "\n");
+            fclose($handle);
+            if ($written === false) {
                 $output->writeln('<error>Datei konnte nicht geschrieben werden.</error>');
 
                 return self::FAILURE;

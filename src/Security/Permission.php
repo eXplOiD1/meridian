@@ -12,13 +12,39 @@ enum Permission: string
     case EditShellJobs = 'jobs.edit_shell';
     case EditStatusPages = 'status_pages.edit';
     case ManageUsers = 'users.manage';
+    /**
+     * Rollen anlegen, umbenennen, Rechte setzen, löschen (ADR 0006 E2, F3). Ändert die Rechte **aller** Inhaber einer
+     * Rolle auf einmal; per Migration 0013 nur an Admin. Zuweisen von Rollen an Benutzer bleibt `users.manage`.
+     */
+    case ManageRoles = 'roles.manage';
+    /** Freigaben interner Ziele für HTTP-Jobs pflegen (lockert den SSRF-Schutz). */
+    case ManageInternalTargets = 'network.internal_targets';
+    /** Globale Einstellungen ändern (lockern Schutz: Antworten speichern, Anzeige-Pfad, Zeitlimits). */
+    case ManageSettings = 'settings.manage';
+    /** Kategorien anlegen, umbenennen, löschen (ändert Sichtbarkeit und Freigaben aller betroffenen Benutzer). */
+    case ManageCategories = 'categories.manage';
+    /** Ausführungsorte für Shell-Jobs freigeben (Container/Host-Profile: erlaubt Code-Ausführung dort, ADR 0004 E4). */
+    case ManageShellTargets = 'shell.targets';
 
     /**
-     * Rechte, die über den Docker-Socket praktisch Root-Zugriff geben.
-     * Werden in der Oberfläche besonders gekennzeichnet.
+     * Gefährliche Rechte: Shell-Jobs (über den Docker-Socket praktisch Root), Benutzerverwaltung und alles,
+     * was eine Schutzfunktion für alle Kategorien lockert. Eine auf Kategorien beschränkte Rolle bekommt sie
+     * nie (RoleGrant::allows()); die Oberfläche kennzeichnet sie besonders.
      */
     public function isDangerous(): bool
     {
-        return $this === self::EditShellJobs || $this === self::ManageUsers;
+        return match ($this) {
+            self::EditShellJobs, self::ManageUsers, self::ManageRoles, self::ManageInternalTargets, self::ManageSettings, self::ManageCategories, self::ManageShellTargets => true,
+            self::ViewJobs, self::RunJobs, self::EditHttpJobs, self::EditStatusPages => false,
+        };
+    }
+
+    /**
+     * Hat das Recht einen Kategoriebezug (kann auf Kategorien beschränkt vergeben werden)? Genau die nicht
+     * gefährlichen: ein gefährliches Recht gibt `RoleGrant::allows()` einer beschränkten Rolle nie frei.
+     */
+    public function isCategoryScoped(): bool
+    {
+        return !$this->isDangerous();
     }
 }

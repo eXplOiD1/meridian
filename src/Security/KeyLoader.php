@@ -7,7 +7,7 @@ namespace Meridian\Security;
 /**
  * Lädt den 32-Byte-Hauptschlüssel.
  *
- * Reihenfolge: Datei aus MERIDIAN_KEY_FILE, sonst Umgebungsvariable MERIDIAN_KEY (base64).
+ * Der Schlüssel kommt ausschließlich aus der Datei, auf die MERIDIAN_KEY_FILE zeigt (base64, 32 Byte).
  * Eine Schlüsseldatei, die für Gruppe oder andere lesbar ist, wird abgelehnt.
  */
 final class KeyLoader
@@ -15,19 +15,16 @@ final class KeyLoader
     /**
      * @param array<string, string> $env
      */
-    public static function load(array $env): string
+    public static function load(#[\SensitiveParameter] array $env): string
     {
+        // Nur als Datei: Umgebungsvariablen sind in docker inspect und /proc/<pid>/environ sichtbar
+        // und werden von Kindprozessen geerbt.
         $file = $env['MERIDIAN_KEY_FILE'] ?? '';
-        if ($file !== '') {
-            return self::fromFile($file);
+        if ($file === '') {
+            throw new SecretException('Kein Schlüssel gesetzt. MERIDIAN_KEY_FILE auf eine Schlüsseldatei zeigen lassen (meridian key:generate).');
         }
 
-        $encoded = $env['MERIDIAN_KEY'] ?? '';
-        if ($encoded !== '') {
-            return self::decode(trim($encoded));
-        }
-
-        throw new SecretException('Kein Schlüssel gesetzt. MERIDIAN_KEY_FILE oder MERIDIAN_KEY angeben (meridian key:generate).');
+        return self::fromFile($file);
     }
 
     public static function fromFile(string $path): string

@@ -3,15 +3,87 @@
 
 declare(strict_types=1);
 
+use Meridian\Auth\AuditLog;
+use Meridian\Auth\LoginThrottle;
+use Meridian\Auth\SessionManager;
+use Meridian\Auth\SystemClock;
 use Meridian\Config;
+use Meridian\Backup\BackupService;
+use Meridian\Backup\ScheduledBackup;
 use Meridian\Console\AdminBootstrapCommand;
+use Meridian\Console\BackupCreateCommand;
+use Meridian\Console\BackupListCommand;
+use Meridian\Console\BackupRestoreCommand;
+use Meridian\Category\CategoryService;
+use Meridian\Console\CategoryCreateCommand;
+use Meridian\Console\CategoryDeleteCommand;
+use Meridian\Console\CategoryRenameCommand;
+use Meridian\Console\InternalTargetsCommand;
+use Meridian\Console\ShellTargetsCommand;
 use Meridian\Console\KeyGenerateCommand;
 use Meridian\Console\MigrateCommand;
 use Meridian\Console\SchedulerRunCommand;
+use Meridian\Console\SettingsGetCommand;
+use Meridian\Console\SettingsSetCommand;
+use Meridian\Console\UnlockCommand;
+use Meridian\Console\UserPasswordCommand;
 use Meridian\Console\UserCreateCommand;
+use Meridian\Console\WorkerRunCommand;
 use Meridian\Database\Connection;
 use Meridian\Database\Migrator;
+use Meridian\Job\DisplayUrlUpgrade;
+use Meridian\Network\InternalTargetStore;
+use Meridian\Shell\ShellTargetStore;
+use Meridian\Runner\Http\AddressPolicy;
+use Meridian\Runner\Http\CurlTransport;
+use Meridian\Runner\Http\DbHttpJobSource;
+use Meridian\Runner\Http\DbInternalTargetSource;
+use Meridian\Runner\Http\DbTlsExpirySink;
+use Meridian\Runner\Http\HttpRunner;
+use Meridian\Runner\Http\InfrastructureTargets;
+use Meridian\Runner\Http\StoredHttpRunSettings;
+use Meridian\Runner\Http\SystemHostResolver;
+use Meridian\Runner\Http\TargetGuard;
+use Meridian\Runner\Heartbeat;
+use Meridian\Runner\Shell\DbExecRefSink;
+use Meridian\Runner\Shell\DbShellJobSource;
+use Meridian\Runner\Shell\DbShellTargetSource;
+use Meridian\Runner\Shell\Docker\DockerExecExecutor;
+use Meridian\Runner\Shell\Docker\DockerProxyClient;
+use Meridian\Job\RunRetention;
+use Meridian\Notify\ChannelNetwork;
+use Meridian\Notify\ChannelStore;
+use Meridian\Notify\NtfySender;
+use Meridian\Notify\Notifier;
+use Meridian\Notify\SmtpSender;
+use Meridian\Notify\TelegramSender;
+use Meridian\Notify\WebhookSender;
+use Meridian\Runner\Shell\Docker\ShellWorkerMaintenance;
+use Meridian\Runner\Shell\HostSocketExecutor;
+use Meridian\Runner\Shell\HostSockets;
+use Meridian\Runner\Shell\ShellRunner;
+use Meridian\Runner\Shell\ShellTargetPolicy;
+use Meridian\Runner\Shell\StoredShellRunSettings;
+use Meridian\Runner\JobType;
+use Meridian\Runner\RunnerRegistry;
+use Meridian\Schedule\DbLiveLogFactory;
+use Meridian\Schedule\DbRunAuthorizer;
+use Meridian\Schedule\LeaseHeartbeat;
+use Meridian\Schedule\Planner;
+use Meridian\Schedule\Scheduler;
+use Meridian\Schedule\SchedulerLease;
+use Meridian\Schedule\StaleRuns;
+use Meridian\Schedule\Worker;
+use Meridian\Schedule\WorkerIdentity;
+use Meridian\Security\AccessControl;
+use Meridian\Security\KeyLoader;
 use Meridian\Security\PasswordHasher;
+use Meridian\Security\SecretBox;
+use Meridian\Security\SecretMasker;
+use Meridian\Settings\Settings;
+use Meridian\Settings\SettingsService;
+use Meridian\User\AdminInvariant;
+use Meridian\User\PasswordReset;
 use Meridian\User\UserRepository;
 use Symfony\Component\Console\Application;
 
@@ -27,11 +99,143 @@ $app->add(new KeyGenerateCommand());
 // Befehle mit Datenbank nur, wenn das Datenverzeichnis existiert.
 if (is_dir($config->dataDir)) {
     $db = Connection::open($config->databasePath());
-    $app->add(new MigrateCommand(new Migrator($db, dirname(__DIR__) . '/migrations')));
     $users = new UserRepository($db, new PasswordHasher());
-    $app->add(new UserCreateCommand($users));
-    $app->add(new AdminBootstrapCommand($users, $env));
-    $app->add(new SchedulerRunCommand($db));
+    $app->add(new MigrateCommand(new Migrator($db, dirname(__DIR__) . '/migrations'), new DisplayUrlUpgrade($db), new AdminInvariant($db, $users, new AccessControl()), $users));
+    $audit = new AuditLog($db, new SystemClock(), new SecretMasker());
+    $app->add(new UserCreateCommand($users, $audit));
+    $app->add(new AdminBootstrapCommand($users, $env, $audit));
+    $categoryService = new CategoryService($db, $audit, new SystemClock());
+    $app->add(new CategoryCreateCommand($categoryService));
+    $app->add(new CategoryRenameCommand($categoryService));
+    $app->add(new CategoryDeleteCommand($categoryService));
+    $throttle = new LoginThrottle($db, new SystemClock());
+    $app->add(new UnlockCommand($throttle, $audit));
+    $app->add(new UserPasswordCommand(new PasswordReset($users, new PasswordHasher(), new SessionManager($db, new SystemClock()), $throttle, $audit, new SystemClock())));
+    $app->add(new InternalTargetsCommand(new InternalTargetStore($db, new SystemClock(), InfrastructureTargets::fromConfig($config)), $audit));
+    $app->add(new ShellTargetsCommand(new ShellTargetStore($db, new SystemClock()), $audit));
+    // Sicherung (mer-storage §7): VACUUM INTO, geprüft, ohne Hauptschlüssel; Wiederherstellung prüft den Schlüssel vor dem ersten Schreiben.
+    $backups = new BackupService($config->dataDir, $config->databasePath(), new SystemClock());
+    $app->add(new BackupCreateCommand($backups, $db, $audit));
+    $app->add(new BackupListCommand($backups));
+    $app->add(new BackupRestoreCommand(
+        $backups,
+        $db,
+        static function () use ($env): ?string {
+            try {
+                return KeyLoader::load($env);
+            } catch (\Throwable) {
+                return null;
+            }
+        },
+        static fn (): AuditLog => new AuditLog(Connection::open($config->databasePath()), new SystemClock(), new SecretMasker()),
+    ));
+    $settingsService = new SettingsService($db, $audit, new SystemClock());
+    $app->add(new SettingsGetCommand($settingsService));
+    $app->add(new SettingsSetCommand($settingsService));
+    // Planer (scheduler:run): eine Besitzer-ID pro Prozess, plant nur und braucht keinen Schlüssel (ADR 0004 E5).
+    // Ausgeführt wird in worker:run --type=http|shell; den Masker erzeugt der Worker je Lauf (H4), H1 prüft
+    // ausgelöste Läufe beim Übernehmen mit frischen Rechten. Den Schlüssel lädt nur ein Worker-Kind beim Start.
+    $clock = new SystemClock();
+    $lease = new SchedulerLease($db, $clock, SchedulerLease::newOwnerId());
+    $planner = new Planner($db, $clock, $lease);
+    $staleRuns = new StaleRuns($db, $clock, $lease);
+    $authorizer = new DbRunAuthorizer($db, $users);
+    $runnersFor = static function (JobType $type) use ($env, $db, $config, $clock): RunnerRegistry {
+        $runners = new RunnerRegistry();
+        if ($type === JobType::Http) {
+            $runners->register(JobType::Http, new HttpRunner(
+                new DbHttpJobSource($db),
+                new SecretBox(KeyLoader::load($env)),
+                new StoredHttpRunSettings(new Settings($db, $clock)),
+                new TargetGuard(new SystemHostResolver(), new AddressPolicy(new DbInternalTargetSource($db), InfrastructureTargets::fromConfig($config))),
+                new CurlTransport('Meridian/' . $config->version),
+                tls: new DbTlsExpirySink($db, $clock),
+            ));
+        }
+        // Shell (ADR 0004 §5.3): nie ein lokaler Prozess im Worker (E2) — nur Docker-Exec über den Socket-Proxy
+        // (nur unix://, sonst Start abgelehnt), Host-Agent folgt mit S11 (bis dahin endet ein Host-Lauf sofort).
+        if ($type === JobType::Shell) {
+            $proxy = DockerProxyClient::fromEnvironment($env['MERIDIAN_DOCKER_PROXY'] ?? null);
+            // Host-Ausführung nur über den Agent-Socket eines freigegebenen Profils (ADR 0014); ohne Angabe gibt es sie nicht.
+            $hostSockets = HostSockets::parse($env['MERIDIAN_SHELL_HOST_SOCKETS'] ?? '');
+            $executors = [];
+            if ($proxy !== null) {
+                $executors['docker'] = new DockerExecExecutor($proxy);
+            }
+            if (!$hostSockets->isEmpty()) {
+                $executors['host'] = new HostSocketExecutor($hostSockets);
+            }
+            $runners->register(JobType::Shell, new ShellRunner(
+                new DbShellJobSource($db),
+                new SecretBox(KeyLoader::load($env)),
+                new StoredShellRunSettings(new Settings($db, $clock)),
+                new ShellTargetPolicy(new DbShellTargetSource($db)),
+                $executors,
+                new DbExecRefSink($db),
+            ));
+        }
+
+        return $runners;
+    };
+    $scheduledBackup = $config->backupKeep > 0 ? new ScheduledBackup($backups, $db, $audit, $clock, $config->backupKeep) : null;
+    // --inline-worker (Entwicklung/Übergang): HTTP-Läufe im Takt, Herzschlag verlängert zusätzlich die Sperre.
+    $app->add(new SchedulerRunCommand(
+        new Scheduler($lease, $planner, $staleRuns, null, new RunRetention($db, $clock, new Settings($db, $clock)), $scheduledBackup),
+        static function () use ($db, $clock, $lease, $planner, $staleRuns, $authorizer, $runnersFor, $scheduledBackup): Scheduler {
+            $worker = new Worker(
+                $db,
+                $clock,
+                new WorkerIdentity($lease->owner(), JobType::Http),
+                [JobType::Http],
+                $runnersFor(JobType::Http),
+                $authorizer,
+                static fn (Heartbeat $heartbeat): Heartbeat => new LeaseHeartbeat($heartbeat, $lease, $clock),
+                new DbLiveLogFactory($db, $clock),
+            );
+
+            return new Scheduler($lease, $planner, $staleRuns, $worker, new RunRetention($db, $clock, new Settings($db, $clock)), $scheduledBackup);
+        },
+    ));
+    // Wartung der Worker-Kinder alle 60 s: Shell-Kinder räumen exec_ref auf und prüfen den Docker-Proxy; HTTP-Kinder (Netz
+    // vorhanden) stellen Benachrichtigungen zu (ADR 0007 N5). Beides atomar, mehrere Kinder stellen nie doppelt zu.
+    $maintenance = null;
+    $notifier = null;
+    $checker = null;
+    $app->add(new WorkerRunCommand(
+        static fn (JobType $type): Worker => new Worker($db, $clock, WorkerIdentity::generate($type), [$type], $runnersFor($type), $authorizer, null, new DbLiveLogFactory($db, $clock)),
+        $env,
+        __FILE__,
+        static function (JobType $type, bool $first) use ($env, $db, $config, $clock, &$maintenance, &$notifier, &$checker): array {
+            if ($type === JobType::Http) {
+                $network = new ChannelNetwork(new SystemHostResolver(), InfrastructureTargets::fromConfig($config));
+                $curl = new CurlTransport('Meridian/' . $config->version);
+                $notifier ??= new Notifier(
+                    $db,
+                    $clock,
+                    new ChannelStore($db, new SecretBox(KeyLoader::load($env)), $clock),
+                    ['email' => new SmtpSender($network), 'ntfy' => new NtfySender($network, $curl), 'webhook' => new WebhookSender($network, $curl), 'telegram' => new TelegramSender($network, $curl)],
+                    new SecretMasker(),
+                    static fn (): ?string => (new Settings($db, $clock))->publicBaseUrl(),
+                );
+
+                // Aktive Prüfungen (ADR 0018) vor dem Zustellen, damit ein Ausfall sofort gemeldet wird.
+                $checker ??= new \Meridian\Monitor\MonitorChecker(
+                    new \Meridian\Monitor\MonitorRepository($db),
+                    new SecretBox(KeyLoader::load($env)),
+                    new \Meridian\Monitor\Probe\NetworkProbe(new TargetGuard(new SystemHostResolver(), new AddressPolicy(new DbInternalTargetSource($db), InfrastructureTargets::fromConfig($config))), $curl),
+                    $clock,
+                );
+
+                return [...$checker->tick(), ...$notifier->tick()];
+            }
+            if ($type !== JobType::Shell) {
+                return [];
+            }
+            $maintenance ??= new ShellWorkerMaintenance($db, DockerProxyClient::fromEnvironment($env['MERIDIAN_DOCKER_PROXY'] ?? null));
+
+            return $maintenance->run($first);
+        },
+    ));
 }
 
 exit($app->run());

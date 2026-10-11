@@ -1,0 +1,627 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Meridian\Http;
+
+use Meridian\Auth\Clock;
+use Meridian\Auth\CsrfGuard;
+use Meridian\Auth\Session;
+use Meridian\Database\Timestamp;
+use Meridian\Job\CategoryRepository;
+use Meridian\Job\JobRepository;
+use Meridian\Job\JobService;
+use Meridian\Job\JobValidator;
+use Meridian\Job\JobSort;
+use Meridian\Job\CancelOutcome;
+use Meridian\Job\LiveChunk;
+use Meridian\Job\RunCancelService;
+use Meridian\Job\RunNotQueued;
+use Meridian\Job\RunRefusal;
+use Meridian\Job\RunRepository;
+use Meridian\Job\RunService;
+use Meridian\Runner\JobType;
+use Meridian\Schedule\CronSchedule;
+use Meridian\Schedule\RunStatus;
+use Meridian\Schedule\RunTrigger;
+use Meridian\Security\AccessControl;
+use Meridian\Security\AccessDenied;
+use Meridian\Security\Permission;
+use Meridian\Security\RoleGrant;
+use Meridian\Settings\Settings;
+use Meridian\User\UserRepository;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Job-API (docs/decisions/0003, §4): Jobs, Verlauf, Läufe, Kategorien, Vorschau und Grenzen.
+ *
+ * Ablauf jedes Endpunkts (mer-security §1): Sitzung → (bei ändernden Methoden CSRF) → Eingaben prüfen →
+ * Datensatz über `findVisible()` mit dem Bereich des Rechts laden (nicht sichtbar → 404) →
+ * `AccessControl::require()` mit der gespeicherten Kategorie (Recht fehlt → 403) → Aktion → Antwort über
+ * den {@see JobPresenter} (Feld-Allowlist, maskiert, `no-store`).
+ */
+final class JobController
+{
+    private const DEFAULT_RUN_LIMIT = 50;
+    private const MAX_PREVIEW = 10;
+    private const DEFAULT_PREVIEW = 5;
+    /** Worker schreiben `seen_at` alle 10 s; älter als das gilt ein Worker als nicht aktiv. */
+    public const WORKER_ALIVE_SECONDS = 30;
+    public const NOTE_NO_SHELL_WORKER = 'Kein Shell-Worker aktiv: Dienst worker-shell prüfen.';
+    public const NOTE_NO_HTTP_WORKER = 'Kein HTTP-Worker aktiv: Dienst worker-http prüfen.';
+
+    public function __construct(
+        private readonly SessionAuth $sessionAuth,
+        private readonly CsrfGuard $csrf,
+        private readonly UserRepository $users,
+        private readonly AccessControl $access,
+        private readonly JobRepository $jobs,
+        private readonly RunRepository $runs,
+        private readonly CategoryRepository $categories,
+        private readonly Settings $settings,
+        private readonly Clock $clock,
+        private readonly JobPresenter $presenter,
+        private readonly JobService $service,
+        private readonly RunService $runService,
+        private readonly RunCancelService $cancelService,
+    ) {
+    }
+
+    public function register(Kernel $kernel): void
+    {
+        $id = ['id' => '[1-9][0-9]{0,17}'];
+        $kernel->get('jobs_list', '/api/jobs', $this->list(...));
+        $kernel->get('jobs_limits', '/api/jobs/limits', $this->limits(...));
+        $kernel->get('jobs_show', '/api/jobs/{id}', $this->show(...), $id);
+        $kernel->get('jobs_runs', '/api/jobs/{id}/runs', $this->history(...), $id);
+        $kernel->get('runs_list', '/api/runs', $this->recentRuns(...));
+        $kernel->get('runs_show', '/api/runs/{id}', $this->runDetail(...), $id);
+        $kernel->get('runs_log', '/api/runs/{id}/log', $this->runLog(...), $id);
+        $kernel->post('runs_cancel', '/api/runs/{id}/cancel', $this->cancelRun(...), $id);
+        $kernel->get('schedule_preview', '/api/schedule/preview', $this->preview(...));
+        $kernel->get('categories_list', '/api/categories', $this->categoryList(...));
+        $kernel->post('jobs_create', '/api/jobs', $this->create(...));
+        $kernel->put('jobs_update', '/api/jobs/{id}', $this->update(...), $id);
+        $kernel->delete('jobs_delete', '/api/jobs/{id}', $this->delete(...), $id);
+        $kernel->post('jobs_enable', '/api/jobs/{id}/enable', fn (#[\SensitiveParameter] Request $r): Response => $this->setEnabled($r, true), $id);
+        $kernel->post('jobs_disable', '/api/jobs/{id}/disable', fn (#[\SensitiveParameter] Request $r): Response => $this->setEnabled($r, false), $id);
+        $kernel->post('jobs_run', '/api/jobs/{id}/run', fn (#[\SensitiveParameter] Request $r): Response => $this->enqueueRun($r, RunTrigger::Manual), $id);
+        $kernel->post('jobs_test', '/api/jobs/{id}/test', fn (#[\SensitiveParameter] Request $r): Response => $this->enqueueRun($r, RunTrigger::Test), $id);
+    }
+
+    public function create(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        $job = $this->service->create($session->userId, $grants, self::body($request));
+
+        return $job === null
+            ? JsonReply::error(404, 'Job nicht gefunden.')
+            : JsonReply::json(['job' => $this->presenter->detail($job, $grants, $this->settings->httpDisplay())], 201);
+    }
+
+    public function update(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        $job = $this->service->update($session->userId, $grants, self::id($request), self::body($request));
+
+        return $job === null
+            ? JsonReply::error(404, 'Job nicht gefunden.')
+            : JsonReply::json(['job' => $this->presenter->detail($job, $grants, $this->settings->httpDisplay())]);
+    }
+
+    public function delete(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        return $this->service->delete($session->userId, $grants, self::id($request))
+            ? JsonReply::noContent()
+            : JsonReply::error(404, 'Job nicht gefunden.');
+    }
+
+    /**
+     * Manueller Lauf und Testlauf: 202 mit der Nummer des eingereihten Laufs; das Ergebnis liest der Aufrufer über
+     * `GET /api/runs/{id}`. 404 = Job nicht sichtbar, 403 = kein `jobs.run`, 409 = deaktiviert (nur manuell) oder
+     * schon ein offener Lauf, 429 = Stundenkontingent.
+     */
+    private function enqueueRun(#[\SensitiveParameter] Request $request, RunTrigger $trigger): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        try {
+            $runId = $this->runService->enqueue($session->userId, $grants, self::id($request), $trigger);
+        } catch (RunNotQueued $e) {
+            return JsonReply::error($e->refusal === RunRefusal::RateLimited ? 429 : 409, $e->getMessage());
+        }
+
+        return $runId === null
+            ? JsonReply::error(404, 'Job nicht gefunden.')
+            : JsonReply::json(['run_id' => $runId], 202);
+    }
+
+    private function setEnabled(#[\SensitiveParameter] Request $request, bool $enabled): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        $job = $this->service->setEnabled($session->userId, $grants, self::id($request), $enabled);
+
+        return $job === null
+            ? JsonReply::error(404, 'Job nicht gefunden.')
+            : JsonReply::json(['job' => $this->presenter->detail($job, $grants, $this->settings->httpDisplay())]);
+    }
+
+    public function list(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+        $scope = $this->access->scope($grants, Permission::ViewJobs);
+        if ($scope->isEmpty()) {
+            throw new AccessDenied(Permission::ViewJobs);
+        }
+
+        $query = $request->query->all();
+        $errors = [];
+        $type = null;
+        if (array_key_exists('type', $query)) {
+            $type = is_string($query['type']) ? JobType::tryFrom($query['type']) : null;
+            if ($type === null) {
+                $errors['type'] = 'Art: „http“ oder „shell“.';
+            }
+        }
+        $category = null;
+        if (array_key_exists('category_id', $query)) {
+            $category = self::positiveInt($query['category_id']);
+            if ($category === null) {
+                $errors['category_id'] = 'Kategorie: positive ganze Zahl.';
+            }
+        }
+        $sort = JobSort::Name;
+        if (array_key_exists('sort', $query)) {
+            $sortValue = is_string($query['sort']) ? JobSort::tryFrom($query['sort']) : null;
+            if ($sortValue === null) {
+                $errors['sort'] = 'Sortierung: „name“ oder „next_run“.';
+            } else {
+                $sort = $sortValue;
+            }
+        }
+        $enabledOnly = false;
+        if (array_key_exists('enabled', $query)) {
+            if ($query['enabled'] !== '1') {
+                $errors['enabled'] = 'Nur aktive Jobs: enabled=1.';
+            }
+            $enabledOnly = true;
+        }
+        if ($errors !== []) {
+            throw new ValidationFailed($errors);
+        }
+
+        // Typ, Kategorie und „nur aktive“ sind Anfragen innerhalb des Bereichs, nie eine Berechtigung.
+        $listing = $this->jobs->list($scope, $type, $category, $enabledOnly, $sort);
+        $out = [];
+        $display = $this->settings->httpDisplay();
+        foreach ($listing->jobs as $job) {
+            $out[] = $this->presenter->summary($job, $grants, $display);
+        }
+
+        return JsonReply::json(['jobs' => $out, 'truncated' => $listing->truncated]);
+    }
+
+    public function show(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+        $job = $this->jobs->findVisible(self::id($request), $this->access->scope($grants, Permission::ViewJobs));
+        if ($job === null) {
+            return JsonReply::error(404, 'Job nicht gefunden.');
+        }
+        $this->access->require($grants, Permission::ViewJobs, $job->categoryName);
+
+        return JsonReply::json(['job' => $this->presenter->detail($job, $grants, $this->settings->httpDisplay())]);
+    }
+
+    public function history(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+
+        [$limit, $before, $status] = self::pageParams($request);
+
+        $scope = $this->access->scope($grants, Permission::ViewJobs);
+        $job = $this->jobs->findVisible(self::id($request), $scope);
+        if ($job === null) {
+            return JsonReply::error(404, 'Job nicht gefunden.');
+        }
+        $this->access->require($grants, Permission::ViewJobs, $job->categoryName);
+
+        $records = $this->runs->history($job->id, $scope, $limit, $before, $status);
+        $more = count($records) > $limit;
+        $page = array_slice($records, 0, $limit);
+        $out = [];
+        $display = $this->settings->httpDisplay();
+        foreach ($page as $run) {
+            $out[] = $this->presenter->run($run, false, $display);
+        }
+
+        return JsonReply::json([
+            'runs' => $out,
+            'next_before_id' => $more && $page !== [] ? $page[count($page) - 1]->id : null,
+        ]);
+    }
+
+    /**
+     * `limit`, `before_id` und `status` der Verlaufsabfragen; wirft {@see ValidationFailed} (422).
+     *
+     * @return array{int, ?int, ?RunStatus}
+     */
+    private static function pageParams(Request $request): array
+    {
+        $query = $request->query->all();
+        $errors = [];
+        $limit = self::DEFAULT_RUN_LIMIT;
+        if (array_key_exists('limit', $query)) {
+            $parsed = self::positiveInt($query['limit']);
+            if ($parsed === null || $parsed > RunRepository::MAX_LIMIT) {
+                $errors['limit'] = 'Anzahl: ganze Zahl von 1 bis ' . RunRepository::MAX_LIMIT . '.';
+            } else {
+                $limit = $parsed;
+            }
+        }
+        $before = null;
+        if (array_key_exists('before_id', $query)) {
+            $before = self::positiveInt($query['before_id']);
+            if ($before === null) {
+                $errors['before_id'] = 'Cursor: positive ganze Zahl.';
+            }
+        }
+        $status = null;
+        if (array_key_exists('status', $query)) {
+            $status = is_string($query['status']) ? RunStatus::tryFrom($query['status']) : null;
+            if ($status === null) {
+                $errors['status'] = 'Status: queued, running, ok, failed, timeout, aborted oder skipped.';
+            }
+        }
+        if ($errors !== []) {
+            throw new ValidationFailed($errors);
+        }
+
+        return [$limit, $before, $status];
+
+    }
+
+    /**
+     * `GET /api/runs`: Verlauf über alle für den Benutzer sichtbaren Jobs (nur mit Sicht `jobs.view`, auf die
+     * erlaubten Kategorien gekappt wie der Verlauf eines Jobs), neueste zuerst, optional `status`, `job_id`.
+     */
+    public function recentRuns(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+        [$limit, $before, $status] = self::pageParams($request);
+        $jobId = null;
+        /** @var mixed $raw */
+        $raw = $request->query->all()['job_id'] ?? null;
+        if ($raw !== null) {
+            $jobId = self::positiveInt($raw);
+            if ($jobId === null) {
+                throw new ValidationFailed(['job_id' => 'Job: positive ganze Zahl.']);
+            }
+        }
+        $scope = $this->access->scope($grants, Permission::ViewJobs);
+        if ($scope->isEmpty()) {
+            throw new AccessDenied(Permission::ViewJobs);
+        }
+        $records = $this->runs->recent($scope, $limit, $before, $status, $jobId);
+        $more = count($records) > $limit;
+        $page = array_slice($records, 0, $limit);
+        $display = $this->settings->httpDisplay();
+        $out = [];
+        foreach ($page as $run) {
+            $out[] = $this->presenter->runWithJob($run, $display);
+        }
+
+        return JsonReply::json([
+            'runs' => $out,
+            'next_before_id' => $more && $page !== [] ? $page[count($page) - 1]->id : null,
+        ]);
+    }
+
+    public function runDetail(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+        $run = $this->runs->findVisible(self::id($request), $this->access->scope($grants, Permission::ViewJobs));
+        if ($run === null) {
+            return JsonReply::error(404, 'Lauf nicht gefunden.');
+        }
+        // Ein Lauf erbt die Kategorie seines Jobs.
+        $this->access->require($grants, Permission::ViewJobs, $run->categoryName);
+
+        $data = $this->presenter->run($run, true, $this->settings->httpDisplay());
+        // Wartet ein Lauf, ohne dass ein Worker seines Typs lebt, soll das sichtbar sein statt still zu hängen:
+        // abgeleitetes Feld `worker_available` (nur bei wartenden Läufen) und ein fester Hinweis in der Notiz. Nie
+        // Kennung, Host oder PID eines Workers (H2).
+        if ($run->status === RunStatus::Queued) {
+            $cutoff = Timestamp::format($this->clock->now()->modify('-' . self::WORKER_ALIVE_SECONDS . ' seconds'));
+            $alive = $this->runs->workerAlive($run->jobType, $cutoff);
+            $data['worker_available'] = $alive;
+            if (!$alive) {
+                $hint = $run->jobType === JobType::Shell ? self::NOTE_NO_SHELL_WORKER : self::NOTE_NO_HTTP_WORKER;
+                $data['note'] = self::withHint($data['note'] ?? null, $hint);
+            }
+        }
+
+        return JsonReply::json(['run' => $data]);
+    }
+
+    /**
+     * `POST /api/runs/{id}/cancel` (ADR 0004 E7): 200 = wartender Lauf abgebrochen, 202 = Abbruch angefordert (auch
+     * wiederholt), 409 = schon beendet, 404 = nicht sichtbar, 403 = kein `jobs.run` in der Kategorie des Jobs.
+     */
+    public function cancelRun(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request, mutating: true);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [$session, $grants] = $auth;
+
+        $outcome = $this->cancelService->cancel($session->userId, $grants, self::id($request));
+        if ($outcome === null) {
+            return JsonReply::error(404, 'Lauf nicht gefunden.');
+        }
+        if ($outcome === CancelOutcome::AlreadyFinished) {
+            return JsonReply::error(409, 'Der Lauf ist bereits beendet und kann nicht mehr abgebrochen werden.');
+        }
+        $run = $this->runs->findVisible(self::id($request), $this->access->scope($grants, Permission::ViewJobs), withOutput: false);
+        if ($run === null) {
+            return JsonReply::error(404, 'Lauf nicht gefunden.');
+        }
+
+        return JsonReply::json(
+            ['run' => $this->presenter->run($run, false, $this->settings->httpDisplay())],
+            $outcome === CancelOutcome::Requested ? 202 : 200,
+        );
+    }
+
+    /**
+     * `GET /api/runs/{id}/log?after=<seq>&limit=1..200` (ADR 0004 §6.2): Abfrage-Rückfall für das Live-Log. Stücke
+     * erneut maskiert; `done` = Lauf beendet und keine weiteren Stücke.
+     */
+    public function runLog(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+        // Herkunft (ADR 0004 §6.1 Schritt 2): ein Browser schickt bei fremder Herkunft „cross-site“/„same-site“.
+        $site = $request->headers->get('Sec-Fetch-Site');
+        if ($site !== null && $site !== 'same-origin') {
+            return JsonReply::error(403, 'Anfrage von fremder Herkunft abgelehnt. Die Seite neu laden.');
+        }
+
+        $query = $request->query->all();
+        $errors = [];
+        $after = 0;
+        if (array_key_exists('after', $query)) {
+            $parsed = is_string($query['after']) && preg_match('/^(0|[1-9][0-9]{0,17})$/D', $query['after']) === 1 ? (int) $query['after'] : null;
+            if ($parsed === null) {
+                $errors['after'] = 'Fortsetzen ab: ganze Zahl ab 0 (letzte erhaltene Nummer).';
+            } else {
+                $after = $parsed;
+            }
+        }
+        $limit = LiveChunk::MAX_LIMIT;
+        if (array_key_exists('limit', $query)) {
+            $parsed = self::positiveInt($query['limit']);
+            if ($parsed === null || $parsed > LiveChunk::MAX_LIMIT) {
+                $errors['limit'] = 'Anzahl: ganze Zahl von 1 bis ' . LiveChunk::MAX_LIMIT . '.';
+            } else {
+                $limit = $parsed;
+            }
+        }
+        if ($errors !== []) {
+            throw new ValidationFailed($errors);
+        }
+
+        $run = $this->runs->findVisible(self::id($request), $this->access->scope($grants, Permission::ViewJobs), withOutput: false);
+        if ($run === null) {
+            return JsonReply::error(404, 'Lauf nicht gefunden.');
+        }
+        // Ein Lauf erbt die Kategorie seines Jobs.
+        $this->access->require($grants, Permission::ViewJobs, $run->categoryName);
+
+        $chunks = $this->runs->chunksAfter($run->id, $after, $limit);
+        $finished = $run->status !== RunStatus::Queued && $run->status !== RunStatus::Running;
+
+        return JsonReply::json([
+            'chunks' => array_map($this->presenter->chunk(...), $chunks),
+            'status' => $run->status->value,
+            'done' => $finished && count($chunks) < $limit,
+        ]);
+    }
+
+    public function preview(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+        if ($this->access->scope($grants, Permission::ViewJobs)->isEmpty()) {
+            throw new AccessDenied(Permission::ViewJobs);
+        }
+
+        $query = $request->query->all();
+        $errors = [];
+        $cron = $query['cron'] ?? null;
+        $timezone = $query['timezone'] ?? null;
+        if (!is_string($cron) || $cron === '' || strlen($cron) > 100) {
+            $errors['cron'] = 'Cron-Ausdruck: Text mit höchstens 100 Zeichen, fünf Felder, z. B. */5 * * * *.';
+        }
+        if (!is_string($timezone) || !in_array($timezone, \DateTimeZone::listIdentifiers(), true)) {
+            $errors['timezone'] = 'Unbekannte Zeitzone. Erwartet wird ein Bezeichner wie „Europe/Berlin“.';
+        }
+        $count = self::DEFAULT_PREVIEW;
+        if (array_key_exists('count', $query)) {
+            $parsed = self::positiveInt($query['count']);
+            if ($parsed === null || $parsed > self::MAX_PREVIEW) {
+                $errors['count'] = 'Anzahl: ganze Zahl von 1 bis ' . self::MAX_PREVIEW . '.';
+            } else {
+                $count = $parsed;
+            }
+        }
+        if ($errors !== [] || !is_string($cron) || !is_string($timezone)) {
+            throw new ValidationFailed($errors);
+        }
+
+        try {
+            $runs = CronSchedule::forJob($cron, $timezone)->nextRuns($this->clock->now(), $count);
+        } catch (\InvalidArgumentException) {
+            throw ValidationFailed::field('cron', 'Ungültiger Cron-Ausdruck. Erwartet werden fünf Felder, z. B. */5 * * * *.');
+        } catch (\RuntimeException) {
+            throw ValidationFailed::field('cron', 'Der Zeitplan hat keinen weiteren Termin. Cron-Ausdruck prüfen.');
+        }
+
+        return JsonReply::json(['runs' => array_map(static fn (\DateTimeImmutable $time): string => $time->format('c'), $runs)]);
+    }
+
+    public function limits(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+        if ($this->access->scope($grants, Permission::ViewJobs)->isEmpty()) {
+            throw new AccessDenied(Permission::ViewJobs);
+        }
+
+        // Nur diese zwei Werte, keine weiteren Einstellungen.
+        return JsonReply::json([
+            'max_timeout_seconds' => $this->settings->maxTimeoutSeconds(),
+            'shell_max_timeout_seconds' => $this->settings->shellMaxTimeoutSeconds(),
+            'response_storage' => $this->settings->responseStorage()->value,
+            'min_interval_seconds' => $this->settings->minIntervalSeconds(),
+        ]);
+    }
+
+    public function categoryList(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request);
+        if ($auth instanceof Response) {
+            return $auth;
+        }
+        [, $grants] = $auth;
+
+        $query = $request->query->all();
+        $permission = Permission::ViewJobs;
+        if (array_key_exists('permission', $query)) {
+            $permission = match ($query['permission']) {
+                'jobs.view' => Permission::ViewJobs,
+                'jobs.edit_http' => Permission::EditHttpJobs,
+                'status_pages.edit' => Permission::EditStatusPages,
+                default => throw ValidationFailed::field('permission', 'Recht: „jobs.view“, „jobs.edit_http“ oder „status_pages.edit“.'),
+            };
+        }
+
+        // Das angefragte Recht bestimmt den Bereich; ohne dieses Recht ist die Liste leer, nie „alles“.
+        return JsonReply::json(['categories' => $this->categories->visible($this->access->scope($grants, $permission))]);
+    }
+
+    /**
+     * Sitzung prüfen (401 ohne), bei ändernden Anfragen CSRF-Token und Herkunft (403, vor dem Laden jedes Datensatzes)
+     * und die frischen Rechte laden. Rechte werden bei jeder Anfrage neu gelesen.
+     *
+     * @return array{0: Session, 1: list<RoleGrant>}|JsonResponse
+     */
+    private function authenticate(#[\SensitiveParameter] Request $request, bool $mutating = false): array|JsonResponse
+    {
+        $session = $this->sessionAuth->authenticate($request);
+        if ($session === null) {
+            return JsonReply::error(401, 'Nicht angemeldet.');
+        }
+        if ($mutating && !$this->csrf->check($request, $session->token)) {
+            return JsonReply::csrfFailed();
+        }
+
+        return [$session, $this->users->grantsFor($session->userId)];
+    }
+
+    /**
+     * Der Anfragekörper als JSON-Objekt (höchstens 160 KiB, Tiefe 5).
+     *
+     * @return array<mixed>
+     *
+     * @throws ValidationFailed
+     */
+    private static function body(#[\SensitiveParameter] Request $request): array
+    {
+        // Bis 320 KiB wegen des Skripts eines Shell-Jobs; für HTTP-Jobs begrenzt der Validator auf 160 KiB.
+        $data = JsonBody::object($request->getContent(), JobValidator::MAX_SHELL_BODY_BYTES, 5);
+        $message = 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 160 KiB, höchstens 5 Ebenen tief).';
+        if ($data === null) {
+            throw ValidationFailed::field('body', $message);
+        }
+        if ($data !== [] && array_is_list($data)) {
+            throw ValidationFailed::field('body', $message);
+        }
+
+        return $data;
+    }
+
+    private static function id(#[\SensitiveParameter] Request $request): int
+    {
+        // Das Muster der Route lässt nur [1-9][0-9]{0,17} durch.
+        return (int) $request->attributes->getString('id');
+    }
+
+    private static function positiveInt(mixed $value): ?int
+    {
+        return is_string($value) && preg_match('/^[1-9][0-9]{0,17}$/D', $value) === 1 ? (int) $value : null;
+    }
+
+    /** Hängt den festen Hinweis an eine (schon bereinigte) Notiz an; nur für die Antwort, nie gespeichert. */
+    private static function withHint(mixed $note, string $hint): string
+    {
+        return is_string($note) && $note !== '' ? $note . ' ' . $hint : $hint;
+    }
+}

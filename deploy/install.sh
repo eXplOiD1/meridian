@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Meridian auf einem Linux-Server installieren (Debian/Ubuntu, als root).
-# Voraussetzungen: PHP 8.3+ mit pdo_sqlite, sodium, pcntl; Composer; rsync; FrankenPHP unter /usr/local/bin.
+# Voraussetzungen: PHP 8.3+ mit pdo_sqlite, sodium, pcntl, curl (Debian/Ubuntu: php-curl, ca-certificates); Composer; rsync; FrankenPHP unter /usr/local/bin.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,11 +15,29 @@ fi
 
 id meridian &>/dev/null || useradd --system --home "$DATA" --shell /usr/sbin/nologin meridian
 
+# Erweiterungen und CA-Bündel prüfen, bevor etwas installiert wird (der HTTP-Runner braucht curl mit TLS).
+for ext in pdo_sqlite sodium pcntl curl; do
+  if ! php -r 'exit(extension_loaded($argv[1]) ? 0 : 1);' "$ext"; then
+    echo "PHP-Erweiterung $ext fehlt. Bitte installieren (z. B. apt install php-cli php-sqlite3 php-curl) und erneut starten." >&2
+    exit 1
+  fi
+done
+if [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
+  echo "CA-Bündel /etc/ssl/certs/ca-certificates.crt fehlt. Bitte 'apt install ca-certificates' ausführen und erneut starten." >&2
+  exit 1
+fi
+
 install -d -o root -g root -m 0755 "$APP"
 install -d -o meridian -g meridian -m 0750 "$DATA"
 install -d -o root -g meridian -m 0750 "$ETC"
 
-rsync -a --delete --exclude vendor --exclude .git "$SRC/" "$APP/"
+# Besitzer root und feste Rechte, egal wie die Quelle aussieht (sonst könnte ein lokaler Benutzer den Code ersetzen,
+# der später mit Zugriff auf Schlüssel und Datenbank läuft). Nur Produktcode, nie Schlüssel, Daten oder Werkzeuge.
+rsync -a --delete --chown=root:root --chmod=D0755,F0644 \
+  --exclude vendor --exclude .git --exclude .github --exclude .claude --exclude tests \
+  --exclude .env --exclude '*.key' --exclude '*.sqlite*' --exclude data --exclude secrets \
+  "$SRC/" "$APP/"
+chmod 0755 "$APP/bin/meridian" "$APP/deploy/install.sh"
 (cd "$APP" && composer install --no-dev --no-interaction --classmap-authoritative)
 
 if [[ ! -f "$ETC/meridian.env" ]]; then
@@ -41,10 +59,24 @@ fi
 
 sudo -u meridian env MERIDIAN_DATA_DIR="$DATA" php "$APP/bin/meridian" migrate
 
-install -m 0644 "$APP/deploy/systemd/meridian-web.service" /etc/systemd/system/
-install -m 0644 "$APP/deploy/systemd/meridian-scheduler.service" /etc/systemd/system/
+# Benutzer für den Host-Agenten: ohne Zugriff auf Schlüssel und Datenbank (ADR 0014).
+id meridian-run &>/dev/null || useradd --system --home /var/lib/meridian-run --shell /usr/sbin/nologin meridian-run
+
+for unit in meridian-web.service meridian-scheduler.service meridian-worker-http.service meridian-worker-shell.service meridian-shell.socket meridian-shell@.service; do
+  install -m 0644 "$APP/deploy/systemd/$unit" /etc/systemd/system/
+done
 systemctl daemon-reload
-systemctl enable --now meridian-web meridian-scheduler
+# Ohne Worker läuft kein Job: der Planer plant nur. Der HTTP-Worker stellt auch Benachrichtigungen zu.
+systemctl enable --now meridian-web meridian-scheduler meridian-worker-http
+
+# Shell-Jobs auf dem Host sind aus: MERIDIAN_ENABLE_SHELL=1 ./deploy/install.sh schaltet Agent und Shell-Worker ein.
+# Danach den Ausführungsort „host default“ in Meridian freigeben (Einstellungen → Ausführungsorte).
+if [[ "${MERIDIAN_ENABLE_SHELL:-0}" == "1" ]]; then
+  grep -q '^MERIDIAN_SHELL_HOST_SOCKETS=' "$ETC/meridian.env" || echo 'MERIDIAN_SHELL_HOST_SOCKETS=default=/run/meridian-shell/default.sock' >> "$ETC/meridian.env"
+  systemctl enable --now meridian-shell.socket meridian-worker-shell
+else
+  echo "Shell-Jobs auf dem Host sind nicht aktiviert (MERIDIAN_ENABLE_SHELL=1 beim Installieren, siehe docs/BETRIEB.md)."
+fi
 
 echo "Meridian ist installiert und läuft."
 

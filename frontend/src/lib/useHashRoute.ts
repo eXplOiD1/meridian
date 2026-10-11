@@ -1,0 +1,119 @@
+import { useEffect, useState } from 'react';
+
+/**
+ * Minimaler Router über den URL-Hash (#/jobs/12). So braucht der Server keine Weiterleitungen für
+ * Unterseiten, und es gibt keine zusätzliche Abhängigkeit. Ids sind Text (positive Ganzzahl), nie Teil von Pfaden
+ * zum Server ohne vorherige Prüfung.
+ */
+export type Route =
+  | { name: 'home' }
+  | { name: 'audit' }
+  | { name: 'konto' }
+  | { name: 'settings' }
+  | { name: 'jobs' }
+  | { name: 'history' }
+  | { name: 'stats' }
+  | { name: 'monitors' }
+  | { name: 'status-pages' }
+  | { name: 'job-new' }
+  | { name: 'job'; id: string }
+  | { name: 'job-edit'; id: string }
+  | { name: 'users'; roleId?: string }
+  | { name: 'roles' }
+  | { name: 'role-new' }
+  | { name: 'role'; id: string }
+  | { name: 'user-new' }
+  | { name: 'user'; id: string }
+  | { name: 'categories' };
+
+const ID = /^[1-9][0-9]{0,17}$/;
+
+export function parseRoute(hash: string): Route {
+  const [pathPart = '', queryPart = ''] = hash.replace(/^#\/?/, '').split('?', 2);
+  const parts = pathPart.split('/').filter((part) => part !== '');
+  const roleParam = new URLSearchParams(queryPart).get('rolle');
+  const [first, second, third] = parts;
+  if (parts.length === 0) {
+    return { name: 'home' };
+  }
+  if (parts.length === 1 && first === 'audit') {
+    return { name: 'audit' };
+  }
+  if (parts.length === 1 && first === 'konto') {
+    return { name: 'konto' };
+  }
+  if (parts.length === 1 && first === 'einstellungen') {
+    return { name: 'settings' };
+  }
+  if (parts.length === 1 && first === 'statistik') {
+    return { name: 'stats' };
+  }
+  if (parts.length === 1 && first === 'ueberwachung') {
+    return { name: 'monitors' };
+  }
+  if (parts.length === 1 && first === 'statusseiten') {
+    return { name: 'status-pages' };
+  }
+  if (parts.length === 1 && first === 'verlauf') {
+    return { name: 'history' };
+  }
+  if (parts.length === 1 && first === 'kategorien') {
+    return { name: 'categories' };
+  }
+  if (first === 'benutzer') {
+    if (parts.length === 1) {
+      return roleParam !== null && ID.test(roleParam) ? { name: 'users', roleId: roleParam } : { name: 'users' };
+    }
+    if (parts.length === 2 && second === 'rollen') {
+      return { name: 'roles' };
+    }
+    if (parts.length === 3 && second === 'rollen' && third === 'neu') {
+      return { name: 'role-new' };
+    }
+    if (parts.length === 3 && second === 'rollen' && third !== undefined && ID.test(third)) {
+      return { name: 'role', id: third };
+    }
+    if (parts.length === 2 && second === 'neu') {
+      return { name: 'user-new' };
+    }
+    if (parts.length === 2 && second !== undefined && ID.test(second)) {
+      return { name: 'user', id: second };
+    }
+  }
+  if (first === 'jobs') {
+    if (parts.length === 1) {
+      return { name: 'jobs' };
+    }
+    if (parts.length === 2 && second === 'neu') {
+      return { name: 'job-new' };
+    }
+    if (second !== undefined && ID.test(second)) {
+      if (parts.length === 2) {
+        return { name: 'job', id: second };
+      }
+      if (parts.length === 3 && third === 'bearbeiten') {
+        return { name: 'job-edit', id: second };
+      }
+    }
+  }
+  return { name: 'home' };
+}
+
+/** Ziel als Pfad ohne führenden Hash, z. B. '', 'jobs', 'jobs/12/bearbeiten'. */
+export function navigate(path: string): void {
+  window.location.hash = path === '' ? '#/' : '#/' + path;
+}
+
+export function hrefOf(path: string): string {
+  return path === '' ? '#/' : '#/' + path;
+}
+
+export function useHashRoute(): Route {
+  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
+  useEffect(() => {
+    const onChange = (): void => setRoute(parseRoute(window.location.hash));
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  return route;
+}

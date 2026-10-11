@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Meridian\Console;
 
+use Meridian\Auth\AuditLog;
 use Meridian\User\UserRepository;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -17,20 +18,22 @@ use Symfony\Component\Console\Helper\QuestionHelper;
 #[AsCommand(name: 'user:create', description: 'Legt einen Benutzer an (Passwort wird verdeckt abgefragt)')]
 final class UserCreateCommand extends Command
 {
-    public function __construct(private readonly UserRepository $users)
+    public function __construct(private readonly UserRepository $users, private readonly AuditLog $audit)
     {
         parent::__construct();
     }
 
+    #[\Override]
     protected function configure(): void
     {
         $this
             ->addArgument('username', InputArgument::REQUIRED)
             ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Anzeigename')
-            ->addOption('role', null, InputOption::VALUE_REQUIRED, 'Admin, Operator oder Beobachter', 'Beobachter');
+            ->addOption('role', null, InputOption::VALUE_REQUIRED, 'Rollenname ohne Rücksicht auf Schreibung (Admin, Operator, Beobachter oder eine eigene Rolle)', 'Beobachter');
         // Kein --password: Passwörter gehören nicht in die Shell-History oder die Prozessliste.
     }
 
+    #[\Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $username = $input->getArgument('username');
@@ -54,6 +57,8 @@ final class UserCreateCommand extends Command
         }
 
         $id = $this->users->create($username, $name ?? $username, $password, $role);
+        // Die Befehlszeile hat keinen angemeldeten Benutzer: Die Vertrauensgrenze ist der Betriebssystem-Benutzer.
+        $this->audit->record(null, 'user.created', $username . ' (' . $role . ')');
         $output->writeln('Benutzer angelegt (ID ' . $id . ', Rolle ' . $role . ').');
 
         return self::SUCCESS;

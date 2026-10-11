@@ -1,0 +1,83 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Meridian\Runner\Shell;
+
+/**
+ * Start oder Ausführung gescheitert. Die Meldung ist immer einer der festen Texte unten (docs/decisions/0004 §5.3),
+ * nie eine Meldung aus Docker, curl oder dem System; `retryable` sagt, ob eine Wiederholung helfen kann.
+ */
+final class ExecFailed extends \RuntimeException
+{
+    public const PROXY_UNREACHABLE = 'Docker-Proxy nicht erreichbar: Dienst docker-proxy prüfen (docker compose ps).';
+    public const PROXY_DENIED = 'Der Docker-Proxy hat die Anfrage abgelehnt: Container-Name und Docker-Proxy-Einstellungen prüfen (docker compose logs docker-proxy).';
+    public const PROXY_ERROR = 'Der Docker-Proxy hat einen unerwarteten Fehler gemeldet: Dienste docker-proxy und Docker prüfen.';
+    public const CONTAINER_MISSING = 'Container nicht gefunden oder läuft nicht: Der Container muss laufen und der Name muss exakt stimmen (docker ps).';
+    public const CONNECTION_LOST = 'Verbindung zum Docker-Proxy abgebrochen.';
+    public const PROTOCOL = 'Protokollfehler bei der Ausführung im Container: Lauf beendet. Hat der Container /bin/sh, head und cut?';
+    public const HOST_NOT_SET_UP = 'Host-Ausführung nicht eingerichtet: meridian-shell.socket prüfen.';
+    public const HOST_LOST = 'Verbindung zum Host-Agenten abgebrochen: Lauf beendet. Dienst meridian-shell.socket prüfen (journalctl -u "meridian-shell@*").';
+    public const HOST_PROTOCOL = 'Protokollfehler beim Host-Agenten: Lauf beendet. Versionen von Meridian und Agent prüfen.';
+    public const HOST_ISOLATION = 'Der Host-Agent verweigert die Ausführung: Er darf nicht als root, im Container oder mit Zugriff auf Schlüssel und Datenbank laufen (Benutzer meridian-run, Units aus deploy/systemd).';
+    public const START_FAILED = 'Der Prozess konnte nicht gestartet werden.';
+    public const NO_PROCESS_GROUP = 'Keine eigene Prozessgruppe (setsid): Lauf aus Sicherheitsgründen nicht gestartet.';
+    public const INFRASTRUCTURE = 'Meridians eigene Container sind als Ausführungsort gesperrt: Job auf einen anderen Container umstellen.';
+    public const API_TOO_OLD = 'Docker-API zu alt (mindestens 1.41): Docker auf dem Server aktualisieren.';
+    public const INVALID_SPEC = 'Ungültige Angaben zum Ausführungsort (Name, Benutzer oder Arbeitsverzeichnis): Job neu speichern.';
+
+    public function __construct(string $note, public readonly bool $retryable)
+    {
+        parent::__construct($note);
+    }
+
+    public static function hostLost(): self
+    {
+        return new self(self::HOST_LOST, true);
+    }
+
+    public static function hostProtocol(): self
+    {
+        return new self(self::HOST_PROTOCOL, false);
+    }
+
+    public static function proxyUnreachable(): self
+    {
+        return new self(self::PROXY_UNREACHABLE, true);
+    }
+
+    public static function proxyDenied(): self
+    {
+        return new self(self::PROXY_DENIED, false);
+    }
+
+    public static function proxyError(): self
+    {
+        return new self(self::PROXY_ERROR, true);
+    }
+
+    public static function containerMissing(): self
+    {
+        return new self(self::CONTAINER_MISSING, true);
+    }
+
+    public static function connectionLost(): self
+    {
+        return new self(self::CONNECTION_LOST, true);
+    }
+
+    public static function protocol(): self
+    {
+        return new self(self::PROTOCOL, false);
+    }
+
+    public static function infrastructure(): self
+    {
+        return new self(self::INFRASTRUCTURE, false);
+    }
+
+    public static function invalidSpec(): self
+    {
+        return new self(self::INVALID_SPEC, false);
+    }
+}

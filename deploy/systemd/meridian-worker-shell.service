@@ -1,0 +1,36 @@
+[Unit]
+Description=Meridian Worker für Shell-Jobs (Docker-Exec über den Proxy oder Host-Agent)
+After=meridian-shell.socket
+
+[Service]
+Type=simple
+User=meridian
+Group=meridian
+WorkingDirectory=/opt/meridian
+EnvironmentFile=/etc/meridian/meridian.env
+ExecStart=/usr/bin/php /opt/meridian/bin/meridian worker:run --type=shell -v
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=40
+KillMode=mixed
+
+# Härtung (nur Unix-Sockets: Docker-Proxy und Host-Agent, kein Netz)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/meridian /run/meridian-docker /run/meridian-shell
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+LoadCredential=meridian_key:/etc/meridian/master.key
+Environment=MERIDIAN_KEY_FILE=%d/meridian_key
+
+[Install]
+WantedBy=multi-user.target
