@@ -11,6 +11,7 @@ import type { JobState } from '../lib/jobs';
 import { canEditHttp, isScoped } from '../lib/permissions';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { JobList, JobSummary, Profile } from '../types';
+import { t } from '../i18n';
 
 type StatusFilter = 'all' | JobState;
 
@@ -85,75 +86,71 @@ export function Jobs({ profile }: { profile: Profile }) {
   return (
     <>
       <div className="toolbar">
-        <div className="chips" role="group" aria-label="Nach Status filtern">
+        <div className="chips" role="group" aria-label={t('Nach Status filtern')}>
           {STATUS_FILTERS.map((entry) => (
             <button key={entry.value} type="button" className="chip" aria-pressed={status === entry.value} onClick={() => setStatus(entry.value)}>
-              {entry.label} <span className="chip__count">{counts[entry.value]}</span>
+              {t(entry.label)} <span className="chip__count">{counts[entry.value]}</span>
             </button>
           ))}
         </div>
         {canEditHttp(profile) && (
           <a className="btn btn--solid" href={hrefOf('jobs/neu')}>
-            Neuen Job anlegen
-          </a>
+            {t('Neuen Job anlegen')}</a>
         )}
       </div>
 
       <div className="row filters">
         <div className="field row__grow">
           <label className="field__label" htmlFor="job-search">
-            Suche
-          </label>
-          <input id="job-search" className="input" type="search" placeholder="Name, Kategorie, Ziel oder Besitzer" value={search} onChange={(e) => setSearch(e.target.value)} />
+            {t('Suche')}</label>
+          <input id="job-search" className="input" type="search" placeholder={t('Name, Kategorie, Ziel oder Besitzer')} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="field filters__select">
           <label className="field__label" htmlFor="job-category">
-            Kategorie
-          </label>
+            {t('Kategorie')}</label>
           <select id="job-category" className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">Alle Kategorien</option>
+            <option value="">{t('Alle Kategorien')}</option>
             {categories.map(([id, name]) => (
               <option key={id} value={String(id)}>
                 {name}
               </option>
             ))}
-            {hasUncategorised && <option value="__none">Ohne Kategorie</option>}
+            {hasUncategorised && <option value="__none">{t('Ohne Kategorie')}</option>}
           </select>
         </div>
       </div>
 
-      {isScoped(profile) && <p className="hint">Du siehst nur Jobs deiner Kategorien.</p>}
+      {isScoped(profile) && <p className="hint">{t('Du siehst nur Jobs deiner Kategorien.')}</p>}
       {error !== null && <Alert tone="err">{error}</Alert>}
-      {data?.truncated === true && <Alert tone="info">Es werden nur die ersten 500 Jobs angezeigt. Mit der Suche oder der Kategorie lässt sich die Liste eingrenzen.</Alert>}
+      {data?.truncated === true && <Alert tone="info">{t('Es werden nur die ersten 500 Jobs angezeigt. Mit der Suche oder der Kategorie lässt sich die Liste eingrenzen.')}</Alert>}
 
-      <section className="card" aria-label="Jobliste">
-        {data === null && error === null && <p className="card__lead">Lädt …</p>}
+      <section className="card" aria-label={t('Jobliste')}>
+        {data === null && error === null && <p className="card__lead">{t('Lädt …')}</p>}
         {data !== null && jobs.length === 0 && (
           <div className="empty">
-            <strong>Noch keine Jobs</strong>
+            <strong>{t('Noch keine Jobs')}</strong>
             <span>
-              {canEditHttp(profile) ? 'Lege den ersten Job an, der regelmäßig eine Adresse aufruft.' : 'Sobald jemand einen Job anlegt, erscheint er hier.'}
+              {canEditHttp(profile) ? t('Lege den ersten Job an, der regelmäßig eine Adresse aufruft.') : t('Sobald jemand einen Job anlegt, erscheint er hier.')}
             </span>
             {canEditHttp(profile) && (
               <button type="button" className="btn btn--solid" onClick={() => navigate('jobs/neu')}>
-                Neuen Job anlegen
-              </button>
+                {t('Neuen Job anlegen')}</button>
             )}
           </div>
         )}
-        {data !== null && jobs.length > 0 && shown.length === 0 && <p className="card__lead">Kein Job passt zu den Filtern.</p>}
+        {data !== null && jobs.length > 0 && shown.length === 0 && <p className="card__lead">{t('Kein Job passt zu den Filtern.')}</p>}
         {shown.length > 0 && (
           <div className="table-wrap">
             <table className="table table--stack">
-              <caption className="visually-hidden">Jobs ({shown.length})</caption>
+              <caption className="visually-hidden">{t('Jobs')} ({shown.length})</caption>
               <thead>
                 <tr>
-                  <th scope="col">Job</th>
-                  <th scope="col">Art</th>
-                  <th scope="col">Zeitplan</th>
-                  <th scope="col">Letzter Lauf</th>
-                  <th scope="col">Nächster Lauf</th>
-                  <th scope="col">Besitzer</th>
+                  <th scope="col">{t('Job')}</th>
+                  <th scope="col">{t('Art')}</th>
+                  <th scope="col">{t('Zeitplan')}</th>
+                  <th scope="col">{t('Letzter Lauf')}</th>
+                  <th scope="col">{t('Nächster Lauf')}</th>
+                  <th scope="col">{t('Besitzer')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -183,7 +180,7 @@ export function Jobs({ profile }: { profile: Profile }) {
                       </td>
                       <td data-label="Letzter Lauf">
                         {job.last_run === null ? (
-                          <span className="muted">noch keiner</span>
+                          <span className="muted">{t('noch keiner')}</span>
                         ) : (
                           <div className="cell">
                             <RunBadge status={job.last_run.status} />

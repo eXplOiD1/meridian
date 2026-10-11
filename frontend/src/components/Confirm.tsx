@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { t } from '../i18n';
 
 interface ConfirmProps {
   label: string;
@@ -28,8 +29,7 @@ export function Confirm({ label, question, confirmLabel, onConfirm, busy = false
         {confirmLabel}
       </button>
       <button type="button" className="btn btn--ghost btn--small" autoFocus onClick={() => setOpen(false)}>
-        Abbrechen
-      </button>
+        {t('Abbrechen')}</button>
     </div>
   );
 }

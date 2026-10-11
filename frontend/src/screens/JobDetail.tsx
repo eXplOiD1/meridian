@@ -14,6 +14,7 @@ import { takePendingRun } from '../lib/pending';
 import { triggerRun } from '../lib/runs';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { JobDetail as Job, Profile, Run, RunPage } from '../types';
+import { t } from '../i18n';
 
 const PAGE_SIZE = 20;
 
@@ -71,7 +72,7 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
     const pending = takePendingRun(id);
     if (pending !== null) {
       setTracked({ runId: pending.runId, kind: pending.kind });
-      setNotice('Der Testlauf wurde eingereiht und startet im nächsten Takt (wenige Sekunden).');
+      setNotice(t('Der Testlauf wurde eingereiht und startet im nächsten Takt (wenige Sekunden).'));
     }
   }, [id]);
 
@@ -88,7 +89,7 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
       const runId = await triggerRun(kind, id, profile.csrf_token);
       setTracking(null);
       setTracked({ runId, kind });
-      setNotice(kind === 'test' ? 'Der Testlauf wurde eingereiht und startet im nächsten Takt (wenige Sekunden).' : 'Der Lauf wurde eingereiht und startet im nächsten Takt (wenige Sekunden).');
+      setNotice(kind === 'test' ? t('Der Testlauf wurde eingereiht und startet im nächsten Takt (wenige Sekunden).') : t('Der Lauf wurde eingereiht und startet im nächsten Takt (wenige Sekunden).'));
     } catch (caught) {
       setActionError(errorMessage(caught));
     } finally {
@@ -151,13 +152,13 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
       <>
         <Alert tone="err">{loadError}</Alert>
         <p>
-          <a href={hrefOf('jobs')}>Zurück zur Jobliste</a>
+          <a href={hrefOf('jobs')}>{t('Zurück zur Jobliste')}</a>
         </p>
       </>
     );
   }
   if (job === null) {
-    return <div className="card__lead">Lädt …</div>;
+    return <div className="card__lead">{t('Lädt …')}</div>;
   }
 
   const state = stateOf(job);
@@ -168,41 +169,38 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
   return (
     <>
       <p className="crumbs">
-        <a href={hrefOf('jobs')}>← Alle Jobs</a>
+        <a href={hrefOf('jobs')}>{t('← Alle Jobs')}</a>
       </p>
-      <section className="card" aria-label="Job">
+      <section className="card" aria-label={t('Job')}>
         <div className="jobhead">
           <div className="jobhead__main">
             <h2>{job.name}</h2>
             <div className="muted">
               {http !== null ? <TargetText target={http.target} /> : '–'}
-              {job.category !== null ? ' · ' + job.category.name : ' · ohne Kategorie'}
+              {job.category !== null ? ' · ' + job.category.name : t(' · ohne Kategorie')}
               {job.owner !== null ? ' · Besitzer: ' + job.owner.display_name : ''}
             </div>
             <span className={'jobstate jobstate--' + state}>{STATE_LABEL[state]}</span>
           </div>
           <div className="row jobhead__actions">
             {job.can.run && (
-              <button type="button" className="btn btn--solid" disabled={busy || waiting || !job.is_enabled} onClick={() => void start('manual')} title={job.is_enabled ? undefined : 'Nur aktive Jobs lassen sich manuell ausführen.'}>
-                Jetzt ausführen
-              </button>
+              <button type="button" className="btn btn--solid" disabled={busy || waiting || !job.is_enabled} onClick={() => void start('manual')} title={job.is_enabled ? undefined : t('Nur aktive Jobs lassen sich manuell ausführen.')}>
+                {t('Jetzt ausführen')}</button>
             )}
             {job.can.run && (
               <button type="button" className="btn btn--ghost" disabled={busy || waiting} onClick={() => void start('test')}>
-                Testlauf
-              </button>
+                {t('Testlauf')}</button>
             )}
             {job.can.edit && (
               <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void toggle()}>
-                {job.is_enabled ? 'Deaktivieren' : 'Aktivieren'}
+                {job.is_enabled ? t('Deaktivieren') : t('Aktivieren')}
               </button>
             )}
             {job.can.edit && (
               <a className="btn btn--ghost" href={hrefOf('jobs/' + String(job.id) + '/bearbeiten')}>
-                Bearbeiten
-              </a>
+                {t('Bearbeiten')}</a>
             )}
-            {job.can.edit && <Confirm label="Löschen" question="Job samt Verlauf endgültig löschen?" confirmLabel="Ja, löschen" busy={busy} onConfirm={() => void remove()} />}
+            {job.can.edit && <Confirm label={t('Löschen')} question={t('Job samt Verlauf endgültig löschen?')} confirmLabel={t('Ja, löschen')} busy={busy} onConfirm={() => void remove()} />}
           </div>
         </div>
 
@@ -210,57 +208,57 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
         {notice !== null && <Alert tone="info">{notice}</Alert>}
 
         <dl className="facts">
-          <dt>Zeitplan</dt>
+          <dt>{t('Zeitplan')}</dt>
           <dd>
             {preset !== null ? preset + ' · ' : ''}
             <code className="cron cron--inline">{job.cron}</code> ({job.timezone})
           </dd>
-          <dt>Nächster Lauf</dt>
-          <dd>{job.is_enabled ? formatShort(job.next_run_at) : 'deaktiviert'}</dd>
+          <dt>{t('Nächster Lauf')}</dt>
+          <dd>{job.is_enabled ? formatShort(job.next_run_at) : t('deaktiviert')}</dd>
           {http !== null && (
             <>
-              <dt>Anfrage</dt>
+              <dt>{t('Anfrage')}</dt>
               <dd>
-                {http.method} an <TargetText target={http.target} />
+                {t('{method} an', { method: http.method })} <TargetText target={http.target} />
                 {/* Header und Body nennt der Server nur mit Bearbeitungsrecht; ohne fehlen die Felder und werden nicht gedeutet. */}
                 {job.can.edit && http.header_count !== undefined && http.has_body !== undefined
                   ? ' · Header: ' + String(http.header_count) + ' · Body: ' + (http.has_body ? 'ja' : 'nein')
                   : http.has_request === true
-                    ? ' · Anfrage gesetzt'
+                    ? t(' · Anfrage gesetzt')
                     : ''}
               </dd>
-              <dt>Zeitlimit</dt>
-              <dd>{http.timeout_seconds} s · erwartet {http.expected_status} · Weiterleitungen: {http.max_redirects}</dd>
+              <dt>{t('Zeitlimit')}</dt>
+              <dd>{http.timeout_seconds} s · {t('erwartet')} {http.expected_status} · {t('Weiterleitungen:')} {http.max_redirects}</dd>
             </>
           )}
           {job.shell != null && (
             <>
-              <dt>Ausführungsort</dt>
+              <dt>{t('Ausführungsort')}</dt>
               <dd>
                 {shellTargetLabel(job.shell.target.kind, job.shell.target.name)}
-                {job.shell.target.kind === 'docker' ? ' · Benutzer: ' + (job.shell.user ?? 'Standard') : ''}
-                {job.shell.workdir != null ? ' · Verzeichnis: ' + job.shell.workdir : ''}
+                {job.shell.target.kind === 'docker' ? ' · ' + t('Benutzer:') + ' ' + (job.shell.user ?? t('Standard')) : ''}
+                {job.shell.workdir != null ? ' · ' + t('Verzeichnis:') + ' ' + job.shell.workdir : ''}
               </dd>
-              <dt>Befehl</dt>
+              <dt>{t('Befehl')}</dt>
               <dd>
-                {job.shell.interpreter} · {job.shell.has_script ? 'Skript gesetzt (Inhalt verborgen)' : 'kein Skript'}
-                {job.shell.has_env ? ' · Umgebungsvariablen: ' + String(job.shell.env_count) : ''}
+                {job.shell.interpreter} · {job.shell.has_script ? t('Skript gesetzt (Inhalt verborgen)') : t('kein Skript')}
+                {job.shell.has_env ? ' · ' + t('Umgebungsvariablen:') + ' ' + String(job.shell.env_count) : ''}
               </dd>
-              <dt>Zeitlimit</dt>
+              <dt>{t('Zeitlimit')}</dt>
               <dd>{job.shell.timeout_seconds} s</dd>
             </>
           )}
-          <dt>Bei Überlappung</dt>
+          <dt>{t('Bei Überlappung')}</dt>
           <dd>
-            {overlapLabel(job.overlap_policy)} · Wiederholungen: {job.retry_count}
-            {job.catch_up ? ' · verpasste Läufe werden nachgeholt' : ''}
+            {overlapLabel(job.overlap_policy)} · {t('Wiederholungen:')} {job.retry_count}
+            {job.catch_up ? ' · ' + t('verpasste Läufe werden nachgeholt') : ''}
           </dd>
           {job.expires_at !== null && (
             <>
-              <dt>Zeitplan läuft ab</dt>
+              <dt>{t('Zeitplan läuft ab')}</dt>
               <dd>
                 {formatTime(job.expires_at)}
-                {new Date(job.expires_at).getTime() <= Date.now() ? ' · abgelaufen, keine weiteren Läufe' : ''}
+                {new Date(job.expires_at).getTime() <= Date.now() ? t(' · abgelaufen, keine weiteren Läufe') : ''}
               </dd>
             </>
           )}
@@ -268,29 +266,29 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
       </section>
 
       {(tracking !== null || waiting) && (
-        <section className="card" aria-label="Ausgelöster Lauf" aria-live="polite">
-          <h2>{tracking?.trigger === 'test' || tracked?.kind === 'test' ? 'Testlauf' : 'Lauf'}</h2>
-          {(tracking?.trigger === 'test' || tracked?.kind === 'test') && <p className="card__lead">Ein Testlauf zählt nicht in die Statistik und gilt nicht als „letzter Lauf“.</p>}
+        <section className="card" aria-label={t('Ausgelöster Lauf')} aria-live="polite">
+          <h2>{tracking?.trigger === 'test' || tracked?.kind === 'test' ? t('Testlauf') : t('Lauf')}</h2>
+          {(tracking?.trigger === 'test' || tracked?.kind === 'test') && <p className="card__lead">{t('Ein Testlauf zählt nicht in die Statistik und gilt nicht als „letzter Lauf“.')}</p>}
           {tracked !== null && <RunLog key={tracked.runId} runId={tracked.runId} csrf={profile.csrf_token} canCancel={job.can.run} onFinished={onTrackedFinished} />}
-          {tracking !== null && isFinished(tracking.status) && <RunDetail run={tracking} heading="Ergebnis" />}
+          {tracking !== null && isFinished(tracking.status) && <RunDetail run={tracking} heading={t('Ergebnis')} />}
         </section>
       )}
 
-      <section className="card" aria-label="Verlauf">
-        <h2>Verlauf</h2>
+      <section className="card" aria-label={t('Verlauf')}>
+        <h2>{t('Verlauf')}</h2>
         {historyError !== null && <Alert tone="err">{historyError}</Alert>}
-        {runs.length === 0 && historyError === null && <p className="card__lead">Noch keine Läufe.</p>}
+        {runs.length === 0 && historyError === null && <p className="card__lead">{t('Noch keine Läufe.')}</p>}
         {runs.length > 0 && (
           <div className="table-wrap">
             <table className="table table--runs">
-              <caption className="visually-hidden">Läufe dieses Jobs, neueste zuerst</caption>
+              <caption className="visually-hidden">{t('Läufe dieses Jobs, neueste zuerst')}</caption>
               <thead>
                 <tr>
-                  <th scope="col">Zeit</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Auslöser</th>
-                  <th scope="col">{job.type === 'shell' ? 'Exit-Code' : 'HTTP'}</th>
-                  <th scope="col">Dauer</th>
+                  <th scope="col">{t('Zeit')}</th>
+                  <th scope="col">{t('Status')}</th>
+                  <th scope="col">{t('Auslöser')}</th>
+                  <th scope="col">{job.type === 'shell' ? t('Exit-Code') : 'HTTP'}</th>
+                  <th scope="col">{t('Dauer')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -316,14 +314,13 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
         {nextBefore !== null && (
           <div className="row">
             <button type="button" className="btn btn--ghost" onClick={() => void loadHistory(nextBefore, true)}>
-              Mehr laden
-            </button>
+              {t('Mehr laden')}</button>
           </div>
         )}
         {selected !== null && !isFinished(selected.status) && (
           <RunLog key={selected.id} runId={selected.id} csrf={profile.csrf_token} canCancel={job.can.run} onFinished={onSelectedFinished} />
         )}
-        {selected !== null && isFinished(selected.status) && <RunDetail run={selected} heading="Lauf-Details" />}
+        {selected !== null && isFinished(selected.status) && <RunDetail run={selected} heading={t('Lauf-Details')} />}
       </section>
     </>
   );

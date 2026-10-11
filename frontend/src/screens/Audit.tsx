@@ -5,6 +5,7 @@ import { Field } from '../components/Field';
 import { ApiError, request } from '../lib/api';
 import { describeAction, formatTime, retryHint } from '../lib/format';
 import type { AuditEntry, AuditPage, Profile } from '../types';
+import { t } from '../i18n';
 
 const PAGE_SIZE = 50;
 const ACTION_PATTERN = /^[a-z0-9_.]{1,64}$/;
@@ -13,7 +14,7 @@ function message(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message + (error.status === 429 ? retryHint(error.retryAfter) : '');
   }
-  return 'Unerwarteter Fehler.';
+  return t('Unerwarteter Fehler.');
 }
 
 /** Sperre aufheben: Benutzername oder IP-Adresse. Der Server prüft Recht, CSRF und Eingabe selbst. */
@@ -33,7 +34,7 @@ function Unlock({ csrf }: { csrf: string }) {
     const isIp = /^[0-9a-fA-F:.]+$/.test(value) && (value.includes(':') || /^\d{1,3}(\.\d{1,3}){3}$/.test(value));
     try {
       await request('POST', '/api/users/unlock', { csrf, body: isIp ? { ip: value } : { username: value } });
-      setDone('Die Sperre für „' + value + '“ ist aufgehoben.');
+      setDone(t('Die Sperre für „{name}“ ist aufgehoben.', { name: value }));
       setTarget('');
     } catch (caught) {
       setError(message(caught));
@@ -43,17 +44,16 @@ function Unlock({ csrf }: { csrf: string }) {
   }
 
   return (
-    <section className="card" aria-label="Sperre aufheben">
-      <h2>Sperre aufheben</h2>
-      <p className="card__lead">Nach mehreren Fehlversuchen sperrt Meridian ein Konto oder eine IP-Adresse zeitweise. Hier hebst du die Sperre sofort auf.</p>
+    <section className="card" aria-label={t('Sperre aufheben')}>
+      <h2>{t('Sperre aufheben')}</h2>
+      <p className="card__lead">{t('Nach mehreren Fehlversuchen sperrt Meridian ein Konto oder eine IP-Adresse zeitweise. Hier hebst du die Sperre sofort auf.')}</p>
       <form className="form" onSubmit={(event) => void submit(event)}>
         {error !== null && <Alert tone="err">{error}</Alert>}
         {done !== null && <Alert tone="ok">{done}</Alert>}
-        <Field label="Benutzername oder IP-Adresse" name="target" required autoComplete="off" value={target} onChange={(e) => setTarget(e.target.value)} />
+        <Field label={t('Benutzername oder IP-Adresse')} name="target" required autoComplete="off" value={target} onChange={(e) => setTarget(e.target.value)} />
         <div className="row">
           <button type="submit" className="btn btn--solid" disabled={busy || target.trim() === ''}>
-            Sperre aufheben
-          </button>
+            {t('Sperre aufheben')}</button>
         </div>
       </form>
     </section>
@@ -97,7 +97,7 @@ export function Audit({ profile }: { profile: Profile }) {
     event.preventDefault();
     const value = filter.trim();
     if (value !== '' && !ACTION_PATTERN.test(value)) {
-      setError('Filter: nur Kleinbuchstaben, Ziffern, Punkt und Unterstrich (z. B. auth.login_failed).');
+      setError(t('Filter: nur Kleinbuchstaben, Ziffern, Punkt und Unterstrich (z. B. auth.login_failed).'));
       return;
     }
     setApplied(value);
@@ -106,17 +106,16 @@ export function Audit({ profile }: { profile: Profile }) {
 
   return (
     <>
-      <section className="card" aria-label="Audit-Log">
+      <section className="card" aria-label={t('Audit-Log')}>
         <div className="row">
-          <h2>Ereignisse</h2>
+          <h2>{t('Ereignisse')}</h2>
         </div>
         <form className="row" onSubmit={apply}>
           <div className="row__grow">
-            <Field label="Aktion filtern" name="filter" autoComplete="off" mono placeholder="z. B. auth.login_failed" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <Field label={t('Aktion filtern')} name="filter" autoComplete="off" mono placeholder={t('z. B. auth.login_failed')} value={filter} onChange={(e) => setFilter(e.target.value)} />
           </div>
           <button type="submit" className="btn btn--ghost" disabled={busy}>
-            Filtern
-          </button>
+            {t('Filtern')}</button>
           {applied !== '' && (
             <button
               type="button"
@@ -128,8 +127,7 @@ export function Audit({ profile }: { profile: Profile }) {
                 void load('', null, false);
               }}
             >
-              Zurücksetzen
-            </button>
+              {t('Zurücksetzen')}</button>
           )}
         </form>
         {error !== null && <Alert tone="err">{error}</Alert>}
@@ -137,10 +135,10 @@ export function Audit({ profile }: { profile: Profile }) {
           <table className="table">
             <thead>
               <tr>
-                <th scope="col">Zeit</th>
-                <th scope="col">Ereignis</th>
-                <th scope="col">Benutzer</th>
-                <th scope="col">Ziel</th>
+                <th scope="col">{t('Zeit')}</th>
+                <th scope="col">{t('Ereignis')}</th>
+                <th scope="col">{t('Benutzer')}</th>
+                <th scope="col">{t('Ziel')}</th>
               </tr>
             </thead>
             <tbody>
@@ -155,7 +153,7 @@ export function Audit({ profile }: { profile: Profile }) {
                         <span>{action.label}</span>
                       </span>
                     </td>
-                    <td>{entry.username ?? <span className="hint">nicht angemeldet / Befehlszeile</span>}</td>
+                    <td>{entry.username ?? <span className="hint">{t('nicht angemeldet / Befehlszeile')}</span>}</td>
                     <td className="table__target">{entry.target ?? ''}</td>
                   </tr>
                 );
@@ -163,8 +161,7 @@ export function Audit({ profile }: { profile: Profile }) {
               {entries.length === 0 && !busy && (
                 <tr>
                   <td colSpan={4} className="hint">
-                    Keine Ereignisse gefunden.
-                  </td>
+                    {t('Keine Ereignisse gefunden.')}</td>
                 </tr>
               )}
             </tbody>
@@ -173,7 +170,7 @@ export function Audit({ profile }: { profile: Profile }) {
         {next !== null && (
           <div className="row">
             <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void load(applied, next, true)}>
-              {busy ? 'Lädt …' : 'Ältere Ereignisse laden'}
+              {busy ? t('Lädt …') : t('Ältere Ereignisse laden')}
             </button>
           </div>
         )}

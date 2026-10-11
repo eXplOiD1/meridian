@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 /**
  * Dünner Client für die Meridian-API. Die Sitzung liegt ausschließlich im HttpOnly-Cookie,
  * hier steht nur das CSRF-Token im Arbeitsspeicher (nie in localStorage, sessionStorage oder der URL).
@@ -93,7 +94,7 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     });
   } catch {
-    throw new ApiError('Der Server ist nicht erreichbar. Netzwerk und Adresse prüfen.', 0, null, false);
+    throw new ApiError(t('Der Server ist nicht erreichbar. Netzwerk und Adresse prüfen.'), 0, null, false);
   }
 
   let data: unknown = null;
@@ -111,7 +112,7 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path
     if (response.status === 403 && isRecord(data) && data.password_change_required === true) {
       window.dispatchEvent(new Event(PASSWORD_CHANGE_EVENT));
     }
-    let message = isRecord(data) && typeof data.error === 'string' ? data.error : 'Unerwarteter Fehler (' + String(response.status) + ').';
+    let message = isRecord(data) && typeof data.error === 'string' ? t(data.error) : t('Unerwarteter Fehler ({status}).', { status: response.status });
     const csrfFailed = response.status === 403 && isRecord(data) && data.csrf_failed === true;
     // Veraltetes Token (zweiter Tab, neue Anmeldung): einmal das Profil neu laden, dann erst den Fehler melden — so
     // trägt das nächste Absenden schon das neue Token. Nie automatisch wiederholen (die Anfrage könnte etwas ändern).

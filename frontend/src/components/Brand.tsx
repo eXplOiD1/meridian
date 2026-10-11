@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 /** Wortmarke mit der Uhr aus dem Klickdummy (nur CSS/SVG, keine Bilddatei). */
 export function Brand({ subtitle = 'Zeitplaner' }: { subtitle?: string }) {
   return (
@@ -8,7 +9,7 @@ export function Brand({ subtitle = 'Zeitplaner' }: { subtitle?: string }) {
         <circle cx="17" cy="17" r="2.2" fill="var(--signal)" />
       </svg>
       <div>
-        <span className="brand__name">MERIDIAN</span>
+        <span className="brand__name">{t('MERIDIAN')}</span>
         <span className="brand__sub">{subtitle}</span>
       </div>
     </div>

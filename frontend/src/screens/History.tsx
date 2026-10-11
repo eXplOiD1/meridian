@@ -10,6 +10,7 @@ import { formatDuration, isFinished, RUN_STATUS, TRIGGER_LABEL } from '../lib/jo
 import { canRun } from '../lib/permissions';
 import { hrefOf } from '../lib/useHashRoute';
 import type { Profile, Run, RunStatus } from '../types';
+import { t } from '../i18n';
 
 /** Lauf der globalen Verlaufsliste: wie `Run`, dazu Job und Kategorie (Antwort von `GET /api/runs`). */
 interface HistoryRun extends Run {
@@ -78,17 +79,17 @@ export function History({ profile }: { profile: Profile }) {
   }, [load]);
 
   return (
-    <section className="card" aria-label="Verlauf aller Jobs">
-      <h2>Verlauf</h2>
-      <p className="card__lead">Die letzten Läufe aller Jobs, die du sehen darfst, neueste zuerst.</p>
+    <section className="card" aria-label={t('Verlauf aller Jobs')}>
+      <h2>{t('Verlauf')}</h2>
+      <p className="card__lead">{t('Die letzten Läufe aller Jobs, die du sehen darfst, neueste zuerst.')}</p>
       <div className="row">
         <label className="field field--inline">
-          <span className="field__label">Status</span>
-          <select value={status} onChange={(event) => {
+          <span className="field__label">{t('Status')}</span>
+          <select className="select" value={status} onChange={(event) => {
               setSelected(null);
               setStatus(event.target.value as '' | RunStatus);
             }}>
-            <option value="">Alle</option>
+            <option value="">{t('Alle')}</option>
             {STATUS_ORDER.map((value) => (
               <option key={value} value={value}>
                 {RUN_STATUS[value].label}
@@ -98,21 +99,21 @@ export function History({ profile }: { profile: Profile }) {
         </label>
       </div>
       {error !== null && <Alert tone="err">{error}</Alert>}
-      {loaded && error === null && runs.length === 0 && <p className="card__lead">Keine Läufe{status !== '' ? ' mit diesem Status' : ''}.</p>}
-      {!loaded && error === null && <p className="card__lead">Lädt …</p>}
+      {loaded && error === null && runs.length === 0 && <p className="card__lead">{status !== '' ? t('Keine Läufe mit diesem Status.') : t('Keine Läufe.')}</p>}
+      {!loaded && error === null && <p className="card__lead">{t('Lädt …')}</p>}
       {runs.length > 0 && (
         <div className="table-wrap">
           <table className="table table--runs">
-            <caption className="visually-hidden">Läufe aller sichtbaren Jobs, neueste zuerst</caption>
+            <caption className="visually-hidden">{t('Läufe aller sichtbaren Jobs, neueste zuerst')}</caption>
             <thead>
               <tr>
-                <th scope="col">Zeit</th>
-                <th scope="col">Job</th>
-                <th scope="col">Kategorie</th>
-                <th scope="col">Status</th>
-                <th scope="col">Auslöser</th>
-                <th scope="col">Ergebnis</th>
-                <th scope="col">Dauer</th>
+                <th scope="col">{t('Zeit')}</th>
+                <th scope="col">{t('Job')}</th>
+                <th scope="col">{t('Kategorie')}</th>
+                <th scope="col">{t('Status')}</th>
+                <th scope="col">{t('Auslöser')}</th>
+                <th scope="col">{t('Ergebnis')}</th>
+                <th scope="col">{t('Dauer')}</th>
               </tr>
             </thead>
             <tbody>
@@ -142,12 +143,11 @@ export function History({ profile }: { profile: Profile }) {
       {selected !== null && !isFinished(selected.status) && (
         <RunLog key={selected.id} runId={selected.id} csrf={profile.csrf_token} canCancel={canRun(profile, selected.category?.name ?? null)} onFinished={onSelectedFinished} />
       )}
-      {selected !== null && isFinished(selected.status) && <RunDetail run={selected} heading={'Lauf-Details: ' + selected.job.name} />}
+      {selected !== null && isFinished(selected.status) && <RunDetail run={selected} heading={t('Lauf-Details: {name}', { name: selected.job.name })} />}
       {nextBefore !== null && (
         <div className="row">
           <button type="button" className="btn btn--ghost" onClick={() => void load(nextBefore, true)}>
-            Mehr laden
-          </button>
+            {t('Mehr laden')}</button>
         </div>
       )}
     </section>

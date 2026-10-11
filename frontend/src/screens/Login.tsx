@@ -45,7 +45,7 @@ export function Login({ onLoggedIn }: LoginProps) {
         onLoggedIn(await request<Profile>('GET', '/api/auth/me'));
       } catch (probe) {
         if (probe instanceof ApiError && probe.status === 401) {
-          setError('Der Browser hat die Sitzung nicht gespeichert. Bitte Cookies für diese Adresse erlauben und es erneut versuchen.');
+          setError(t('Der Browser hat die Sitzung nicht gespeichert. Bitte Cookies für diese Adresse erlauben und es erneut versuchen.'));
           return;
         }
         throw probe;
@@ -64,7 +64,7 @@ export function Login({ onLoggedIn }: LoginProps) {
           setCode('');
         }
       } else {
-        setError('Unerwarteter Fehler bei der Anmeldung.');
+        setError(t('Unerwarteter Fehler bei der Anmeldung.'));
       }
     } finally {
       setBusy(false);
@@ -100,8 +100,7 @@ export function Login({ onLoggedIn }: LoginProps) {
               <strong>{t('Anmeldung nicht möglich: Reverse-Proxy nicht eingerichtet.')}</strong>
               <p>{proxyError}</p>
               <p>
-                Das ist ein Konfigurationsfehler des Servers (<code className="cron cron--inline">MERIDIAN_TRUSTED_PROXIES</code>), kein Problem mit deinen Zugangsdaten. Erneutes Versuchen hilft nicht, bis ein
-                Administrator ihn behoben hat.
+                {t('Das ist ein Konfigurationsfehler des Servers (MERIDIAN_TRUSTED_PROXIES), kein Problem mit deinen Zugangsdaten. Erneutes Versuchen hilft nicht, bis ein Administrator ihn behoben hat.')}
               </p>
             </div>
           )}

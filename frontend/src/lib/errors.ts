@@ -1,12 +1,13 @@
 import { ApiError } from './api';
 import { retryHint } from './format';
+import { t } from '../i18n';
 
 /** Fehlermeldung des Servers als Text (nie als HTML); 429 mit Wartehinweis. */
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message + (error.status === 429 ? retryHint(error.retryAfter) : '');
   }
-  return 'Unerwarteter Fehler.';
+  return t('Unerwarteter Fehler.');
 }
 
 /** Feldfehler einer 422-Antwort (leer bei allem anderen). */

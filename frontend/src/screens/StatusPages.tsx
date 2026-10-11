@@ -5,6 +5,7 @@ import { FormField } from '../components/FormField';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import type { CategoryRef, Monitor, Profile, StatusPage, StatusPageItem } from '../types';
+import { t } from '../i18n';
 
 interface Candidate {
   type: 'job' | 'monitor';
@@ -61,13 +62,13 @@ function PageForm({ draft, setDraft, categories, candidates, errors, busy, submi
       }}
     >
       <div className="grid-2">
-        <FormField label="Titel" error={errors.title} hint="Steht oben auf der öffentlichen Seite.">
+        <FormField label={t('Titel')} error={errors.title} hint={t('Steht oben auf der öffentlichen Seite.')}>
           {(aria) => <input {...aria} className="input" name="page-title" autoComplete="off" maxLength={80} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />}
         </FormField>
-        <FormField label="Kategorie der Seite" error={errors.category_id} hint="Bestimmt, wer die Seite bearbeiten darf.">
+        <FormField label={t('Kategorie der Seite')} error={errors.category_id} hint={t('Bestimmt, wer die Seite bearbeiten darf.')}>
           {(aria) => (
             <select {...aria} className="input" name="page-category" value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}>
-              {categories.length === 0 && <option value="">Keine</option>}
+              {categories.length === 0 && <option value="">{t('Keine')}</option>}
               {categories.map((c) => (
                 <option key={c.id} value={String(c.id)}>
                   {c.name}
@@ -79,25 +80,25 @@ function PageForm({ draft, setDraft, categories, candidates, errors, busy, submi
       </div>
       <label className="check">
         <input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />
-        <span>Seite ist erreichbar (ausgeschaltet antwortet der Link wie ein unbekannter)</span>
+        <span>{t('Seite ist erreichbar (ausgeschaltet antwortet der Link wie ein unbekannter)')}</span>
       </label>
       <fieldset className="statusitems">
-        <legend className="field__label">Einträge</legend>
-        <p className="hint">Die Seite zeigt nur den Anzeigenamen, den Zustand und den Zeitpunkt, nie den Namen des Jobs, Adressen oder Ausgaben. Den Anzeigenamen wählst du selbst.</p>
+        <legend className="field__label">{t('Einträge')}</legend>
+        <p className="hint">{t('Die Seite zeigt nur den Anzeigenamen, den Zustand und den Zeitpunkt, nie den Namen des Jobs, Adressen oder Ausgaben. Den Anzeigenamen wählst du selbst.')}</p>
         {errors.items !== undefined && <p className="field__error">{errors.items}</p>}
-        {draft.items.length === 0 && <p className="hint">Noch keine Einträge.</p>}
+        {draft.items.length === 0 && <p className="hint">{t('Noch keine Einträge.')}</p>}
         {draft.items.map((item, index) => (
           <div key={item.key} className="row statusitems__row">
-            <span className="badge">{item.type === 'job' ? 'Job' : 'Überwachung'}</span>
+            <span className="badge">{item.type === 'job' ? t('Job') : t('Überwachung')}</span>
             <input
               className="input"
-              aria-label={'Anzeigename von ' + (item.name === '' ? 'Eintrag ' + String(index + 1) : item.name)}
+              aria-label={t('Anzeigename von {name}', { name: item.name === '' ? t('Eintrag {n}', { n: index + 1 }) : item.name })}
               maxLength={80}
               value={item.label}
               onChange={(e) => setDraft({ ...draft, items: draft.items.map((x) => (x.key === item.key ? { ...x, label: e.target.value } : x)) })}
             />
             <span className="muted statusitems__name">{item.name}</span>
-            <button type="button" className="btn btn--ghost btn--small" aria-label="Nach oben" disabled={index === 0} onClick={() => {
+            <button type="button" className="btn btn--ghost btn--small" aria-label={t('Nach oben')} disabled={index === 0} onClick={() => {
               const items = [...draft.items];
               const moved = items.splice(index, 1)[0];
               if (moved !== undefined) items.splice(index - 1, 0, moved);
@@ -106,24 +107,22 @@ function PageForm({ draft, setDraft, categories, candidates, errors, busy, submi
               ↑
             </button>
             <button type="button" className="btn btn--ghost btn--small btn--danger-text" onClick={() => setDraft({ ...draft, items: draft.items.filter((x) => x.key !== item.key) })}>
-              Entfernen
-            </button>
+              {t('Entfernen')}</button>
             {errors['items.' + String(index)] !== undefined && <span className="field__error">{errors['items.' + String(index)]}</span>}
             {errors['items.' + String(index) + '.label'] !== undefined && <span className="field__error">{errors['items.' + String(index) + '.label']}</span>}
           </div>
         ))}
         <div className="row">
-          <select className="input" aria-label="Eintrag hinzufügen" value={pick} onChange={(e) => setPick(e.target.value)}>
-            <option value="">Job oder Überwachung wählen …</option>
+          <select className="input" aria-label={t('Eintrag hinzufügen')} value={pick} onChange={(e) => setPick(e.target.value)}>
+            <option value="">{t('Job oder Überwachung wählen …')}</option>
             {free.map((c) => (
               <option key={c.type + ':' + String(c.id)} value={c.type + ':' + String(c.id)}>
-                {(c.type === 'job' ? 'Job: ' : 'Überwachung: ') + c.name}
+                {(c.type === 'job' ? t('Job: ') : t('Überwachung: ')) + c.name}
               </option>
             ))}
           </select>
           <button type="button" className="btn btn--ghost" disabled={pick === ''} onClick={add}>
-            Hinzufügen
-          </button>
+            {t('Hinzufügen')}</button>
         </div>
       </fieldset>
       <div className="row">
@@ -132,8 +131,7 @@ function PageForm({ draft, setDraft, categories, candidates, errors, busy, submi
         </button>
         {onCancel !== undefined && (
           <button type="button" className="btn btn--ghost" onClick={onCancel}>
-            Abbrechen
-          </button>
+            {t('Abbrechen')}</button>
         )}
       </div>
     </form>
@@ -200,7 +198,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 422) {
         setErrors(caught.fields);
-        setFormError('Bitte die markierten Felder korrigieren.');
+        setFormError(t('Bitte die markierten Felder korrigieren.'));
       } else {
         setFormError(errorMessage(caught));
       }
@@ -225,25 +223,23 @@ export function StatusPages({ profile }: { profile: Profile }) {
 
   return (
     <>
-      <section className="card" aria-label="Statusseiten">
-        <h2>Statusseiten</h2>
+      <section className="card" aria-label={t('Statusseiten')}>
+        <h2>{t('Statusseiten')}</h2>
         <p className="card__lead">
-          Eine Seite zum Weitergeben, auch an Menschen ohne Konto: sie zeigt, ob ausgewählte Jobs und Überwachungen laufen. Der Link ist geheim und nicht erratbar; wer ihn kennt, sieht die Seite. Bei Bedarf einen neuen Link erzeugen, der alte
-          gilt dann sofort nicht mehr.
-        </p>
+          {t('Eine Seite zum Weitergeben, auch an Menschen ohne Konto: sie zeigt, ob ausgewählte Jobs und Überwachungen laufen. Der Link ist geheim und nicht erratbar; wer ihn kennt, sieht die Seite. Bei Bedarf einen neuen Link erzeugen, der alte gilt dann sofort nicht mehr.')}</p>
         {loadError !== null && <Alert tone="err">{loadError}</Alert>}
         {formError !== null && <Alert tone="err">{formError}</Alert>}
-        {pages !== null && pages.length === 0 && <p className="card__lead">Noch keine Statusseite angelegt.</p>}
+        {pages !== null && pages.length === 0 && <p className="card__lead">{t('Noch keine Statusseite angelegt.')}</p>}
         {pages !== null && pages.length > 0 && (
           <div className="table-wrap">
             <table className="table">
-              <caption className="visually-hidden">Statusseiten</caption>
+              <caption className="visually-hidden">{t('Statusseiten')}</caption>
               <thead>
                 <tr>
-                  <th scope="col">Titel</th>
-                  <th scope="col">Einträge</th>
-                  <th scope="col">Link</th>
-                  <th scope="col">Aktion</th>
+                  <th scope="col">{t('Titel')}</th>
+                  <th scope="col">{t('Einträge')}</th>
+                  <th scope="col">{t('Link')}</th>
+                  <th scope="col">{t('Aktion')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -253,7 +249,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
                     <tr key={page.id}>
                       <td>
                         {page.title}
-                        {!page.enabled && <div className="hint">ausgeschaltet</div>}
+                        {!page.enabled && <div className="hint">{t('ausgeschaltet')}</div>}
                         {page.category !== null && <div className="hint">{page.category}</div>}
                       </td>
                       <td>{page.items.length}</td>
@@ -265,12 +261,11 @@ export function StatusPages({ profile }: { profile: Profile }) {
                       <td>
                         <div className="row">
                           <button type="button" className="btn btn--ghost btn--small" aria-label={page.title + ' bearbeiten'} onClick={() => setEditing({ id: page.id, draft: draftOf(page, '') })}>
-                            Bearbeiten
-                          </button>
-                          <Confirm label="Neuer Link" question="Neuen Link erzeugen? Der alte gilt sofort nicht mehr." confirmLabel="Ja, erneuern" busy={busy} accessibleName={'Link von ' + page.title + ' erneuern'} onConfirm={() => void act(async () => {
+                            {t('Bearbeiten')}</button>
+                          <Confirm label={t('Neuer Link')} question={t('Neuen Link erzeugen? Der alte gilt sofort nicht mehr.')} confirmLabel={t('Ja, erneuern')} busy={busy} accessibleName={t('Link von {name} erneuern', { name: page.title })} onConfirm={() => void act(async () => {
                             await request('POST', '/api/status-pages/' + String(page.id) + '/link', { csrf });
                           })} />
-                          <Confirm label="Löschen" question="Statusseite löschen?" confirmLabel="Ja, löschen" busy={busy} accessibleName={page.title + ' löschen'} onConfirm={() => void act(async () => {
+                          <Confirm label={t('Löschen')} question={t('Statusseite löschen?')} confirmLabel={t('Ja, löschen')} busy={busy} accessibleName={t('{name} löschen', { name: page.title })} onConfirm={() => void act(async () => {
                             await request('DELETE', '/api/status-pages/' + String(page.id), { csrf });
                           })} />
                         </div>
@@ -284,7 +279,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
         )}
         {editing !== null && (
           <div className="replace">
-            <h3>Statusseite bearbeiten</h3>
+            <h3>{t('Statusseite bearbeiten')}</h3>
             <PageForm
               draft={editing.draft}
               setDraft={(d) => setEditing({ id: editing.id, draft: d })}
@@ -292,7 +287,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
               candidates={candidates}
               errors={errors}
               busy={busy}
-              submitLabel="Speichern"
+              submitLabel={t('Speichern')}
               onSubmit={() => void submit('PUT', '/api/status-pages/' + String(editing.id), editing.draft).then((ok) => ok && setEditing(null))}
               onCancel={() => {
                 setEditing(null);
@@ -303,8 +298,8 @@ export function StatusPages({ profile }: { profile: Profile }) {
         )}
       </section>
       {editing === null && (
-        <section className="card" aria-label="Statusseite anlegen">
-          <h2>Statusseite anlegen</h2>
+        <section className="card" aria-label={t('Statusseite anlegen')}>
+          <h2>{t('Statusseite anlegen')}</h2>
           <PageForm
             draft={draft}
             setDraft={setDraft}

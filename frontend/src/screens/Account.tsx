@@ -9,6 +9,7 @@ import { roleNames } from '../lib/permissions';
 import type { Profile } from '../types';
 import { ApiTokens } from '../components/ApiTokens';
 import { DisplayNameCard, PasswordCard, SessionsCard } from './AccountExtras';
+import { t } from '../i18n';
 
 interface AccountProps {
   profile: Profile;
@@ -25,7 +26,7 @@ function message(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message + (error.status === 429 ? retryHint(error.retryAfter) : '');
   }
-  return 'Unerwarteter Fehler.';
+  return t('Unerwarteter Fehler.');
 }
 
 /** QR-Code lokal im Browser erzeugt (data:-Bild, img-src der CSP erlaubt es): das Geheimnis verlässt die Seite nie. */
@@ -48,7 +49,7 @@ function QrImage({ uri }: { uri: string }) {
       alive = false;
     };
   }, [uri]);
-  return src === null ? <p className="hint">QR-Code wird erzeugt …</p> : <img src={src} alt="QR-Code zum Einscannen mit der Authenticator-App" />;
+  return src === null ? <p className="hint">{t('QR-Code wird erzeugt …')}</p> : <img src={src} alt={t('QR-Code zum Einscannen mit der Authenticator-App')} />;
 }
 
 export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
@@ -97,7 +98,7 @@ export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
       await request('POST', '/api/auth/2fa/disable', { csrf, body: { password, code: code.trim() } });
       setPassword('');
       setCode('');
-      setInfo('Die Zwei-Faktor-Anmeldung ist abgeschaltet.');
+      setInfo(t('Die Zwei-Faktor-Anmeldung ist abgeschaltet.'));
       await onChanged();
     });
   };
@@ -111,11 +112,10 @@ export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
   // Wiederherstellungscodes: genau einmal sichtbar
   if (recovery !== null) {
     return (
-      <section className="card" aria-label="Wiederherstellungscodes">
-        <h2>Wiederherstellungscodes</h2>
+      <section className="card" aria-label={t('Wiederherstellungscodes')}>
+        <h2>{t('Wiederherstellungscodes')}</h2>
         <Alert tone="warn">
-          Diese Codes erscheinen nur jetzt. Jeder gilt einmal und ersetzt den App-Code, falls du dein Gerät verlierst. Bewahre sie getrennt vom Passwort auf.
-        </Alert>
+          {t('Diese Codes erscheinen nur jetzt. Jeder gilt einmal und ersetzt den App-Code, falls du dein Gerät verlierst. Bewahre sie getrennt vom Passwort auf.')}</Alert>
         <ul className="codes">
           {recovery.map((entry) => (
             <li key={entry}>{entry}</li>
@@ -123,12 +123,11 @@ export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
         </ul>
         <label className="check">
           <input type="checkbox" checked={saved} onChange={(event) => setSaved(event.target.checked)} />
-          <span>Ich habe die Codes sicher gespeichert.</span>
+          <span>{t('Ich habe die Codes sicher gespeichert.')}</span>
         </label>
         <div className="row">
           <button type="button" className="btn btn--solid" disabled={!saved} onClick={() => void finish()}>
-            Fertig
-          </button>
+            {t('Fertig')}</button>
           <button
             type="button"
             className="btn btn--ghost"
@@ -136,8 +135,7 @@ export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
               void navigator.clipboard?.writeText(recovery.join('\n'));
             }}
           >
-            In die Zwischenablage kopieren
-          </button>
+            {t('In die Zwischenablage kopieren')}</button>
         </div>
       </section>
     );
@@ -146,55 +144,53 @@ export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
   return (
     <div className="settings">
     <div className="grid-2">
-      <section className="card" aria-label="Konto">
-        <h2>Konto</h2>
+      <section className="card" aria-label={t('Konto')}>
+        <h2>{t('Konto')}</h2>
         <dl className="facts">
-          <dt>Benutzername</dt>
+          <dt>{t('Benutzername')}</dt>
           <dd>{profile.user.username}</dd>
-          <dt>Anzeigename</dt>
+          <dt>{t('Anzeigename')}</dt>
           <dd>{profile.user.display_name}</dd>
-          <dt>Rolle</dt>
+          <dt>{t('Rolle')}</dt>
           <dd>{roleNames(profile)}</dd>
         </dl>
       </section>
 
-      <section className="card" aria-label="Zwei-Faktor-Anmeldung">
+      <section className="card" aria-label={t('Zwei-Faktor-Anmeldung')}>
         <div className="row">
-          <h2>Zwei-Faktor-Anmeldung</h2>
-          <span className={profile.totp_enabled ? 'badge badge--ok' : 'badge badge--warn'}>{profile.totp_enabled ? 'aktiv' : 'nicht aktiv'}</span>
+          <h2>{t('Zwei-Faktor-Anmeldung')}</h2>
+          <span className={profile.totp_enabled ? 'badge badge--ok' : 'badge badge--warn'}>{profile.totp_enabled ? t('aktiv') : t('nicht aktiv')}</span>
         </div>
         {error !== null && <Alert tone="err">{error}</Alert>}
         {info !== null && <Alert tone="ok">{info}</Alert>}
 
         {!profile.totp_enabled && setup === null && (
           <>
-            <p className="card__lead">Zusätzlich zum Passwort fragt die Anmeldung dann nach einem Code aus einer Authenticator-App (z. B. Aegis, 2FAS oder Google Authenticator).</p>
+            <p className="card__lead">{t('Zusätzlich zum Passwort fragt die Anmeldung dann nach einem Code aus einer Authenticator-App (z. B. Aegis, 2FAS oder Google Authenticator).')}</p>
             <div className="row">
               <button type="button" className="btn btn--solid" disabled={busy} onClick={() => void start()}>
-                Einrichten
-              </button>
+                {t('Einrichten')}</button>
             </div>
           </>
         )}
 
         {!profile.totp_enabled && setup !== null && (
           <form className="form" onSubmit={(event) => void enable(event)}>
-            <p className="card__lead">1. Code in der App einscannen, oder den Schlüssel von Hand eintragen.</p>
+            <p className="card__lead">{t('1. Code in der App einscannen, oder den Schlüssel von Hand eintragen.')}</p>
             <div className="qr">
               <QrImage uri={setup.otpauth_uri} />
               <div className="field">
-                <span className="field__label">Schlüssel zum Abtippen</span>
+                <span className="field__label">{t('Schlüssel zum Abtippen')}</span>
                 <span className="secret">{groupSecret(setup.secret)}</span>
-                <span className="field__hint">Wird nur jetzt angezeigt.</span>
+                <span className="field__hint">{t('Wird nur jetzt angezeigt.')}</span>
               </div>
             </div>
-            <p className="card__lead">2. Zur Bestätigung dein Passwort und den aktuellen 6-stelligen Code der App eingeben.</p>
-            <Field label="Passwort" type="password" name="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            <Field label="Code aus der App" name="code" inputMode="numeric" autoComplete="one-time-code" required mono maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} />
+            <p className="card__lead">{t('2. Zur Bestätigung dein Passwort und den aktuellen 6-stelligen Code der App eingeben.')}</p>
+            <Field label={t('Passwort')} type="password" name="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Field label={t('Code aus der App')} name="code" inputMode="numeric" autoComplete="one-time-code" required mono maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} />
             <div className="row">
               <button type="submit" className="btn btn--solid" disabled={busy || password === '' || code.trim().length !== 6}>
-                Aktivieren
-              </button>
+                {t('Aktivieren')}</button>
               <button
                 type="button"
                 className="btn btn--ghost"
@@ -205,21 +201,19 @@ export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
                   setCode('');
                 }}
               >
-                Abbrechen
-              </button>
+                {t('Abbrechen')}</button>
             </div>
           </form>
         )}
 
         {profile.totp_enabled && (
           <form className="form" onSubmit={(event) => void disable(event)}>
-            <p className="card__lead">Zum Abschalten brauchst du dein Passwort und einen gültigen Code (App oder Wiederherstellungscode).</p>
-            <Field label="Passwort" type="password" name="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            <Field label="Code" name="code" autoComplete="one-time-code" required mono maxLength={32} value={code} onChange={(e) => setCode(e.target.value)} />
+            <p className="card__lead">{t('Zum Abschalten brauchst du dein Passwort und einen gültigen Code (App oder Wiederherstellungscode).')}</p>
+            <Field label={t('Passwort')} type="password" name="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Field label={t('Code')} name="code" autoComplete="one-time-code" required mono maxLength={32} value={code} onChange={(e) => setCode(e.target.value)} />
             <div className="row">
               <button type="submit" className="btn btn--danger" disabled={busy || password === '' || code.trim() === ''}>
-                Abschalten
-              </button>
+                {t('Abschalten')}</button>
             </div>
           </form>
         )}

@@ -51,45 +51,45 @@ const ICONS: Record<string, string> = {
 function groups(profile: Profile): NavGroup[] {
   const jobs = canViewJobs(profile);
   const operate: NavEntry[] = [
-    { path: '', label: 'Übersicht', icon: 'home', current: (r) => r.name === 'home' },
+    { path: '', label: t('Übersicht'), icon: 'home', current: (r) => r.name === 'home' },
     jobs
-      ? { path: 'jobs', label: 'Jobs', icon: 'jobs', current: (r) => r.name === 'jobs' || r.name === 'job-new' || r.name === 'job' || r.name === 'job-edit' }
-      : { path: null, label: 'Jobs', icon: 'jobs', hint: 'bald' },
-    jobs ? { path: 'verlauf', label: 'Verlauf', icon: 'history', current: (r) => r.name === 'history' } : { path: null, label: 'Verlauf', icon: 'history', hint: 'bald' },
+      ? { path: 'jobs', label: t('Jobs'), icon: 'jobs', current: (r) => r.name === 'jobs' || r.name === 'job-new' || r.name === 'job' || r.name === 'job-edit' }
+      : { path: null, label: t('Jobs'), icon: 'jobs', hint: t('bald') },
+    jobs ? { path: 'verlauf', label: t('Verlauf'), icon: 'history', current: (r) => r.name === 'history' } : { path: null, label: t('Verlauf'), icon: 'history', hint: t('bald') },
   ];
   const observe: NavEntry[] = [
-    jobs ? { path: 'statistik', label: 'Statistik', icon: 'stats', current: (r) => r.name === 'stats' } : { path: null, label: 'Statistik', icon: 'stats', hint: 'bald' },
-    jobs ? { path: 'ueberwachung', label: 'Überwachung', icon: 'monitor', current: (r) => r.name === 'monitors' } : { path: null, label: 'Überwachung', icon: 'monitor', hint: 'bald' },
+    jobs ? { path: 'statistik', label: t('Statistik'), icon: 'stats', current: (r) => r.name === 'stats' } : { path: null, label: t('Statistik'), icon: 'stats', hint: t('bald') },
+    jobs ? { path: 'ueberwachung', label: t('Überwachung'), icon: 'monitor', current: (r) => r.name === 'monitors' } : { path: null, label: t('Überwachung'), icon: 'monitor', hint: t('bald') },
     canEditStatusPages(profile)
-      ? { path: 'statusseiten', label: 'Statusseiten', icon: 'status', current: (r) => r.name === 'status-pages' }
-      : { path: null, label: 'Statusseiten', icon: 'status', hint: 'bald' },
+      ? { path: 'statusseiten', label: t('Statusseiten'), icon: 'status', current: (r) => r.name === 'status-pages' }
+      : { path: null, label: t('Statusseiten'), icon: 'status', hint: t('bald') },
   ];
   const admin: NavEntry[] = [];
   if (canSeeUsersArea(profile)) {
     admin.push({
       path: canManageUsers(profile) ? 'benutzer' : 'benutzer/rollen',
-      label: 'Benutzer & Rollen',
+      label: t('Benutzer & Rollen'),
       icon: 'users',
       current: (r) => r.name === 'users' || r.name === 'roles' || r.name === 'role-new' || r.name === 'role' || r.name === 'user-new' || r.name === 'user',
     });
   }
   if (canManageCategories(profile)) {
-    admin.push({ path: 'kategorien', label: 'Kategorien', icon: 'folder', current: (r) => r.name === 'categories' });
+    admin.push({ path: 'kategorien', label: t('Kategorien'), icon: 'folder', current: (r) => r.name === 'categories' });
   }
   if (canManageUsers(profile)) {
-    admin.push({ path: 'audit', label: 'Audit-Log', icon: 'audit', current: (r) => r.name === 'audit' });
+    admin.push({ path: 'audit', label: t('Audit-Log'), icon: 'audit', current: (r) => r.name === 'audit' });
   }
   if (canManageSettings(profile) || canManageInternalTargets(profile) || canManageShellTargets(profile)) {
-    admin.push({ path: 'einstellungen', label: 'Einstellungen', icon: 'settings', current: (r) => r.name === 'settings' });
+    admin.push({ path: 'einstellungen', label: t('Einstellungen'), icon: 'settings', current: (r) => r.name === 'settings' });
   }
   const result: NavGroup[] = [
-    { label: 'Betrieb', items: operate },
-    { label: 'Beobachten', items: observe },
+    { label: t('Betrieb'), items: operate },
+    { label: t('Beobachten'), items: observe },
   ];
   if (admin.length > 0) {
-    result.push({ label: 'Verwaltung', items: admin });
+    result.push({ label: t('Verwaltung'), items: admin });
   }
-  result.push({ label: 'Konto', items: [{ path: 'konto', label: 'Mein Konto', icon: 'account', current: (r) => r.name === 'konto' }] });
+  result.push({ label: t('Konto'), items: [{ path: 'konto', label: t('Mein Konto'), icon: 'account', current: (r) => r.name === 'konto' }] });
   return result;
 }
 
@@ -190,9 +190,6 @@ export function Layout({ profile, route, kicker, title, onLogout, children }: La
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
         <Brand />
-        <div className="mobilebar__tools">
-          <LanguageSwitch csrf={profile.csrf_token} />
-        </div>
       </header>
       <button type="button" className="drawer-backdrop" tabIndex={-1} aria-label={t('Menü schließen')} onClick={() => close(true)} />
       <nav id="hauptnavigation" ref={sidebarRef} className="sidebar" aria-label={t('Hauptnavigation')}>
@@ -238,6 +235,7 @@ export function Layout({ profile, route, kicker, title, onLogout, children }: La
           </div>
           <div className="userbox__actions">
             <ThemeSwitch csrf={profile.csrf_token} />
+            <div className="userbox__lang"><LanguageSwitch csrf={profile.csrf_token} /></div>
             <button type="button" className="btn btn--ghost btn--small userbox__logout" onClick={onLogout}>
               {t('Abmelden')}
             </button>

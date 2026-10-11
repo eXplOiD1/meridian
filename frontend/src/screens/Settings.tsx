@@ -10,6 +10,7 @@ import { errorMessage } from '../lib/errors';
 import { formatTime } from '../lib/format';
 import { canManageInternalTargets, canManageSettings, canManageShellTargets } from '../lib/permissions';
 import type { CategoryRef, InternalTarget, Profile, SettingChange, SettingEntry, ShellTargetEntry } from '../types';
+import { t } from '../i18n';
 
 /** Beschreibung je Einstellung. Der Server kennt dieselbe Allowlist und lehnt alles andere ab. */
 interface SettingSpec {
@@ -37,8 +38,7 @@ const SPECS: SettingSpec[] = [
     numberLabel: 'Sekunden',
     extra: () => (
       <Alert tone="info">
-        Alle Jobs laufen derzeit nacheinander. Ein Lauf mit langem Zeitlimit kann andere Läufe so lange aufhalten; Termine, die dabei mehr als 5 Minuten überfällig werden, gelten als verpasst.
-      </Alert>
+        {t('Alle Jobs laufen derzeit nacheinander. Ein Lauf mit langem Zeitlimit kann andere Läufe so lange aufhalten; Termine, die dabei mehr als 5 Minuten überfällig werden, gelten als verpasst.')}</Alert>
     ),
   },
   {
@@ -61,9 +61,8 @@ const SPECS: SettingSpec[] = [
     ],
     extra: (entry) => (
       <Alert tone="warn">
-        „Immer verbergen“ verschärft bestehende Jobs sofort: Ihre gespeicherten Anzeige-URLs werden gekürzt. Das Zurückstellen auf „Automatisch“ lockert nichts nachträglich: Bereits gekürzte Anzeigen
-        kommen nicht zurück, erst neu gespeicherte Anfragen nutzen wieder die automatische Anzeige.
-        {entry.value === 'hidden' ? ' Aktuell ist „Immer verbergen“ aktiv.' : ''}
+        {t('„Immer verbergen“ verschärft bestehende Jobs sofort: Ihre gespeicherten Anzeige-URLs werden gekürzt. Das Zurückstellen auf „Automatisch“ lockert nichts nachträglich: Bereits gekürzte Anzeigen kommen nicht zurück, erst neu gespeicherte Anfragen nutzen wieder die automatische Anzeige.')}
+        {entry.value === 'hidden' ? ' ' + t('Aktuell ist „Immer verbergen“ aktiv.') : ''}
       </Alert>
     ),
   },
@@ -77,9 +76,8 @@ const SPECS: SettingSpec[] = [
     ],
     extra: (entry) => (
       <Alert tone="warn">
-        „Immer verbergen“ verschärft bestehende Jobs sofort: Ihre gespeicherten Anzeige-URLs verlieren den Host. Das Zurückstellen auf „Automatisch“ lockert nichts nachträglich: Bereits verborgene Anzeigen
-        kommen nicht zurück, erst neu gespeicherte Anfragen zeigen den Host wieder.
-        {entry.value === 'hidden' ? ' Aktuell ist „Immer verbergen“ aktiv.' : ''}
+        {t('„Immer verbergen“ verschärft bestehende Jobs sofort: Ihre gespeicherten Anzeige-URLs verlieren den Host. Das Zurückstellen auf „Automatisch“ lockert nichts nachträglich: Bereits verborgene Anzeigen kommen nicht zurück, erst neu gespeicherte Anfragen zeigen den Host wieder.')}
+        {entry.value === 'hidden' ? ' ' + t('Aktuell ist „Immer verbergen“ aktiv.') : ''}
       </Alert>
     ),
   },
@@ -106,9 +104,8 @@ const EDITOR_SPECS: SettingSpec[] = [
     ],
     extra: (entry) => (
       <Alert tone="warn">
-        <strong>Achtung:</strong> Wer bearbeiten darf, kann Geheimnisse im Klartext sehen: Tokens in URLs, Header-Werte, Skripte und Umgebungsvariablen. Jeder Abruf wird im Audit-Log protokolliert
-        („job.source_viewed“), höchstens 60 Abrufe je Benutzer und Stunde. Standard ist aus.
-        {entry.value === 'on' ? ' Aktuell ist die Anzeige eingeschaltet.' : ''}
+        <strong>{t('Achtung:')}</strong> {t('Wer bearbeiten darf, kann Geheimnisse im Klartext sehen: Tokens in URLs, Header-Werte, Skripte und Umgebungsvariablen. Jeder Abruf wird im Audit-Log protokolliert („job.source_viewed“), höchstens 60 Abrufe je Benutzer und Stunde. Standard ist aus.')}
+        {entry.value === 'on' ? ' ' + t('Aktuell ist die Anzeige eingeschaltet.') : ''}
       </Alert>
     ),
   },
@@ -122,8 +119,8 @@ const APP_SPECS: SettingSpec[] = [
     options: null,
     numberLabel: 'Tage (0 = niemals)',
     unit: 'Tage',
-    describe: (value) => (value < 0 ? 'Standard (2 Std. Leerlauf, 12 Std. gesamt)' : value === 0 ? 'niemals ablaufen' : null),
-    extra: () => <Alert tone="warn">Lange Sitzungen sind bequem, aber ein gestohlenes Cookie gilt dann ebenso lange. Besser sparsam einstellen; Benutzer können eigene Sitzungen unter „Mein Konto“ beenden.</Alert>,
+    describe: (value) => (value < 0 ? t('Standard (2 Std. Leerlauf, 12 Std. gesamt)') : value === 0 ? t('niemals ablaufen') : null),
+    extra: () => <Alert tone="warn">{t('Lange Sitzungen sind bequem, aber ein gestohlenes Cookie gilt dann ebenso lange. Besser sparsam einstellen; Benutzer können eigene Sitzungen unter „Mein Konto“ beenden.')}</Alert>,
   },
   {
     key: 'jobs.min_interval_seconds',
@@ -140,7 +137,7 @@ const APP_SPECS: SettingSpec[] = [
     options: null,
     numberLabel: 'Tage',
     unit: 'Tage',
-    extra: () => <Alert tone="warn">Eine kürzere Zeit löscht ältere Läufe beim nächsten Durchgang (innerhalb von 10 Minuten). Das lässt sich nicht rückgängig machen.</Alert>,
+    extra: () => <Alert tone="warn">{t('Eine kürzere Zeit löscht ältere Läufe beim nächsten Durchgang (innerhalb von 10 Minuten). Das lässt sich nicht rückgängig machen.')}</Alert>,
   },
   {
     key: 'app.public_url',
@@ -154,16 +151,17 @@ const APP_SPECS: SettingSpec[] = [
 
 function optionLabel(spec: SettingSpec, value: number | string): string {
   if (spec.text === true) {
-    return value === '' ? '(nicht gesetzt)' : String(value);
+    return value === '' ? t('(nicht gesetzt)') : String(value);
   }
   if (spec.options === null) {
     const special = spec.describe !== undefined && typeof value === 'number' ? spec.describe(value) : null;
     if (special !== null) {
-      return special;
+      return t(special);
     }
-    return String(value) + ' ' + (spec.unit ?? 's');
+    return String(value) + ' ' + t(spec.unit ?? 's');
   }
-  return spec.options.find((option) => option.value === value)?.label ?? String(value);
+  const found = spec.options.find((option) => option.value === value)?.label;
+  return found === undefined ? String(value) : t(found);
 }
 
 function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry: SettingEntry; csrf: string; onSaved: (entry: SettingEntry) => void }) {
@@ -189,8 +187,8 @@ function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry:
       onSaved(result.setting);
       const tightened = result.tightened_jobs;
       setDone(
-        (value === null ? 'Auf den Standard zurückgesetzt.' : 'Gespeichert.') +
-          (tightened > 0 ? ' Die Anzeige wurde bei ' + String(tightened) + (tightened === 1 ? ' Job' : ' Jobs') + ' verschärft.' : ''),
+        (value === null ? t('Auf den Standard zurückgesetzt.') : 'Gespeichert.') +
+          (tightened > 0 ? ' ' + t('Die Anzeige wurde bei {n} verschärft.', { n: String(tightened) + ' ' + (tightened === 1 ? t('Job') : t('Jobs')) }) : ''),
       );
     } catch (caught) {
       if (caught instanceof ApiError && caught.fields.value !== undefined) {
@@ -216,30 +214,30 @@ function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry:
   return (
     <form className="setting" onSubmit={submit} aria-labelledby={headingId}>
       <div className="setting__head">
-        <h3 id={headingId}>{spec.title}</h3>
-        <span className={'badge ' + (entry.source === 'stored' ? 'badge--warn' : 'badge--ok')}>{entry.source === 'stored' ? 'Geändert' : 'Standard'}</span>
+        <h3 id={headingId}>{t(spec.title)}</h3>
+        <span className={'badge ' + (entry.source === 'stored' ? 'badge--warn' : 'badge--ok')}>{entry.source === 'stored' ? t('Geändert') : t('Standard')}</span>
       </div>
-      <ExpandableLead text={spec.lead} />
+      <ExpandableLead text={t(spec.lead)} />
       <dl className="facts">
-        <dt>Aktuell</dt>
+        <dt>{t('Aktuell')}</dt>
         <dd>
           <strong>{optionLabel(spec, entry.value)}</strong>
         </dd>
-        <dt>Standard</dt>
+        <dt>{t('Standard')}</dt>
         <dd>{optionLabel(spec, entry.default)}</dd>
         {entry.source === 'stored' && entry.updated_at !== null && (
           <>
-            <dt>Geändert</dt>
+            <dt>{t('Geändert')}</dt>
             <dd>
               {formatTime(entry.updated_at)}
-              {entry.updated_by !== null ? ' von ' + entry.updated_by.display_name : ''}
+              {entry.updated_by !== null ? ' ' + t('von') + ' ' + entry.updated_by.display_name : ''}
             </dd>
           </>
         )}
       </dl>
       {error !== null && <Alert tone="err">{error}</Alert>}
       {done !== null && <Alert tone="ok">{done}</Alert>}
-      <FormField label={spec.numberLabel ?? 'Neuer Wert'} error={fieldError} hint={help}>
+      <FormField label={t(spec.numberLabel ?? 'Neuer Wert')} error={fieldError} hint={help === undefined ? undefined : t(help)}>
         {(aria) =>
           spec.options === null ? (
             <input {...aria} className={spec.text === true ? 'input' : 'input input--short'} name={spec.key} inputMode={spec.text === true ? 'url' : 'numeric'} autoComplete="off" value={draft} onChange={(e) => setDraft(e.target.value)} />
@@ -247,7 +245,7 @@ function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry:
             <select {...aria} className="input input--short" name={spec.key} value={draft} onChange={(e) => setDraft(e.target.value)}>
               {spec.options.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.label)}
                 </option>
               ))}
             </select>
@@ -257,11 +255,10 @@ function SettingCard({ spec, entry, csrf, onSaved }: { spec: SettingSpec; entry:
       {spec.extra?.(entry)}
       <div className="row">
         <button type="submit" className="btn btn--solid" disabled={busy || !changed}>
-          {busy ? 'Speichert …' : 'Speichern'}
+          {busy ? t('Speichert …') : t('Speichern')}
         </button>
         <button type="button" className="btn btn--ghost" disabled={busy || entry.source === 'default'} onClick={() => void send(null)}>
-          Auf Standard zurücksetzen
-        </button>
+          {t('Auf Standard zurücksetzen')}</button>
       </div>
     </form>
   );
@@ -298,7 +295,7 @@ function SettingsGroup({ id, title, lead, specs, csrf }: { id: string; title: st
       <h2 id={id}>{title}</h2>
       <p className="card__lead">{lead}</p>
       {error !== null && <Alert tone="err">{error}</Alert>}
-      {entries === null && error === null && <p className="hint">Lädt …</p>}
+      {entries === null && error === null && <p className="hint">{t('Lädt …')}</p>}
       {entries !== null &&
         specs.map((spec) => {
           const entry = entries.find((candidate) => candidate.key === spec.key);
@@ -312,8 +309,8 @@ function HttpSettings({ csrf }: { csrf: string }) {
   return (
     <SettingsGroup
       id="settings-http"
-      title="HTTP-Jobs"
-      lead="Globale Grenzwerte für alle HTTP-Jobs. Änderungen gelten beim nächsten Lauf ohne Neustart und werden im Audit-Log festgehalten."
+      title={t('HTTP-Jobs')}
+      lead={t('Globale Grenzwerte für alle HTTP-Jobs. Änderungen gelten beim nächsten Lauf ohne Neustart und werden im Audit-Log festgehalten.')}
       specs={SPECS}
       csrf={csrf}
     />
@@ -324,8 +321,8 @@ function ShellSettings({ csrf }: { csrf: string }) {
   return (
     <SettingsGroup
       id="settings-shell"
-      title="Shell-Jobs"
-      lead="Globale Grenzwerte für alle Shell-Jobs. Änderungen gelten beim nächsten Lauf ohne Neustart und werden im Audit-Log festgehalten."
+      title={t('Shell-Jobs')}
+      lead={t('Globale Grenzwerte für alle Shell-Jobs. Änderungen gelten beim nächsten Lauf ohne Neustart und werden im Audit-Log festgehalten.')}
       specs={SHELL_SPECS}
       csrf={csrf}
     />
@@ -333,15 +330,15 @@ function ShellSettings({ csrf }: { csrf: string }) {
 }
 
 function AppSettings({ csrf }: { csrf: string }) {
-  return <SettingsGroup id="settings-app" title="Allgemein" lead="Angaben, die Meridian über sich selbst braucht. Änderungen gelten sofort und werden im Audit-Log festgehalten." specs={APP_SPECS} csrf={csrf} />;
+  return <SettingsGroup id="settings-app" title={t('Allgemein')} lead={t('Angaben, die Meridian über sich selbst braucht. Änderungen gelten sofort und werden im Audit-Log festgehalten.')} specs={APP_SPECS} csrf={csrf} />;
 }
 
 function EditorSettings({ csrf }: { csrf: string }) {
   return (
     <SettingsGroup
       id="settings-editor"
-      title="Job-Editor"
-      lead="Was der Job-Editor von gespeicherten Jobs zeigt. Änderungen gelten sofort und werden im Audit-Log festgehalten."
+      title={t('Job-Editor')}
+      lead={t('Was der Job-Editor von gespeicherten Jobs zeigt. Änderungen gelten sofort und werden im Audit-Log festgehalten.')}
       specs={EDITOR_SPECS}
       csrf={csrf}
     />
@@ -351,7 +348,7 @@ function EditorSettings({ csrf }: { csrf: string }) {
 const EMPTY_FORM = { kind: 'cidr', value: '', port: '', categoryId: '', note: '' };
 
 function scopeLabel(target: InternalTarget): string {
-  return target.category === null ? 'Global (alle Kategorien)' : 'Kategorie „' + target.category.name + '“';
+  return target.category === null ? t('Global (alle Kategorien)') : t('Kategorie „{name}“', { name: target.category.name });
 }
 
 function InternalTargets({ csrf }: { csrf: string }) {
@@ -408,7 +405,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
       });
       setTargets((current) => [...(current ?? []), result.target]);
       setForm({ ...EMPTY_FORM, kind: form.kind });
-      setNotice('Freigabe angelegt. Sie gilt ab dem nächsten Lauf.');
+      setNotice(t('Freigabe angelegt. Sie gilt ab dem nächsten Lauf.'));
     } catch (caught) {
       if (caught instanceof ApiError && Object.keys(caught.fields).length > 0) {
         setErrors(caught.fields);
@@ -428,7 +425,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
     try {
       await request<null>('DELETE', '/api/settings/internal-targets/' + String(target.id), { csrf });
       setTargets((current) => current?.filter((entry) => entry.id !== target.id) ?? current);
-      setNotice('Freigabe entfernt. Sie gilt ab dem nächsten Lauf nicht mehr.');
+      setNotice(t('Freigabe entfernt. Sie gilt ab dem nächsten Lauf nicht mehr.'));
     } catch (caught) {
       setFormError(errorMessage(caught));
     } finally {
@@ -438,35 +435,30 @@ function InternalTargets({ csrf }: { csrf: string }) {
 
   return (
     <section className="card" aria-labelledby="settings-targets">
-      <h2 id="settings-targets">Freigaben interner Ziele</h2>
+      <h2 id="settings-targets">{t('Freigaben interner Ziele')}</h2>
       <p className="card__lead">
-        HTTP-Jobs erreichen Adressen in privaten Netzen und auf dem eigenen Rechner nur, wenn hier eine passende Freigabe besteht. Eine Freigabe gilt global oder für genau eine Kategorie, optional nur für einen Port.
-      </p>
+        {t('HTTP-Jobs erreichen Adressen in privaten Netzen und auf dem eigenen Rechner nur, wenn hier eine passende Freigabe besteht. Eine Freigabe gilt global oder für genau eine Kategorie, optional nur für einen Port.')}</p>
       <Alert tone="warn">
-        Jede Freigabe lockert den Schutz vor Zugriffen auf interne Dienste: Wer Jobs in diesem Geltungsbereich bearbeiten darf, kann diesen Dienst aufrufen. Gib nur Ziele frei, die dafür gedacht sind, und
-        wähle möglichst eine Kategorie und einen Port.
-      </Alert>
+        {t('Jede Freigabe lockert den Schutz vor Zugriffen auf interne Dienste: Wer Jobs in diesem Geltungsbereich bearbeiten darf, kann diesen Dienst aufrufen. Gib nur Ziele frei, die dafür gedacht sind, und wähle möglichst eine Kategorie und einen Port.')}</Alert>
       <p className="hint">
-        Nie freigebbar sind Link-local-Adressen (169.254.0.0/16, fe80::/10) einschließlich der Metadaten-Dienste von Cloud-Anbietern, unspezifizierte, Multicast-, Broadcast- und reservierte Bereiche
-        sowie Meridians eigene Infrastruktur: der Docker-Socket-Proxy (jeder Port), die Docker-API-Ports 2375 und 2376 sowie Meridians eigener Port auf dem eigenen Rechner. Hostnamen geben nur private Adressen frei, Loopback nur als einzelne Adresse mit Port. Wird eine Kategorie gelöscht, entfallen ihre Freigaben, sie werden nie global.
-      </p>
+        {t('Nie freigebbar sind Link-local-Adressen (169.254.0.0/16, fe80::/10) einschließlich der Metadaten-Dienste von Cloud-Anbietern, unspezifizierte, Multicast-, Broadcast- und reservierte Bereiche sowie Meridians eigene Infrastruktur: der Docker-Socket-Proxy (jeder Port), die Docker-API-Ports 2375 und 2376 sowie Meridians eigener Port auf dem eigenen Rechner. Hostnamen geben nur private Adressen frei, Loopback nur als einzelne Adresse mit Port. Wird eine Kategorie gelöscht, entfallen ihre Freigaben, sie werden nie global.')}</p>
 
       {loadError !== null && <Alert tone="err">{loadError}</Alert>}
       {notice !== null && <Alert tone="ok">{notice}</Alert>}
-      {targets === null && loadError === null && <p className="hint">Lädt …</p>}
+      {targets === null && loadError === null && <p className="hint">{t('Lädt …')}</p>}
       {targets !== null && (
         <div className="table-wrap">
           <table className="table table--stack">
-            <caption className="visually-hidden">Freigegebene interne Ziele</caption>
+            <caption className="visually-hidden">{t('Freigegebene interne Ziele')}</caption>
             <thead>
               <tr>
-                <th scope="col">Ziel</th>
-                <th scope="col">Port</th>
-                <th scope="col">Gilt für</th>
-                <th scope="col">Notiz</th>
-                <th scope="col">Angelegt</th>
+                <th scope="col">{t('Ziel')}</th>
+                <th scope="col">{t('Port')}</th>
+                <th scope="col">{t('Gilt für')}</th>
+                <th scope="col">{t('Notiz')}</th>
+                <th scope="col">{t('Angelegt')}</th>
                 <th scope="col">
-                  <span className="visually-hidden">Aktion</span>
+                  <span className="visually-hidden">{t('Aktion')}</span>
                 </th>
               </tr>
             </thead>
@@ -474,7 +466,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
               {targets.map((target) => (
                 <tr key={target.id}>
                   <td data-label="Ziel">
-                    <span className="mono">{target.value}</span> <span className="hint">({target.kind === 'cidr' ? 'Netz' : 'Hostname'})</span>
+                    <span className="mono">{target.value}</span> <span className="hint">({target.kind === 'cidr' ? t('Netz') : t('Hostname')})</span>
                   </td>
                   <td data-label="Port" className="mono">
                     {target.port === 0 ? 'alle' : target.port}
@@ -487,10 +479,10 @@ function InternalTargets({ csrf }: { csrf: string }) {
                   </td>
                   <td>
                     <Confirm
-                      label="Entfernen"
-                      accessibleName={'Freigabe ' + target.value + ' entfernen'}
-                      question="Freigabe entfernen?"
-                      confirmLabel="Ja, entfernen"
+                      label={t('Entfernen')}
+                      accessibleName={t('Freigabe {name} entfernen', { name: target.value })}
+                      question={t('Freigabe entfernen?')}
+                      confirmLabel={t('Ja, entfernen')}
                       busy={busy}
                       onConfirm={() => void remove(target)}
                     />
@@ -500,8 +492,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
               {targets.length === 0 && (
                 <tr>
                   <td colSpan={6} className="hint">
-                    Keine Freigaben: Alle internen Ziele sind gesperrt.
-                  </td>
+                    {t('Keine Freigaben: Alle internen Ziele sind gesperrt.')}</td>
                 </tr>
               )}
             </tbody>
@@ -510,21 +501,21 @@ function InternalTargets({ csrf }: { csrf: string }) {
       )}
 
       <form className="form targets__form" onSubmit={(event) => void add(event)} aria-labelledby="settings-targets-add">
-        <h3 id="settings-targets-add">Freigabe hinzufügen</h3>
+        <h3 id="settings-targets-add">{t('Freigabe hinzufügen')}</h3>
         {formError !== null && <Alert tone="err">{formError}</Alert>}
         <div className="grid-2">
-          <FormField label="Art" error={errors.kind}>
+          <FormField label={t('Art')} error={errors.kind}>
             {(aria) => (
               <select {...aria} className="input" name="kind" value={form.kind} onChange={(e) => set('kind', e.target.value)}>
-                <option value="cidr">Netz oder Adresse (CIDR)</option>
-                <option value="host">Hostname</option>
+                <option value="cidr">{t('Netz oder Adresse (CIDR)')}</option>
+                <option value="host">{t('Hostname')}</option>
               </select>
             )}
           </FormField>
           <FormField
-            label={form.kind === 'cidr' ? 'Netz oder Adresse' : 'Hostname'}
+            label={form.kind === 'cidr' ? t('Netz oder Adresse') : t('Hostname')}
             error={errors.value}
-            hint={form.kind === 'cidr' ? 'z. B. 192.168.10.0/24 oder 127.0.0.1/32' : 'z. B. nextcloud oder intranet.firma.local'}
+            hint={form.kind === 'cidr' ? t('z. B. 192.168.10.0/24 oder 127.0.0.1/32') : t('z. B. nextcloud oder intranet.firma.local')}
           >
             {(aria) => (
               <input {...aria} className="input input--mono" name="value" required autoComplete="off" spellCheck={false} value={form.value} onChange={(e) => set('value', e.target.value)} />
@@ -532,29 +523,29 @@ function InternalTargets({ csrf }: { csrf: string }) {
           </FormField>
         </div>
         <div className="grid-2">
-          <FormField label="Port" error={errors.port} hint="Leer = alle Ports. Für Loopback ist ein Port nötig.">
+          <FormField label={t('Port')} error={errors.port} hint={t('Leer = alle Ports. Für Loopback ist ein Port nötig.')}>
             {(aria) => <input {...aria} className="input input--short" name="port" inputMode="numeric" autoComplete="off" value={form.port} onChange={(e) => set('port', e.target.value)} />}
           </FormField>
-          <FormField label="Gilt für" error={errors.category_id} hint="„Global“ erlaubt das Ziel allen Jobs, auch Jobs ohne Kategorie.">
+          <FormField label={t('Gilt für')} error={errors.category_id} hint={t('„Global“ erlaubt das Ziel allen Jobs, auch Jobs ohne Kategorie.')}>
             {(aria) => (
               <select {...aria} className="input" name="category" value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)}>
-                <option value="">Global (alle Kategorien)</option>
+                <option value="">{t('Global (alle Kategorien)')}</option>
                 {categories.map((category) => (
                   <option key={category.id} value={String(category.id)}>
-                    Kategorie „{category.name}“
+                    {t('Kategorie „{name}“', { name: category.name })}
                   </option>
                 ))}
               </select>
             )}
           </FormField>
         </div>
-        <FormField label="Notiz" error={errors.note} hint="Wofür ist die Freigabe? (optional)">
+        <FormField label={t('Notiz')} error={errors.note} hint={t('Wofür ist die Freigabe? (optional)')}>
           {(aria) => <input {...aria} className="input" name="note" maxLength={200} autoComplete="off" value={form.note} onChange={(e) => set('note', e.target.value)} />}
         </FormField>
         {errors.body !== undefined && <Alert tone="err">{errors.body}</Alert>}
         <div className="row">
           <button type="submit" className="btn btn--solid" disabled={busy || form.value.trim() === ''}>
-            {busy ? 'Speichert …' : 'Freigabe anlegen'}
+            {busy ? t('Speichert …') : t('Freigabe anlegen')}
           </button>
         </div>
       </form>
@@ -565,7 +556,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
 const EMPTY_SHELL_FORM = { kind: 'docker', name: '', categoryId: '', users: '', defaultUser: '', note: '' };
 
 function shellScopeLabel(target: ShellTargetEntry): string {
-  return target.category === null ? 'Global (alle Kategorien)' : 'Kategorie „' + target.category.name + '“';
+  return target.category === null ? t('Global (alle Kategorien)') : t('Kategorie „{name}“', { name: target.category.name });
 }
 
 /** Benutzerliste aus Kommas, Leerzeichen oder Zeilen; Leereinträge fallen weg, geprüft wird auf dem Server. */
@@ -671,7 +662,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       const result = await request<{ target: ShellTargetEntry }>('POST', '/api/settings/shell-targets', { csrf, body });
       setTargets((current) => [...(current ?? []), result.target]);
       setForm({ ...EMPTY_SHELL_FORM, kind: form.kind });
-      setNotice('Ausführungsort angelegt. Er steht ab sofort im Job-Editor zur Wahl.');
+      setNotice(t('Ausführungsort angelegt. Er steht ab sofort im Job-Editor zur Wahl.'));
     } catch (caught) {
       if (caught instanceof ApiError && Object.keys(caught.fields).length > 0) {
         setErrors(caught.fields);
@@ -694,7 +685,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       if (editing?.id === target.id) {
         cancelEdit();
       }
-      setNotice('Ausführungsort entfernt. Jobs, die ihn nutzen, schlagen ab dem nächsten Lauf fehl, bis ein anderer gewählt ist.');
+      setNotice(t('Ausführungsort entfernt. Jobs, die ihn nutzen, schlagen ab dem nächsten Lauf fehl, bis ein anderer gewählt ist.'));
     } catch (caught) {
       setFormError(errorMessage(caught));
     } finally {
@@ -704,35 +695,32 @@ function ShellTargets({ csrf }: { csrf: string }) {
 
   return (
     <section className="card" aria-labelledby="settings-shell-targets">
-      <h2 id="settings-shell-targets">Ausführungsorte</h2>
+      <h2 id="settings-shell-targets">{t('Ausführungsorte')}</h2>
       <p className="card__lead">
-        Shell-Jobs laufen nie in Meridian selbst, sondern nur an einem hier freigegebenen Ort: in einem Docker-Container oder als Host-Profil. Eine Freigabe gilt global oder für genau eine Kategorie.
-      </p>
+        {t('Shell-Jobs laufen nie in Meridian selbst, sondern nur an einem hier freigegebenen Ort: in einem Docker-Container oder als Host-Profil. Eine Freigabe gilt global oder für genau eine Kategorie.')}</p>
       <Alert tone="warn">
-        Eine Freigabe erlaubt Administratoren mit dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle an diesem Ort. Diese Freigabe ist die einzige nötige Einstellung: Der Container muss laufen und der Name muss exakt stimmen. Meridians eigene Container (meridian-…, außer meridian-sandbox) sind gesperrt. Gib nur Orte frei, die dafür gedacht sind, und wähle
-        möglichst eine Kategorie.
-      </Alert>
+        {t('Eine Freigabe erlaubt Administratoren mit dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle an diesem Ort. Diese Freigabe ist die einzige nötige Einstellung: Der Container muss laufen und der Name muss exakt stimmen. Meridians eigene Container (meridian-…, außer meridian-sandbox) sind gesperrt. Gib nur Orte frei, die dafür gedacht sind, und wähle möglichst eine Kategorie.')}</Alert>
       <p className="hint">
-        <strong>root nur ausdrücklich:</strong> Trage root (oder die Benutzer-ID 0) nur ein, wenn es unbedingt nötig ist. Ohne diesen Eintrag kann kein Job als root laufen. Wird eine Kategorie gelöscht, entfallen ihre Freigaben, sie werden nie global.
+        <strong>{t('root nur ausdrücklich:')}</strong> {t('Trage root (oder die Benutzer-ID 0) nur ein, wenn es unbedingt nötig ist. Ohne diesen Eintrag kann kein Job als root laufen. Wird eine Kategorie gelöscht, entfallen ihre Freigaben, sie werden nie global.')}
       </p>
 
       {loadError !== null && <Alert tone="err">{loadError}</Alert>}
       {notice !== null && <Alert tone="ok">{notice}</Alert>}
-      {targets === null && loadError === null && <p className="hint">Lädt …</p>}
+      {targets === null && loadError === null && <p className="hint">{t('Lädt …')}</p>}
       {targets !== null && (
         <div className="table-wrap">
           <table className="table table--stack">
-            <caption className="visually-hidden">Freigegebene Ausführungsorte</caption>
+            <caption className="visually-hidden">{t('Freigegebene Ausführungsorte')}</caption>
             <thead>
               <tr>
-                <th scope="col">Art</th>
-                <th scope="col">Name</th>
-                <th scope="col">Gilt für</th>
-                <th scope="col">Benutzer (Standard)</th>
-                <th scope="col">Notiz</th>
-                <th scope="col">Angelegt</th>
+                <th scope="col">{t('Art')}</th>
+                <th scope="col">{t('Name')}</th>
+                <th scope="col">{t('Gilt für')}</th>
+                <th scope="col">{t('Benutzer (Standard)')}</th>
+                <th scope="col">{t('Notiz')}</th>
+                <th scope="col">{t('Angelegt')}</th>
                 <th scope="col">
-                  <span className="visually-hidden">Aktion</span>
+                  <span className="visually-hidden">{t('Aktion')}</span>
                 </th>
               </tr>
             </thead>
@@ -746,12 +734,12 @@ function ShellTargets({ csrf }: { csrf: string }) {
                   <td data-label="Gilt für">{shellScopeLabel(target)}</td>
                   <td data-label="Benutzer">
                     {target.kind === 'host' ? (
-                      <span className="hint">fest (meridian-run)</span>
+                      <span className="hint">{t('fest (meridian-run)')}</span>
                     ) : (
                       <>
                         <span className="mono">{target.users.join(', ')}</span>
-                        {target.default_user !== null && <span className="hint"> (Standard: {target.default_user})</span>}
-                        {target.allows_root && <span className="badge badge--danger"> root erlaubt</span>}
+                        {target.default_user !== null && <span className="hint"> ({t('Standard')}: {target.default_user})</span>}
+                        {target.allows_root && <span className="badge badge--danger"> {t('root erlaubt')}</span>}
                       </>
                     )}
                   </td>
@@ -761,14 +749,13 @@ function ShellTargets({ csrf }: { csrf: string }) {
                     {target.created_by !== null && <span className="hint"> · {target.created_by.display_name}</span>}
                   </td>
                   <td>
-                    <button type="button" className="btn btn--ghost" disabled={busy} aria-label={'Ausführungsort ' + target.name + ' bearbeiten'} onClick={() => startEdit(target)}>
-                      Bearbeiten
-                    </button>{' '}
+                    <button type="button" className="btn btn--ghost" disabled={busy} aria-label={t('Ausführungsort {name} bearbeiten', { name: target.name })} onClick={() => startEdit(target)}>
+                      {t('Bearbeiten')}</button>{' '}
                     <Confirm
-                      label="Entfernen"
-                      accessibleName={'Ausführungsort ' + target.name + ' entfernen'}
-                      question="Ausführungsort entfernen?"
-                      confirmLabel="Ja, entfernen"
+                      label={t('Entfernen')}
+                      accessibleName={t('Ausführungsort {name} entfernen', { name: target.name })}
+                      question={t('Ausführungsort entfernen?')}
+                      confirmLabel={t('Ja, entfernen')}
                       busy={busy}
                       onConfirm={() => void remove(target)}
                     />
@@ -778,8 +765,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
               {targets.length === 0 && (
                 <tr>
                   <td colSpan={7} className="hint">
-                    Keine Ausführungsorte: Shell-Jobs lassen sich nicht anlegen.
-                  </td>
+                    {t('Keine Ausführungsorte: Shell-Jobs lassen sich nicht anlegen.')}</td>
                 </tr>
               )}
             </tbody>
@@ -788,78 +774,76 @@ function ShellTargets({ csrf }: { csrf: string }) {
       )}
 
       <form className="form targets__form" onSubmit={(event) => void save(event)} aria-labelledby="settings-shell-targets-add">
-        <h3 id="settings-shell-targets-add">{editing === null ? 'Ausführungsort hinzufügen' : 'Ausführungsort bearbeiten'}</h3>
+        <h3 id="settings-shell-targets-add">{editing === null ? t('Ausführungsort hinzufügen') : t('Ausführungsort bearbeiten')}</h3>
         {editing !== null && (
           <p className="hint">
-            Die Art lässt sich nicht ändern. Jobs, die auf den bisherigen Namen, Geltungsbereich oder Benutzer zeigen, werden ab dem nächsten Lauf abgelehnt, bis sie angepasst sind.
-          </p>
+            {t('Die Art lässt sich nicht ändern. Jobs, die auf den bisherigen Namen, Geltungsbereich oder Benutzer zeigen, werden ab dem nächsten Lauf abgelehnt, bis sie angepasst sind.')}</p>
         )}
         {formError !== null && <Alert tone="err">{formError}</Alert>}
         <div className="grid-2">
-          <FormField label="Art" error={errors.kind}>
+          <FormField label={t('Art')} error={errors.kind}>
             {(aria) => (
               <select {...aria} className="input" name="shell-kind" value={form.kind} disabled={editing !== null} onChange={(e) => set('kind', e.target.value)}>
-                <option value="docker">Docker-Container</option>
-                <option value="host">Host-Profil</option>
+                <option value="docker">{t('Docker-Container')}</option>
+                <option value="host">{t('Host-Profil')}</option>
               </select>
             )}
           </FormField>
           <FormField
             label={docker ? 'Name des Containers' : 'Name des Host-Profils'}
             error={errors.name}
-            hint={docker ? 'Genau der Containername, z. B. nextcloud.' : 'z. B. default'}
+            hint={docker ? t('Genau der Containername, z. B. nextcloud.') : 'z. B. default'}
           >
             {(aria) => <input {...aria} className="input input--mono" name="shell-name" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.name} onChange={(e) => set('name', e.target.value)} />}
           </FormField>
         </div>
         <div className="grid-2">
-          <FormField label="Gilt für" error={errors.category_id} hint="„Global“ erlaubt den Ort für Jobs in allen Kategorien.">
+          <FormField label={t('Gilt für')} error={errors.category_id} hint={t('„Global“ erlaubt den Ort für Jobs in allen Kategorien.')}>
             {(aria) => (
               <select {...aria} className="input" name="shell-category" value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)}>
-                <option value="">Global (alle Kategorien)</option>
+                <option value="">{t('Global (alle Kategorien)')}</option>
                 {categories.map((category) => (
                   <option key={category.id} value={String(category.id)}>
-                    Kategorie „{category.name}“
+                    {t('Kategorie „{name}“', { name: category.name })}
                   </option>
                 ))}
               </select>
             )}
           </FormField>
           {docker ? (
-            <FormField label="Standardbenutzer" error={errors.default_user} hint="Muss in der Liste der erlaubten Benutzer stehen, z. B. www-data.">
+            <FormField label={t('Standardbenutzer')} error={errors.default_user} hint={t('Muss in der Liste der erlaubten Benutzer stehen, z. B. www-data.')}>
               {(aria) => (
                 <input {...aria} className="input input--mono" name="shell-default-user" autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.defaultUser} onChange={(e) => set('defaultUser', e.target.value)} />
               )}
             </FormField>
           ) : (
             <div className="field">
-              <span className="field__label">Benutzer</span>
-              <span className="hint">Host-Profile haben keine Benutzerliste; sie laufen als fester Benutzer meridian-run.</span>
+              <span className="field__label">{t('Benutzer')}</span>
+              <span className="hint">{t('Host-Profile haben keine Benutzerliste; sie laufen als fester Benutzer meridian-run.')}</span>
             </div>
           )}
         </div>
         {docker && (
-          <FormField label="Erlaubte Benutzer" error={errors.users} hint="Durch Komma oder Leerzeichen getrennt, 1 bis 10 Einträge, Kleinbuchstaben oder numerische ID (z. B. www-data 1001).">
+          <FormField label={t('Erlaubte Benutzer')} error={errors.users} hint={t('Durch Komma oder Leerzeichen getrennt, 1 bis 10 Einträge, Kleinbuchstaben oder numerische ID (z. B. www-data 1001).')}>
             {(aria) => <input {...aria} className="input input--mono" name="shell-users" autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.users} onChange={(e) => set('users', e.target.value)} />}
           </FormField>
         )}
         {rootChosen && (
           <Alert tone="err">
-            <strong>root ist eingetragen.</strong> Jobs an diesem Ort können dann als root laufen und im Container alles ändern. Trage root nur ausdrücklich und nur ein, wenn es nötig ist.
+            <strong>{t('root ist eingetragen.')}</strong> {t('Jobs an diesem Ort können dann als root laufen und im Container alles ändern. Trage root nur ausdrücklich und nur ein, wenn es nötig ist.')}
           </Alert>
         )}
-        <FormField label="Notiz" error={errors.note} hint="Wofür ist der Ort freigegeben? (optional)">
+        <FormField label={t('Notiz')} error={errors.note} hint={t('Wofür ist der Ort freigegeben? (optional)')}>
           {(aria) => <input {...aria} className="input" name="shell-note" maxLength={200} autoComplete="off" value={form.note} onChange={(e) => set('note', e.target.value)} />}
         </FormField>
         {errors.body !== undefined && <Alert tone="err">{errors.body}</Alert>}
         <div className="row">
           <button type="submit" className="btn btn--solid" disabled={busy || form.name.trim() === ''}>
-            {busy ? 'Speichert …' : editing === null ? 'Ausführungsort anlegen' : 'Änderung speichern'}
+            {busy ? t('Speichert …') : editing === null ? t('Ausführungsort anlegen') : t('Änderung speichern')}
           </button>
           {editing !== null && (
             <button type="button" className="btn btn--ghost" disabled={busy} onClick={cancelEdit}>
-              Abbrechen
-            </button>
+              {t('Abbrechen')}</button>
           )}
         </div>
       </form>
@@ -873,7 +857,7 @@ export function Settings({ profile }: { profile: Profile }) {
   const shellTargets = canManageShellTargets(profile);
   // Nur Bedienkomfort: Der Server prüft die Rechte bei jeder Anfrage selbst.
   if (!settings && !targets && !shellTargets) {
-    return <Alert tone="info">Für die Einstellungen fehlt dir das Recht. Sie sind Administratoren vorbehalten.</Alert>;
+    return <Alert tone="info">{t('Für die Einstellungen fehlt dir das Recht. Sie sind Administratoren vorbehalten.')}</Alert>;
   }
   return (
     <div className="settings">

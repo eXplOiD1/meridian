@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatTime } from '../lib/format';
 import { Alert } from './Alert';
+import { t } from '../i18n';
 
 interface Props {
   username: string;
@@ -24,29 +25,26 @@ export function OneTimePassword({ username, password, expiresAt, onDone }: Props
   }
 
   return (
-    <section className="card" aria-label="Einmalpasswort">
-      <h2>Einmalpasswort für {username}</h2>
+    <section className="card" aria-label={t('Einmalpasswort')}>
+      <h2>{t('Einmalpasswort für {name}', { name: username })}</h2>
       <Alert tone="warn">
-        Dieses Passwort wird nur jetzt angezeigt und nicht gespeichert. Gib es sicher an {username} weiter (nicht per E-Mail oder Chat im Klartext, wenn es sich vermeiden lässt). Nach dem Schließen lässt es sich nur durch
-        ein neues Einmalpasswort ersetzen.
+        {t('Dieses Passwort wird nur jetzt angezeigt und nicht gespeichert. Gib es sicher an {name} weiter (nicht per E-Mail oder Chat im Klartext, wenn es sich vermeiden lässt). Nach dem Schließen lässt es sich nur durch ein neues Einmalpasswort ersetzen.', { name: username })}
       </Alert>
       <p className="otp" data-testid="one-time-password">
         {password}
       </p>
       <p className="hint">
-        Gültig bis {formatTime(expiresAt)}. {username} muss beim ersten Anmelden ein eigenes Passwort festlegen.
+        {t('Gültig bis {time}. {name} muss beim ersten Anmelden ein eigenes Passwort festlegen.', { time: formatTime(expiresAt), name: username })}
       </p>
       <div className="row">
         <button type="button" className="btn btn--solid" onClick={() => void copy()}>
-          In die Zwischenablage kopieren
-        </button>
+          {t('In die Zwischenablage kopieren')}</button>
         <button type="button" className="btn btn--ghost" onClick={onDone}>
-          Fertig, Passwort ausblenden
-        </button>
+          {t('Fertig, Passwort ausblenden')}</button>
       </div>
       <p className="hint" role="status">
-        {copied === 'yes' && 'Kopiert. Die Zwischenablage nach dem Einfügen leeren.'}
-        {copied === 'no' && 'Kopieren nicht möglich. Das Passwort oben markieren und von Hand kopieren.'}
+        {copied === 'yes' && t('Kopiert. Die Zwischenablage nach dem Einfügen leeren.')}
+        {copied === 'no' && t('Kopieren nicht möglich. Das Passwort oben markieren und von Hand kopieren.')}
       </p>
     </section>
   );
