@@ -17,14 +17,15 @@ export function LanguageSwitch({ csrf }: { csrf?: string }) {
     if (next === getLang()) {
       return;
     }
-    setLang(next);
+    // Erst speichern, dann umschalten: Das Umschalten baut die Oberfläche neu auf und lädt das Profil, das dann schon die neue Sprache tragen muss.
     if (csrf !== undefined) {
       try {
         await request('PUT', '/api/auth/language', { csrf, body: { language: next } });
       } catch {
-        // Die Anzeige bleibt in der gewählten Sprache; gespeichert wird beim nächsten Wechsel erneut.
+        // Die Anzeige wechselt trotzdem; gespeichert wird beim nächsten Wechsel erneut.
       }
     }
+    setLang(next);
   }
   return (
     <div className="langswitch" role="group" aria-label={t('Sprache')}>
