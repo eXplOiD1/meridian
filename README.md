@@ -8,8 +8,22 @@ E-Mail-Empfänger lassen sich im SMTP-Kanal, pro Kategorie und pro Job einstelle
 
 Im Job unter „Benachrichtigungen“ lässt sich eine Laufzeitwarnung aktivieren. Meridian vergleicht abgeschlossene erfolgreiche Läufe mit dem Median der letzten 20 erfolgreichen Läufe, sobald mindestens fünf Vergleichswerte vorliegen. 200 Prozent bedeutet doppelte Dauer; einstellbar sind 110 bis 1000 Prozent. Testläufe zählen nicht, und jede Warnung wird einmal pro Lauf eingereiht.
 
-Es genügt die Datei `compose.yaml`, vorbereitet werden muss nichts. Als Projekt in Docker bereitstellen
-(UGOS-Docker-App) oder auf dem Server:
+### Installation als Stack oder Docker-Projekt
+
+Für die Installation genügt [compose.yaml](compose.yaml). In einer Docker-Verwaltung mit Compose-Editor, zum Beispiel der UGOS-Docker-App:
+
+1. Die Datei `compose.yaml` öffnen und ihren **gesamten Inhalt** kopieren.
+2. Einen neuen Stack bzw. ein neues Docker-Projekt mit dem Namen `meridian` erstellen.
+3. Den kopierten Inhalt in den Compose-Editor einfügen. Falls die Verwaltung eine Datei verlangt, den Inhalt als `compose.yaml` speichern und diese auswählen.
+4. Optional `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD` als Umgebungsvariablen des Stacks setzen. Ohne diese Angaben wird der Admin automatisch angelegt.
+5. Den Stack bereitstellen bzw. das Projekt starten. Die Images werden heruntergeladen und die benötigten Volumes automatisch angelegt.
+6. Im Log des Containers `meridian-web` das einmalig ausgegebene Admin-Passwort ablesen, sofern kein eigenes gesetzt wurde. Anschließend `http://<IP-des-Docker-Hosts>:8090` öffnen und anmelden.
+
+`compose.build.yaml` ist nur die Alternative zum Selbstbauen; für die normale Stack-Installation wird `compose.yaml` verwendet.
+
+### Installation über die Kommandozeile
+
+Die Datei `compose.yaml` auf dem Docker-Host in einem eigenen Ordner speichern und dort ausführen:
 
 ```bash
 docker compose up -d
@@ -22,7 +36,9 @@ Ohne Angabe heißt er `admin` und bekommt ein zufälliges Passwort, das einmalig
 (mind. 8 Zeichen, oder `MERIDIAN_ADMIN_PASSWORD_FILE`), siehe `.env.example`. Erreichbar unter
 `http://<host>:8090` (Port über `MERIDIAN_PORT`).
 
-Aktualisieren auf die neueste Version:
+### Aktualisieren
+
+In der Docker-Verwaltung den bestehenden Stack erneut bereitstellen und dabei das erneute Abrufen der Images aktivieren. Die vorhandenen Volumes beibehalten. Über die Kommandozeile:
 
 ```bash
 docker compose pull && docker compose up -d
