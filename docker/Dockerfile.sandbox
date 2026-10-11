@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Sandbox für Shell-Jobs (docs/decisions/0004, E2/O4). Die compose.yaml enthält denselben Inhalt inline
+# Sandbox für Shell-Jobs. Die compose.yaml enthält denselben Inhalt inline
 # (Dienst "sandbox"); bei Änderungen beide anpassen. Erweitern: eigenes Image und eigener Dienst.
 # Basis-Image-Pin: Version alpine:3.20; für Reproduzierbarkeit den Digest ergänzen (alpine:3.20@sha256:<Digest>).
 FROM alpine:3.20
