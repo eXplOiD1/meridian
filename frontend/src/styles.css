@@ -576,3 +576,9 @@ details.fold[open] { padding-bottom: 14px; }
   .settings-menu { flex-direction: row; overflow-x: auto; position: static; padding-bottom: 4px; }
   .settings-menu__item { white-space: nowrap; flex: none; }
 }
+
+/* Keine Ligaturen in Festbreitenschrift: „//“ in Adressen und Befehlen muss genau so aussehen, wie es getippt wurde. */
+code, pre, kbd, samp, .mono, .cron, .input--mono, .input--mono-plain, .input--area, .input--script, .runout, .otp, .secret, .codes li, .display-url, .board__host, .board__time, .joblink__sub, .table__target, .preview__row, .takt__axislabels, .runlog__out, .board__clock, .orbit strong {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+}
