@@ -160,7 +160,7 @@ export interface JobLimits {
   response_storage: 'off' | 'on' | 'never';
 }
 
-export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path' | 'http.display_host' | 'shell.max_timeout_seconds' | 'jobs.reveal_for_edit' | 'app.public_url';
+export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path' | 'http.display_host' | 'shell.max_timeout_seconds' | 'jobs.reveal_for_edit' | 'app.public_url' | 'runs.retention_days';
 
 /**
  * Antwort von `GET /api/jobs/{id}/source` (nur bei Einstellung `jobs.reveal_for_edit = on` und Bearbeitungsrecht):
@@ -386,4 +386,12 @@ export interface JobNotify {
   on_recovery: boolean;
   channels: 'all' | 'selected' | 'none';
   channel_ids: number[];
+}
+
+/** Antwort von `GET /api/stats` (Läufe je Tag und je Job). */
+export interface Stats {
+  range: { from: string; to: string; days: number };
+  retention_days: number;
+  daily: Array<{ day: string; runs: number; ok: number; failed: number; avg_duration_ms: number | null }>;
+  jobs: Array<{ id: number; name: string; runs: number; ok: number; failed: number; success_rate: number | null; avg_duration_ms: number | null; max_duration_ms: number }>;
 }

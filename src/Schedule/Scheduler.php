@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Meridian\Schedule;
 
+use Meridian\Job\RunRetention;
+
 /**
  * Ein Takt des Planer-Prozesses (ADR 0004 E5): Sperre übernehmen/verlängern, hängende und verwaiste Läufe beenden,
  * aufräumen, planen. Ausgeführt wird im Betrieb nichts: das tun die Worker-Prozesse (`worker:run`), deshalb halten
@@ -19,6 +21,7 @@ final class Scheduler
         private readonly Planner $planner,
         private readonly StaleRuns $staleRuns,
         private readonly ?Worker $inlineWorker = null,
+        private readonly ?RunRetention $retention = null,
     ) {
     }
 
@@ -45,11 +48,25 @@ final class Scheduler
         $events = $this->staleRuns->abort();
         $this->staleRuns->cleanup();
         $events = [...$events, ...$this->planner->plan($stopRequested)];
+        $this->retain();
         if ($this->inlineWorker !== null) {
             $events = [...$events, ...$this->inlineWorker->work($stopRequested)];
         }
 
         return $events;
+    }
+
+    /**
+     * Aufbewahrung des Verlaufs (höchstens alle 10 Minuten, ADR 0008). Ein Fehler hier darf den Takt nie anhalten: der nächste
+     * Durchgang versucht es erneut; die Meldung (kann Pfade enthalten) wird nicht ausgegeben.
+     */
+    private function retain(): void
+    {
+        try {
+            $this->retention?->maybeRun();
+        } catch (\Throwable) {
+            // bewusst still
+        }
     }
 
     public function holdsLease(): bool

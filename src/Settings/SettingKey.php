@@ -17,6 +17,7 @@ enum SettingKey: string
     case ShellMaxTimeout = 'shell.max_timeout_seconds';
     case JobsRevealForEdit = 'jobs.reveal_for_edit';
     case AppPublicUrl = 'app.public_url';
+    case RunsRetentionDays = 'runs.retention_days';
 
     /** Standardwert ohne Zeile in `settings`. */
     public function default(): int|string
@@ -29,6 +30,7 @@ enum SettingKey: string
             self::ShellMaxTimeout => Settings::SHELL_DEFAULT_MAX_TIMEOUT_SECONDS,
             self::JobsRevealForEdit => RevealForEdit::default()->value,
             self::AppPublicUrl => '',
+            self::RunsRetentionDays => Settings::DEFAULT_RETENTION_DAYS,
         };
     }
 }
