@@ -118,7 +118,7 @@ final class SchedulerRunCommandTest extends TestCase
             }
             SchedulerHarness::removeDatabase($dir . '/meridian.sqlite');
             unlink($dir . '/key');
-            rmdir($dir);
+            self::removeTestDirectory($dir);
         }
     }
 
@@ -145,7 +145,20 @@ final class SchedulerRunCommandTest extends TestCase
             }
         } finally {
             SchedulerHarness::removeDatabase($dir . '/meridian.sqlite');
-            rmdir($dir);
+            self::removeTestDirectory($dir);
         }
     }
+    private static function removeTestDirectory(string $dir): void
+    {
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($files as $file) {
+            if ($file->isDir() && !$file->isLink()) {
+                rmdir($file->getPathname());
+            } else {
+                unlink($file->getPathname());
+            }
+        }
+        rmdir($dir);
+    }
+
 }
