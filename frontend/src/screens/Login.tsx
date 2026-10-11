@@ -2,6 +2,9 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert } from '../components/Alert';
 import { InsecureWarning } from '../components/InsecureWarning';
+import { LanguageSwitch } from '../components/LanguageSwitch';
+import { ThemeSwitch } from '../components/ThemeSwitch';
+import { t } from '../i18n';
 import { Brand } from '../components/Brand';
 import { Field } from '../components/Field';
 import { ApiError, request } from '../lib/api';
@@ -81,19 +84,20 @@ export function Login({ onLoggedIn }: LoginProps) {
       <aside className="login__side">
         <Brand />
         <h2 className="login__headline">
-          Jeder Job <span>pünktlich</span> zur richtigen Zeit.
+          {t('Jeder Job')} <span>{t('pünktlich')}</span> {t('zur richtigen Zeit.')}
         </h2>
         <p className="login__tagline">
-          Selbst gehosteter Zeitplaner für HTTP- und Shell-Jobs.
+          {t('Selbst gehosteter Zeitplaner für HTTP- und Shell-Jobs.')}
         </p>
       </aside>
       <main className="login__main">
+        <div className="login__tools"><LanguageSwitch /><ThemeSwitch /></div>
         <form className="login__card form" onSubmit={(event) => void submit(event)} noValidate>
-          <h1>{needsCode ? 'Zweiter Faktor' : 'Anmelden'}</h1>
+          <h1>{needsCode ? t('Zweiter Faktor') : t('Anmelden')}</h1>
           <InsecureWarning />
           {proxyError !== null && (
             <div className="alert alert--err" role="alert" data-testid="proxy-required">
-              <strong>Anmeldung nicht möglich: Reverse-Proxy nicht eingerichtet.</strong>
+              <strong>{t('Anmeldung nicht möglich: Reverse-Proxy nicht eingerichtet.')}</strong>
               <p>{proxyError}</p>
               <p>
                 Das ist ein Konfigurationsfehler des Servers (<code className="cron cron--inline">MERIDIAN_TRUSTED_PROXIES</code>), kein Problem mit deinen Zugangsdaten. Erneutes Versuchen hilft nicht, bis ein
@@ -104,14 +108,14 @@ export function Login({ onLoggedIn }: LoginProps) {
           {error !== null && <Alert tone="err">{error}</Alert>}
           {!needsCode ? (
             <>
-              <Field label="Benutzername" name="username" autoComplete="username" autoFocus required value={username} onChange={(e) => { setUsername(e.target.value); setProxyError(null); }} />
-              <Field label="Passwort" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => { setPassword(e.target.value); setProxyError(null); }} />
+              <Field label={t('Benutzername')} name="username" autoComplete="username" autoFocus required value={username} onChange={(e) => { setUsername(e.target.value); setProxyError(null); }} />
+              <Field label={t('Passwort')} name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => { setPassword(e.target.value); setProxyError(null); }} />
             </>
           ) : (
             <>
-              <p className="hint">Gib den 6-stelligen Code deiner Authenticator-App ein oder einen Wiederherstellungscode.</p>
+              <p className="hint">{t('Gib den 6-stelligen Code deiner Authenticator-App ein oder einen Wiederherstellungscode.')}</p>
               <Field
-                label="Code"
+                label={t('Code')}
                 name="totp_code"
                 inputMode="text"
                 autoComplete="one-time-code"
@@ -121,21 +125,21 @@ export function Login({ onLoggedIn }: LoginProps) {
                 maxLength={32}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                hint="Beispiel: 123456 oder ABCD-EFGH-JKLM"
+                hint={t('Beispiel: 123456 oder ABCD-EFGH-JKLM')}
               />
             </>
           )}
           <div className="row">
             <button type="submit" className="btn btn--solid" disabled={busy || proxyError !== null || username === '' || password === '' || (needsCode && code.trim() === '')}>
-              {busy ? 'Einen Moment …' : needsCode ? 'Bestätigen' : 'Anmelden'}
+              {busy ? t('Einen Moment …') : needsCode ? t('Bestätigen') : t('Anmelden')}
             </button>
             {needsCode && (
               <button type="button" className="btn btn--ghost" onClick={back} disabled={busy}>
-                Zurück
+                {t('Zurück')}
               </button>
             )}
           </div>
-          <p className="hint">Die Anmeldung funktioniert nur über HTTPS (oder im Entwicklungsmodus).</p>
+          <p className="hint">{t('Die Anmeldung funktioniert nur über HTTPS (oder im Entwicklungsmodus).')}</p>
         </form>
       </main>
     </div>
