@@ -101,3 +101,11 @@ Das legt den Benutzer `meridian-run` an (ohne Zugriff auf Schlüssel und Datenba
 - [ ] `backup:create` einmal von Hand ausgeführt, `backup:list` zeigt sie
 - [ ] Sicherungen werden regelmäßig vom Server weg kopiert
 - [ ] Wiederherstellung einmal auf einer Testinstanz geübt
+
+## Aktive Überwachung (ADR 0018)
+
+Meridian prüft Web-Adressen, TCP-Ports und Hosts (Ping) selbst. Die Prüfung läuft im Dienst `worker-http` (er braucht Netz); ohne ihn passiert nichts.
+
+- **Ping** braucht das Programm `ping` (im Image: `iputils`) und das Recht, ICMP zu senden. Im mitgelieferten `compose.yaml` setzt `worker-http` dafür `net.ipv4.ping_group_range` (keine Capability nötig). Bei systemd-Installationen: `ping` installieren und `sysctl net.ipv4.ping_group_range="0 2147483647"` setzen. Fehlt das, steht in der Überwachung „Ping ist in dieser Installation nicht verfügbar“.
+- **Ziele im eigenen Netz** (192.168.x.x, Docker-Namen) sind wie bei HTTP-Jobs gesperrt, bis unter Einstellungen → Interne Ziele eine Freigabe (am besten je Kategorie und Port) besteht.
+- Die Meldung nach `n` Fehlversuchen nutzt dieselben Kanäle wie Jobs (Einstellungen → Benachrichtigungen).

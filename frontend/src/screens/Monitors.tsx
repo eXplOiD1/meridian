@@ -7,7 +7,7 @@ import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatTime } from '../lib/format';
 import { canEditHttp } from '../lib/permissions';
-import type { CategoryRef, Monitor, MonitorState, Profile } from '../types';
+import type { CategoryRef, Monitor, MonitorKind, MonitorState, Profile } from '../types';
 import { t } from '../i18n';
 
 const UNITS = [
@@ -23,6 +23,30 @@ const STATE: Record<MonitorState, { label: string; dot: string }> = {
   down: { label: 'Kein Lebenszeichen', dot: 'err' },
   waiting: { label: 'Wartet auf den ersten Ping', dot: 'warn' },
   paused: { label: 'Pausiert', dot: 'info' },
+};
+
+/** Aktive Prüfungen sagen „erreichbar/ausgefallen“ statt „meldet sich“. */
+const ACTIVE_STATE: Record<MonitorState, { label: string; dot: string }> = {
+  up: { label: 'Erreichbar', dot: 'ok' },
+  down: { label: 'Ausgefallen', dot: 'err' },
+  waiting: { label: 'Wartet auf die erste Prüfung', dot: 'warn' },
+  paused: { label: 'Pausiert', dot: 'info' },
+};
+
+const KINDS: ReadonlyArray<{ value: MonitorKind; label: string }> = [
+  { value: 'heartbeat', label: 'Lebenszeichen (Skript meldet sich)' },
+  { value: 'http', label: 'Web-Adresse (HTTP/HTTPS)' },
+  { value: 'tcp', label: 'Netzwerk-Port (TCP)' },
+  { value: 'ping', label: 'Ping (ICMP)' },
+];
+
+const KIND_SHORT: Record<MonitorKind, string> = { heartbeat: 'Lebenszeichen', http: 'Web', tcp: 'Port', ping: 'Ping' };
+
+const TARGET_PLACEHOLDER: Record<'http' | 'tcp' | 'ping', string> = { http: 'https://www.example.org/health', tcp: 'db.example.org:5432', ping: 'router.example.org' };
+const TARGET_HINT: Record<'http' | 'tcp' | 'ping', string> = {
+  http: 'Die Adresse wird verschlüsselt gespeichert und nie wieder angezeigt; in Listen steht nur der Server. Weiterleitungen werden nicht verfolgt, das Zertifikat wird immer geprüft.',
+  tcp: 'Host und Port, z. B. db.example.org:5432. Geprüft wird, ob sich der Port öffnen lässt.',
+  ping: 'Nur der Host oder die IP-Adresse. Braucht das Programm „ping“ im Dienst worker-http.',
 };
 
 /** Zerlegt Sekunden in die größte glatte Einheit (für das Bearbeiten). */
@@ -64,6 +88,10 @@ function IssuedToken({ issued, onClose }: { issued: Issued; onClose: () => void 
 }
 
 interface Draft {
+  kind: MonitorKind;
+  target: string;
+  expectedStatus: string;
+  failAfter: string;
   name: string;
   value: string;
   unit: Unit;
@@ -76,25 +104,27 @@ interface Draft {
 }
 
 function emptyDraft(categoryId: string): Draft {
-  return { name: '', value: '1', unit: 'days', graceValue: '15', graceUnit: 'minutes', categoryId, notifyDown: true, notifyUp: true, notifyChannels: 'all' };
+  return { kind: 'heartbeat', target: '', expectedStatus: '200-399', failAfter: '3', name: '', value: '1', unit: 'days', graceValue: '15', graceUnit: 'minutes', categoryId, notifyDown: true, notifyUp: true, notifyChannels: 'all' };
 }
 
 function draftOf(m: Monitor): Draft {
   const interval = split(m.interval_seconds);
   const grace = split(m.grace_seconds);
-  return { name: m.name, value: interval.value, unit: interval.unit, graceValue: m.grace_seconds === 0 ? '0' : grace.value, graceUnit: grace.unit, categoryId: m.category_id === null ? '' : String(m.category_id), notifyDown: m.notify_on_down, notifyUp: m.notify_on_up, notifyChannels: m.notify_channels };
+  return { kind: m.kind, target: '', expectedStatus: m.expected_status ?? '200-399', failAfter: String(m.fail_after ?? 3), name: m.name, value: interval.value, unit: interval.unit, graceValue: m.grace_seconds === 0 ? '0' : grace.value, graceUnit: grace.unit, categoryId: m.category_id === null ? '' : String(m.category_id), notifyDown: m.notify_on_down, notifyUp: m.notify_on_up, notifyChannels: m.notify_channels };
 }
 
-function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, onSubmit, onCancel }: {
+function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, editing, onSubmit, onCancel }: {
   draft: Draft;
   setDraft: (d: Draft) => void;
   categories: CategoryRef[];
   errors: Record<string, string>;
   busy: boolean;
   submitLabel: string;
+  editing: boolean;
   onSubmit: () => void;
   onCancel?: () => void;
 }) {
+  const isActive = draft.kind !== 'heartbeat';
   const unitSelect = (value: Unit, onChange: (u: Unit) => void, label: string) => (
     <select className="input input--short" aria-label={label} value={value} onChange={(e) => onChange(e.target.value as Unit)}>
       {UNITS.map((u) => (
@@ -113,6 +143,25 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, o
         onSubmit();
       }}
     >
+      <FormField label={t('Art')} error={errors.kind}>
+        {(aria) => (
+          <select {...aria} className="input" name="monitor-kind" value={draft.kind} disabled={editing} onChange={(e) => {
+              const kind = e.target.value as MonitorKind;
+              // Sinnvolle Vorgabe: aktive Prüfungen alle 5 Minuten, Lebenszeichen täglich (nur solange nichts Eigenes eingetragen ist).
+              const untouched = draft.value === '1' && draft.unit === 'days';
+              const activeUntouched = draft.value === '5' && draft.unit === 'minutes';
+              if (kind !== 'heartbeat' && draft.kind === 'heartbeat' && untouched) setDraft({ ...draft, kind, value: '5', unit: 'minutes' });
+              else if (kind === 'heartbeat' && draft.kind !== 'heartbeat' && activeUntouched) setDraft({ ...draft, kind, value: '1', unit: 'days' });
+              else setDraft({ ...draft, kind });
+            }}>
+            {KINDS.map((k) => (
+              <option key={k.value} value={k.value}>
+                {t(k.label)}
+              </option>
+            ))}
+          </select>
+        )}
+      </FormField>
       <div className="grid-2">
         <FormField label={t('Name')} error={errors.name} hint={t('Woran du den Lauf erkennst, z. B. „Nacht-Backup“.')}>
           {(aria) => <input {...aria} className="input" name="monitor-name" autoComplete="off" maxLength={80} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />}
@@ -130,31 +179,64 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, o
           )}
         </FormField>
       </div>
+      {isActive && (
+        <FormField label={t('Ziel')} error={errors.target} hint={t(TARGET_HINT[draft.kind as 'http' | 'tcp' | 'ping'])}>
+          {(aria) => (
+            <input
+              {...aria}
+              className="input input--mono-plain"
+              name="monitor-target"
+              autoComplete="off"
+              spellCheck={false}
+              inputMode={draft.kind === 'http' ? 'url' : 'text'}
+              placeholder={editing ? t('Leer lassen, um das gespeicherte Ziel zu behalten') : TARGET_PLACEHOLDER[draft.kind as 'http' | 'tcp' | 'ping']}
+              value={draft.target}
+              onChange={(e) => setDraft({ ...draft, target: e.target.value })}
+            />
+          )}
+        </FormField>
+      )}
       <div className="grid-2">
-        <FormField label={t('Erwartet alle …')} error={errors.interval_seconds} hint={t('Wie oft das Lebenszeichen spätestens kommen soll (mindestens 1 Minute).')}>
+        <FormField
+          label={isActive ? t('Prüfen alle …') : t('Erwartet alle …')}
+          error={errors.interval_seconds}
+          hint={isActive ? t('Wie oft Meridian prüft (mindestens 1 Minute).') : t('Wie oft das Lebenszeichen spätestens kommen soll (mindestens 1 Minute).')}
+        >
           {(aria) => (
             <div className="row">
               <input {...aria} className="input input--short" name="monitor-interval" inputMode="numeric" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
-              {unitSelect(draft.unit, (unit) => setDraft({ ...draft, unit }), 'Einheit des Intervalls')}
+              {unitSelect(draft.unit, (unit) => setDraft({ ...draft, unit }), t('Einheit des Intervalls'))}
             </div>
           )}
         </FormField>
-        <FormField label={t('Toleranz')} error={errors.grace_seconds} hint={t('Zusätzliche Wartezeit, bevor es als Ausfall gilt.')}>
-          {(aria) => (
-            <div className="row">
-              <input {...aria} className="input input--short" name="monitor-grace" inputMode="numeric" value={draft.graceValue} onChange={(e) => setDraft({ ...draft, graceValue: e.target.value })} />
-              {unitSelect(draft.graceUnit, (graceUnit) => setDraft({ ...draft, graceUnit }), t('Einheit der Toleranz'))}
-            </div>
-          )}
-        </FormField>
+        {!isActive && (
+          <FormField label={t('Toleranz')} error={errors.grace_seconds} hint={t('Zusätzliche Wartezeit, bevor es als Ausfall gilt.')}>
+            {(aria) => (
+              <div className="row">
+                <input {...aria} className="input input--short" name="monitor-grace" inputMode="numeric" value={draft.graceValue} onChange={(e) => setDraft({ ...draft, graceValue: e.target.value })} />
+                {unitSelect(draft.graceUnit, (graceUnit) => setDraft({ ...draft, graceUnit }), t('Einheit der Toleranz'))}
+              </div>
+            )}
+          </FormField>
+        )}
+        {isActive && (
+          <FormField label={t('Ausfall nach … Fehlversuchen')} error={errors.fail_after} hint={t('Erst nach so vielen fehlgeschlagenen Prüfungen in Folge gilt das Ziel als ausgefallen und wird gemeldet (1 bis 10).')}>
+            {(aria) => <input {...aria} className="input input--short" name="monitor-fail-after" inputMode="numeric" value={draft.failAfter} onChange={(e) => setDraft({ ...draft, failAfter: e.target.value })} />}
+          </FormField>
+        )}
       </div>
+      {draft.kind === 'http' && (
+        <FormField label={t('Erwartete Statuscodes')} error={errors.expected_status} hint={t('z. B. 200-299 oder 200,204,301-302')}>
+          {(aria) => <input {...aria} className="input input--short input--mono-plain" name="monitor-expected" autoComplete="off" value={draft.expectedStatus} onChange={(e) => setDraft({ ...draft, expectedStatus: e.target.value })} />}
+        </FormField>
+      )}
       <label className="check">
         <input type="checkbox" checked={draft.notifyDown} onChange={(e) => setDraft({ ...draft, notifyDown: e.target.checked })} />
-        <span>{t('Benachrichtigen, wenn das Lebenszeichen ausbleibt')}</span>
+        <span>{isActive ? t('Benachrichtigen, wenn das Ziel ausfällt') : t('Benachrichtigen, wenn das Lebenszeichen ausbleibt')}</span>
       </label>
       <label className="check">
         <input type="checkbox" checked={draft.notifyUp} onChange={(e) => setDraft({ ...draft, notifyUp: e.target.checked })} />
-        <span>{t('Benachrichtigen, wenn es sich wieder meldet')}</span>
+        <span>{isActive ? t('Benachrichtigen, wenn es wieder erreichbar ist') : t('Benachrichtigen, wenn es sich wieder meldet')}</span>
       </label>
       <label className="check">
         <input type="checkbox" checked={draft.notifyChannels === 'none'} onChange={(e) => setDraft({ ...draft, notifyChannels: e.target.checked ? 'none' : 'all' })} />
@@ -173,17 +255,37 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, o
   );
 }
 
-function payload(draft: Draft): { body: Record<string, unknown> } | { error: Record<string, string> } {
+function payload(draft: Draft, editing: boolean): { body: Record<string, unknown> } | { error: Record<string, string> } {
   const interval = toSeconds(draft.value, draft.unit);
-  const grace = toSeconds(draft.graceValue, draft.graceUnit);
+  const active = draft.kind !== 'heartbeat';
+  const grace = active ? 0 : toSeconds(draft.graceValue, draft.graceUnit);
+  const failAfter = /^\d{1,2}$/.test(draft.failAfter) ? Number.parseInt(draft.failAfter, 10) : null;
   const error: Record<string, string> = {};
-  if (interval === null) error.interval_seconds = 'Zahl eingeben (ganze Zahl).';
-  if (grace === null) error.grace_seconds = 'Zahl eingeben (ganze Zahl, 0 erlaubt).';
+  if (interval === null) error.interval_seconds = t('Zahl eingeben (ganze Zahl).');
+  if (grace === null) error.grace_seconds = t('Zahl eingeben (ganze Zahl, 0 erlaubt).');
+  if (active && failAfter === null) error.fail_after = t('Zahl eingeben (ganze Zahl).');
+  if (active && !editing && draft.target.trim() === '') error.target = t('Pflichtfeld: das Ziel der Prüfung.');
   if (Object.keys(error).length > 0) return { error };
-  return { body: { name: draft.name.trim(), category_id: draft.categoryId === '' ? null : Number.parseInt(draft.categoryId, 10), interval_seconds: interval, grace_seconds: grace, notify_on_down: draft.notifyDown, notify_on_up: draft.notifyUp, notify_channels: draft.notifyChannels } };
+  const body: Record<string, unknown> = {
+    name: draft.name.trim(),
+    category_id: draft.categoryId === '' ? null : Number.parseInt(draft.categoryId, 10),
+    interval_seconds: interval,
+    notify_on_down: draft.notifyDown,
+    notify_on_up: draft.notifyUp,
+    notify_channels: draft.notifyChannels,
+  };
+  if (!editing) body.kind = draft.kind;
+  if (active) {
+    body.fail_after = failAfter;
+    if (draft.target.trim() !== '') body.target = draft.target.trim();
+    if (draft.kind === 'http') body.expected_status = draft.expectedStatus.trim();
+  } else {
+    body.grace_seconds = grace;
+  }
+  return { body };
 }
 
-/** Herzschlag-Überwachung: Skripte melden sich per Ping, bleibt es aus, wird gemeldet (ADR 0011). */
+/** Überwachung: Lebenszeichen (Skripte melden sich per Ping, ADR 0011) und aktive Prüfungen von Web-Adresse, Port und Ping (ADR 0018). */
 export function Monitors({ profile }: { profile: Profile }) {
   const csrf = profile.csrf_token;
   const [monitors, setMonitors] = useState<Monitor[] | null>(null);
@@ -217,7 +319,7 @@ export function Monitors({ profile }: { profile: Profile }) {
   }, [load]);
 
   async function submit(method: 'POST' | 'PUT', path: string, d: Draft): Promise<boolean> {
-    const built = payload(d);
+    const built = payload(d, method === 'PUT');
     if ('error' in built) {
       setErrors(built.error);
       return false;
@@ -259,60 +361,85 @@ export function Monitors({ profile }: { profile: Profile }) {
   return (
     <>
       <section className="card" aria-label={t('Überwachungen')}>
-        <h2>{t('Lebenszeichen')}</h2>
+        <h2>{t('Überwachung')}</h2>
         <p className="card__lead">
-          {t('Für Dinge, die Meridian nicht selbst startet (ein Skript auf dem Server, eine Sicherung, ein Router): sie rufen am Ende eine Adresse auf. Bleibt der Aufruf aus, meldet Meridian den Ausfall und danach die Rückkehr.')}</p>
+          {t('Meridian prüft eine Web-Adresse, einen Netzwerk-Port oder einen Host per Ping, oder wartet auf das Lebenszeichen eines Skripts, einer Sicherung oder eines Routers. Bleibt die Rückmeldung aus, meldet Meridian den Ausfall und danach die Rückkehr.')}</p>
         {loadError !== null && <Alert tone="err">{loadError}</Alert>}
         {formError !== null && <Alert tone="err">{formError}</Alert>}
         {issued !== null && <IssuedToken issued={issued} onClose={() => setIssued(null)} />}
         {monitors !== null && monitors.length === 0 && <p className="card__lead">{t('Noch keine Überwachung angelegt.')}</p>}
         {monitors !== null && monitors.length > 0 && (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table table--stack">
               <caption className="visually-hidden">{t('Überwachungen')}</caption>
               <thead>
                 <tr>
                   <th scope="col">{t('Name')}</th>
+                  <th scope="col">{t('Art')}</th>
                   <th scope="col">{t('Zustand')}</th>
-                  <th scope="col">{t('Erwartet alle')}</th>
-                  <th scope="col">{t('Letztes Lebenszeichen')}</th>
+                  <th scope="col">{t('Intervall')}</th>
+                  <th scope="col">{t('Letzte Rückmeldung')}</th>
                   <th scope="col">{t('Aktion')}</th>
                 </tr>
               </thead>
               <tbody>
-                {monitors.map((m) => (
-                  <tr key={m.id}>
-                    <td>
-                      {m.name}
-                      {m.category !== null && <div className="hint">{m.category}</div>}
-                    </td>
-                    <td>
-                      <span className="runstate">
-                        <span className={'dot dot--' + STATE[m.state].dot} aria-hidden="true" />
-                        {t(STATE[m.state].label)}
-                      </span>
-                    </td>
-                    <td>{describe(m.interval_seconds)}</td>
-                    <td>{m.last_ping_at === null ? <span className="muted">{t('noch nie')}</span> : formatTime(m.last_ping_at)}</td>
-                    <td>
-                      {m.can_edit ? (
-                        <div className="row">
-                          <button type="button" className="btn btn--ghost btn--small" aria-label={m.name + ' bearbeiten'} onClick={() => setEditing({ id: m.id, draft: draftOf(m) })}>
-                            {t('Bearbeiten')}</button>
-                          <Confirm label={t('Neue Adresse')} question={t('Neue Ping-Adresse erzeugen? Die alte gilt sofort nicht mehr.')} confirmLabel={t('Ja, erneuern')} busy={busy} accessibleName={t('Ping-Adresse von {name} erneuern', { name: m.name })} onConfirm={() => void act(async () => {
-                            const reply = await request<{ ping_token: string }>('POST', '/api/monitors/' + String(m.id) + '/token', { csrf });
-                            setIssued({ name: m.name, token: reply.ping_token });
-                          })} />
-                          <Confirm label={t('Löschen')} question={t('Überwachung löschen?')} confirmLabel={t('Ja, löschen')} busy={busy} accessibleName={t('{name} löschen', { name: m.name })} onConfirm={() => void act(async () => {
-                            await request('DELETE', '/api/monitors/' + String(m.id), { csrf });
-                          })} />
-                        </div>
-                      ) : (
-                        <span className="muted">{t('nur lesen')}</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {monitors.map((m) => {
+                  const active = m.kind !== 'heartbeat';
+                  const state = (active ? ACTIVE_STATE : STATE)[m.state];
+                  return (
+                    <tr key={m.id}>
+                      <td data-label={t('Name')}>
+                        {m.name}
+                        {m.category !== null && <div className="hint">{m.category}</div>}
+                        {active && m.target !== null && <div className="mono">{m.target}</div>}
+                      </td>
+                      <td data-label={t('Art')}>{t(KIND_SHORT[m.kind])}</td>
+                      <td data-label={t('Zustand')}>
+                        <span className="runstate">
+                          <span className={'dot dot--' + state.dot} aria-hidden="true" />
+                          {t(state.label)}
+                        </span>
+                        {active && m.last_check_ok === false && m.last_check_note !== null && <div className="hint">{m.last_check_note}</div>}
+                      </td>
+                      <td data-label={t('Intervall')}>{describe(m.interval_seconds)}</td>
+                      <td data-label={t('Letzte Rückmeldung')}>
+                        {active ? (
+                          m.last_check_at === null ? (
+                            <span className="muted">{t('noch nie')}</span>
+                          ) : (
+                            <>
+                              {formatTime(m.last_check_at)}
+                              {m.last_latency_ms !== null && <div className="hint">{m.last_latency_ms} ms</div>}
+                            </>
+                          )
+                        ) : m.last_ping_at === null ? (
+                          <span className="muted">{t('noch nie')}</span>
+                        ) : (
+                          formatTime(m.last_ping_at)
+                        )}
+                      </td>
+                      <td data-label={t('Aktion')}>
+                        {m.can_edit ? (
+                          <div className="row">
+                            <button type="button" className="btn btn--ghost btn--small" aria-label={t('{name} bearbeiten', { name: m.name })} onClick={() => { setErrors({}); setEditing({ id: m.id, draft: draftOf(m) }); }}>
+                              {t('Bearbeiten')}</button>
+                            {!active && (
+                              <Confirm label={t('Neue Adresse')} question={t('Neue Ping-Adresse erzeugen? Die alte gilt sofort nicht mehr.')} confirmLabel={t('Ja, erneuern')} busy={busy} accessibleName={t('Ping-Adresse von {name} erneuern', { name: m.name })} onConfirm={() => void act(async () => {
+                                const reply = await request<{ ping_token: string }>('POST', '/api/monitors/' + String(m.id) + '/token', { csrf });
+                                setIssued({ name: m.name, token: reply.ping_token });
+                              })} />
+                            )}
+                            <Confirm label={t('Löschen')} question={t('Überwachung löschen?')} confirmLabel={t('Ja, löschen')} busy={busy} accessibleName={t('{name} löschen', { name: m.name })} onConfirm={() => void act(async () => {
+                              await request('DELETE', '/api/monitors/' + String(m.id), { csrf });
+                            })} />
+                          </div>
+                        ) : (
+                          <span className="muted">{t('nur lesen')}</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -327,6 +454,7 @@ export function Monitors({ profile }: { profile: Profile }) {
               errors={errors}
               busy={busy}
               submitLabel={t('Speichern')}
+              editing
               onSubmit={() => void submit('PUT', '/api/monitors/' + String(editing.id), editing.draft).then((ok) => ok && setEditing(null))}
               onCancel={() => {
                 setEditing(null);
@@ -345,7 +473,8 @@ export function Monitors({ profile }: { profile: Profile }) {
             categories={categories}
             errors={errors}
             busy={busy}
-            submitLabel="Anlegen"
+            submitLabel={t('Anlegen')}
+            editing={false}
             onSubmit={() => void submit('POST', '/api/monitors', draft).then((ok) => ok && setDraft(emptyDraft(draft.categoryId)))}
           />
         </section>

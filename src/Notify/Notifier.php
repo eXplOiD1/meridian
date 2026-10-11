@@ -194,7 +194,7 @@ final class Notifier
         $nowText = Timestamp::format($now);
         $queued = 0;
         $rows = $this->db->fetchAll(
-            'SELECT id, name, state, armed_at, last_ping_at, interval_seconds, grace_seconds, notify_on_down, notify_on_up, notify_channels, recovery_pending
+            'SELECT id, name, kind, state, armed_at, last_ping_at, interval_seconds, grace_seconds, notify_on_down, notify_on_up, notify_channels, recovery_pending, down_pending, last_check_note
                FROM monitors WHERE is_enabled = 1 ORDER BY id',
         );
         foreach ($rows as $row) {
@@ -207,8 +207,21 @@ final class Notifier
                         return 0;
                     }
 
-                    return Row::bool($row, 'notify_on_up') ? $this->enqueueRaw($job, 'monitor_up', null, null, $nowText, 'Das Lebenszeichen ist wieder da.', 0) : 0;
+                    return Row::bool($row, 'notify_on_up') ? $this->enqueueRaw($job, 'monitor_up', null, null, $nowText, Row::string($row, 'kind') === 'heartbeat' ? 'Das Lebenszeichen ist wieder da.' : 'Die Prüfung ist wieder erfolgreich.', 0) : 0;
                 });
+                continue;
+            }
+            if (Row::string($row, 'kind') !== 'heartbeat') {
+                // Aktive Prüfung (ADR 0018): den Ausfall hat die Prüfung schon festgestellt (nach n Fehlversuchen); hier nur melden.
+                if (Row::bool($row, 'down_pending')) {
+                    $queued += $this->db->immediate(function () use ($id, $row, $job, $nowText): int {
+                        if ($this->db->execute('UPDATE monitors SET down_pending = 0 WHERE id = :id AND down_pending = 1', ['id' => $id]) !== 1) {
+                            return 0;
+                        }
+
+                        return Row::bool($row, 'notify_on_down') ? $this->enqueueRaw($job, 'monitor_down', null, null, $nowText, Row::stringOrNull($row, 'last_check_note') ?? 'Die Prüfung ist fehlgeschlagen.', 0) : 0;
+                    });
+                }
                 continue;
             }
             if ($state === 'down') {

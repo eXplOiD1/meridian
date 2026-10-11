@@ -418,8 +418,20 @@ export interface ApiTokenEntry {
 export type MonitorState = 'waiting' | 'up' | 'down' | 'paused';
 
 /** Herzschlag-Überwachung (`/api/monitors`). Das Ping-Token kommt nur beim Anlegen/Erneuern (einmal), nie in der Liste. */
+export type MonitorKind = 'heartbeat' | 'http' | 'tcp' | 'ping';
+
 export interface Monitor {
   id: number;
+  kind: MonitorKind;
+  /** Aktive Prüfung: Ursprung bzw. Host:Port (nie Pfad oder Query); bei verborgenem Host ein Platzhalter. */
+  target: string | null;
+  expected_status: string | null;
+  fail_after: number | null;
+  consecutive_failures: number | null;
+  last_check_at: string | null;
+  last_check_ok: boolean | null;
+  last_latency_ms: number | null;
+  last_check_note: string | null;
   name: string;
   category_id: number | null;
   category: string | null;

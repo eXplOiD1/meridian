@@ -200,11 +200,12 @@ if (is_dir($config->dataDir)) {
     // vorhanden) stellen Benachrichtigungen zu (ADR 0007 N5). Beides atomar, mehrere Kinder stellen nie doppelt zu.
     $maintenance = null;
     $notifier = null;
+    $checker = null;
     $app->add(new WorkerRunCommand(
         static fn (JobType $type): Worker => new Worker($db, $clock, WorkerIdentity::generate($type), [$type], $runnersFor($type), $authorizer, null, new DbLiveLogFactory($db, $clock)),
         $env,
         __FILE__,
-        static function (JobType $type, bool $first) use ($env, $db, $config, $clock, &$maintenance, &$notifier): array {
+        static function (JobType $type, bool $first) use ($env, $db, $config, $clock, &$maintenance, &$notifier, &$checker): array {
             if ($type === JobType::Http) {
                 $network = new ChannelNetwork(new SystemHostResolver(), InfrastructureTargets::fromConfig($config));
                 $curl = new CurlTransport('Meridian/' . $config->version);
@@ -217,7 +218,15 @@ if (is_dir($config->dataDir)) {
                     static fn (): ?string => (new Settings($db, $clock))->publicBaseUrl(),
                 );
 
-                return $notifier->tick();
+                // Aktive Prüfungen (ADR 0018) vor dem Zustellen, damit ein Ausfall sofort gemeldet wird.
+                $checker ??= new \Meridian\Monitor\MonitorChecker(
+                    new \Meridian\Monitor\MonitorRepository($db),
+                    new SecretBox(KeyLoader::load($env)),
+                    new \Meridian\Monitor\Probe\NetworkProbe(new TargetGuard(new SystemHostResolver(), new AddressPolicy(new DbInternalTargetSource($db), InfrastructureTargets::fromConfig($config))), $curl),
+                    $clock,
+                );
+
+                return [...$checker->tick(), ...$notifier->tick()];
             }
             if ($type !== JobType::Shell) {
                 return [];

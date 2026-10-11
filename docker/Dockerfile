@@ -26,7 +26,8 @@ RUN npm run build
 # --- Laufzeit -------------------------------------------------------------
 FROM dunglas/frankenphp:1-php8.4-alpine
 
-RUN install-php-extensions pdo_sqlite sodium pcntl opcache \
+RUN apk add --no-cache iputils \
+ && install-php-extensions pdo_sqlite sodium pcntl opcache \
  && addgroup -S -g 1000 meridian \
  && adduser -S -u 1000 -G meridian -h /var/lib/meridian meridian \
  && mkdir -p /var/lib/meridian /etc/meridian /config/caddy /data/caddy \

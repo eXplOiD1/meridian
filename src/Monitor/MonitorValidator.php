@@ -6,6 +6,9 @@ namespace Meridian\Monitor;
 
 use Meridian\Http\ValidationFailed;
 use Meridian\Job\CategoryRepository;
+use Meridian\Job\HttpJobConfig;
+use Meridian\Runner\Http\InvalidUrl;
+use Meridian\Runner\Http\UrlPolicy;
 use Meridian\Security\CategoryScope;
 
 /**
@@ -19,9 +22,9 @@ final class MonitorValidator
     public const MAX_GRACE = 86_400;
     public const DEFAULT_GRACE = 300;
 
-    private const KEYS = ['name', 'category_id', 'interval_seconds', 'grace_seconds', 'is_enabled', 'notify_on_down', 'notify_on_up', 'notify_channels'];
+    private const KEYS = ['name', 'category_id', 'interval_seconds', 'grace_seconds', 'is_enabled', 'notify_on_down', 'notify_on_up', 'notify_channels', 'kind', 'target', 'expected_status', 'fail_after'];
 
-    public function __construct(private readonly CategoryRepository $categories)
+    public function __construct(private readonly CategoryRepository $categories, private readonly UrlPolicy $urls = new UrlPolicy())
     {
     }
 
@@ -37,6 +40,50 @@ final class MonitorValidator
             if (!in_array((string) $key, self::KEYS, true)) {
                 $errors[(string) $key] = 'Unbekanntes Feld. Erlaubt sind: ' . implode(', ', self::KEYS) . '.';
             }
+        }
+
+        /** @var mixed $kindInput */
+        $kindInput = array_key_exists('kind', $input) ? $input['kind'] : ($existing === null ? MonitorKind::Heartbeat->value : $existing->kind->value);
+        $kind = is_string($kindInput) ? MonitorKind::tryFrom($kindInput) : null;
+        if ($kind === null) {
+            $errors['kind'] = 'Art: „heartbeat“, „http“, „tcp“ oder „ping“.';
+        } elseif ($existing !== null && $kind !== $existing->kind) {
+            $errors['kind'] = 'Die Art einer Überwachung lässt sich nicht ändern. Lege eine neue an.';
+        }
+        $target = null;
+        $displayTarget = null;
+        if ($kind !== null && $kind->isActive()) {
+            if (array_key_exists('target', $input)) {
+                /** @var mixed $targetInput */
+                $targetInput = $input['target'];
+                if (!is_string($targetInput)) {
+                    $errors['target'] = 'Ziel: Text erwartet.';
+                } else {
+                    try {
+                        $parsed = MonitorTarget::parse($kind, $targetInput, $this->urls);
+                        $target = MonitorTarget::stored($kind, $parsed);
+                        $displayTarget = MonitorTarget::display($kind, $parsed);
+                    } catch (InvalidUrl $e) {
+                        $errors['target'] = $e->getMessage();
+                    }
+                }
+            } elseif ($existing === null) {
+                $errors['target'] = 'Pflichtfeld: das Ziel der Prüfung.';
+            }
+        } elseif (array_key_exists('target', $input)) {
+            $errors['target'] = 'Ein Herzschlag hat kein Ziel.';
+        }
+        /** @var mixed $expectedInput */
+        $expectedInput = array_key_exists('expected_status', $input) ? $input['expected_status'] : ($existing->expectedStatus ?? '200-399');
+        if (!is_string($expectedInput) || HttpJobConfig::parseExpectedStatus($expectedInput) === null) {
+            $errors['expected_status'] = 'Erwartete Statuscodes: z. B. 200-399 oder 200,204 (Codes 100 bis 599).';
+        } elseif ($kind !== MonitorKind::Http && array_key_exists('expected_status', $input)) {
+            $errors['expected_status'] = 'Statuscodes gibt es nur bei einer Web-Adresse.';
+        }
+        /** @var mixed $failAfter */
+        $failAfter = array_key_exists('fail_after', $input) ? $input['fail_after'] : ($existing->failAfter ?? 3);
+        if (!is_int($failAfter) || $failAfter < 1 || $failAfter > 10) {
+            $errors['fail_after'] = 'Fehlversuche bis zum Ausfall: ganze Zahl von 1 bis 10.';
         }
 
         /** @var mixed $name */
@@ -90,10 +137,10 @@ final class MonitorValidator
             }
         }
 
-        if ($errors !== [] || !is_string($name) || !is_int($interval) || !is_int($grace) || !is_string($channels)) {
+        if ($errors !== [] || $kind === null || !is_string($name) || !is_int($interval) || !is_int($grace) || !is_string($channels) || !is_string($expectedInput) || !is_int($failAfter)) {
             throw new ValidationFailed($errors);
         }
 
-        return new MonitorDraft(trim($name), $categoryId, $categoryName, $interval, $grace, $flags['is_enabled'] ?? true, $flags['notify_on_down'] ?? true, $flags['notify_on_up'] ?? true, $channels);
+        return new MonitorDraft(trim($name), $categoryId, $categoryName, $interval, $kind->isActive() ? 0 : $grace, $flags['is_enabled'] ?? true, $flags['notify_on_down'] ?? true, $flags['notify_on_up'] ?? true, $channels, $kind, $target, $displayTarget, $expectedInput, $failAfter);
     }
 }
