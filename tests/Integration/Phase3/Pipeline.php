@@ -89,8 +89,13 @@ trait Pipeline
         ini_set('error_log', $this->previousErrorLog);
         $this->fileDb = null;
         if ($this->dir !== '' && is_dir($this->dir)) {
-            foreach (glob($this->dir . '/*') ?: [] as $file) {
-                unlink($file);
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->dir, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
+            foreach ($files as $file) {
+                if ($file->isDir() && !$file->isLink()) {
+                    rmdir($file->getPathname());
+                } else {
+                    unlink($file->getPathname());
+                }
             }
             rmdir($this->dir);
         }

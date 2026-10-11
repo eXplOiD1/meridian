@@ -29,3 +29,6 @@
 
 /composer.dev.lock
 .phpunit.result.cache
+
+!/tests/Fixtures/
+!/tests/Fixtures/**

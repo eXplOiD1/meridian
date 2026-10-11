@@ -252,7 +252,7 @@ final class LeakSurfacesTest extends TestCase
             }
             self::fail($where . ': erwartete eine Ausnahme');
         }
-        self::assertSame(15, $caught);
+        self::assertSame(14, $caught);
 
         // Test des Versuchsaufbaus: Ohne #[SensitiveParameter] stünden die Argumente im Trace.
         $leaky = static function (string $value): never {

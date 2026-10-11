@@ -82,13 +82,13 @@ final class CurlTransportTest extends TestCase
 
         self::assertNull($response->error);
         self::assertSame(200, $response->status);
-        self::assertStringContainsString('method=' . $method . "\n", $response->body);
-        self::assertStringContainsString('header x-token: ' . self::TEST_SECRET, $response->body);
-        self::assertStringContainsString('header user-agent: Meridian/test', $response->body);
-        self::assertStringNotContainsString('header expect:', $response->body, 'kein „Expect: 100-continue“');
-        self::assertStringNotContainsString('header accept-encoding:', $response->body, 'keine Entpackung angefordert');
-        self::assertStringContainsString('body=' . ($body ?? '') . "\n", $response->body);
-        self::assertSame(strlen($response->body), $response->bodyBytes);
+        self::assertStringContainsString('method=' . $method . "\n", $response->body());
+        self::assertStringContainsString('header x-token: ' . self::TEST_SECRET, $response->body());
+        self::assertStringContainsString('header user-agent: Meridian/test', $response->body());
+        self::assertStringNotContainsString('header expect:', $response->body(), 'kein „Expect: 100-continue“');
+        self::assertStringNotContainsString('header accept-encoding:', $response->body(), 'keine Entpackung angefordert');
+        self::assertStringContainsString('body=' . ($body ?? '') . "\n", $response->body());
+        self::assertSame(strlen($response->body()), $response->bodyBytes);
     }
 
     public function testHeadSendsNoBodyAndReadsNone(): void
@@ -97,7 +97,7 @@ final class CurlTransportTest extends TestCase
 
         self::assertNull($response->error);
         self::assertSame(204, $response->status);
-        self::assertSame('', $response->body);
+        self::assertSame('', $response->body());
     }
 
     public function testRedirectsAreNeverFollowed(): void
@@ -106,7 +106,7 @@ final class CurlTransportTest extends TestCase
 
         self::assertNull($response->error);
         self::assertSame(302, $response->status);
-        self::assertSame('/status/500', $response->location);
+        self::assertSame('/status/500', $response->location());
     }
 
     public function testStatusCodesArePassedThrough(): void
@@ -115,7 +115,7 @@ final class CurlTransportTest extends TestCase
 
         self::assertNull($response->error);
         self::assertSame(503, $response->status);
-        self::assertSame('status 503', $response->body);
+        self::assertSame('status 503', $response->body());
         self::assertSame('text/plain; charset=utf-8', $response->contentType);
     }
 
@@ -129,7 +129,7 @@ final class CurlTransportTest extends TestCase
 
         self::assertNull($response->error);
         self::assertSame(200, $response->status);
-        self::assertStringContainsString('header host: meridian-test.invalid:' . self::server()->port, $response->body, 'Host-Header bleibt der Name');
+        self::assertStringContainsString('header host: meridian-test.invalid:' . self::server()->port, $response->body(), 'Host-Header bleibt der Name');
     }
 
     public function testPinnedAddressWinsOverAnyOtherAddress(): void
@@ -212,7 +212,7 @@ final class CurlTransportTest extends TestCase
         self::assertSame(200, $response->status);
         self::assertTrue($response->bodyLimitReached);
         self::assertSame(CurlTransport::MAX_BODY_BYTES, $response->bodyBytes);
-        self::assertSame(CurlTransport::KEEP_BODY_BYTES, strlen($response->body), 'nur der Anfang wird behalten');
+        self::assertSame(CurlTransport::KEEP_BODY_BYTES, strlen($response->body()), 'nur der Anfang wird behalten');
     }
 
     public function testLargeBodyBelowTheLimitIsCountedButNotKept(): void
@@ -222,7 +222,7 @@ final class CurlTransportTest extends TestCase
         self::assertNull($response->error);
         self::assertFalse($response->bodyLimitReached);
         self::assertSame(200000, $response->bodyBytes);
-        self::assertSame(CurlTransport::KEEP_BODY_BYTES, strlen($response->body));
+        self::assertSame(CurlTransport::KEEP_BODY_BYTES, strlen($response->body()));
     }
 
     public function testOversizedHeadersAbort(): void
