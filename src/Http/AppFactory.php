@@ -71,7 +71,8 @@ final class AppFactory
 
         $throttle = new LoginThrottle($db, $clock);
         $audit = new AuditLog($db, $clock, $masker);
-        $sessionAuth = new SessionAuth($sessions);
+        $apiTokens = new \Meridian\Auth\ApiTokenService($db, $clock);
+        $sessionAuth = new SessionAuth($sessions, $apiTokens);
         $csrf = new CsrfGuard();
 
         $auth = new AuthService($users, $hasher, $sessions, $throttle, $audit, $clock, $twoFactor, $db);
@@ -128,6 +129,8 @@ final class AppFactory
         ))->register($kernel);
         // Übersicht „Heute im Takt“: Läufe je Job in Abschnitten, geplante Läufe, Summen.
         (new OverviewController($sessionAuth, $users, $access, $jobs, new \Meridian\Job\OverviewRepository($db), $clock, $masker))->register($kernel);
+        // Zugriffstoken für die REST-API (ADR 0009): Verwaltung nur mit der Sitzung, Anlegen mit Passwort.
+        (new ApiTokenController($config, $sessionAuth, $csrf, $users, $auth, $apiTokens, $audit))->register($kernel);
         // Statistik über Tage und Jobs (ADR 0008): frische Läufe plus Tageswerte der aufbewahrten Zeit.
         (new StatsController($sessionAuth, $users, $access, new \Meridian\Job\StatsRepository($db), $settings, $clock, $masker))->register($kernel);
         // Benachrichtigungskanäle (ADR 0007): Verwaltung nur mit settings.manage, Versand im Zusteller.

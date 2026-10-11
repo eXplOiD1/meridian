@@ -25,6 +25,10 @@ final class CsrfGuard
 
     public function check(#[\SensitiveParameter] Request $request, #[\SensitiveParameter] string $sessionToken): bool
     {
+        // Zugriffstoken im Header (setzt nur SessionAuth nach erfolgreicher Prüfung): kein Cookie, also kein CSRF.
+        if ($request->attributes->get('meridian.auth') === 'token') {
+            return true;
+        }
         $given = $request->headers->get(self::HEADER);
         if ($given === null || !hash_equals($this->tokenFor($sessionToken), $given)) {
             return false;

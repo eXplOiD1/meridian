@@ -395,3 +395,13 @@ export interface Stats {
   daily: Array<{ day: string; runs: number; ok: number; failed: number; avg_duration_ms: number | null }>;
   jobs: Array<{ id: number; name: string; runs: number; ok: number; failed: number; success_rate: number | null; avg_duration_ms: number | null; max_duration_ms: number }>;
 }
+
+/** Zugriffstoken für die REST-API (`/api/auth/tokens`). Hash und Klartext sind nie Teil der Liste. */
+export interface ApiTokenEntry {
+  id: number;
+  name: string;
+  read_only: boolean;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+}

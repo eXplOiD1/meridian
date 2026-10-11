@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Meridian\Http;
 
 use Meridian\Auth\PasswordChangeRequired;
+use Meridian\Auth\TokenNotAllowed;
 use Meridian\Auth\TooManyAttempts;
 use Meridian\Config;
 use Meridian\Security\AccessDenied;
@@ -105,6 +106,8 @@ final class Kernel
         } catch (ValidationFailed $e) {
             $response = JsonReply::validation($e);
         } catch (AccessDenied $e) {
+            $response = $this->error(403, $e->getMessage());
+        } catch (TokenNotAllowed $e) {
             $response = $this->error(403, $e->getMessage());
         } catch (PasswordChangeRequired) {
             $response = JsonReply::json(['error' => PasswordChangeRequired::MESSAGE, 'password_change_required' => true], 403);
