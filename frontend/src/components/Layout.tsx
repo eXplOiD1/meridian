@@ -34,6 +34,7 @@ function entries(profile: Profile): NavEntry[] {
     list.push({ path: null, label: 'Jobs', hint: 'bald' });
   }
   list.push(canViewJobs(profile) ? { path: 'verlauf', label: 'Verlauf', current: (r) => r.name === 'history' } : { path: null, label: 'Verlauf', hint: 'bald' });
+  list.push(canViewJobs(profile) ? { path: 'statistik', label: 'Statistik', current: (r) => r.name === 'stats' } : { path: null, label: 'Statistik', hint: 'bald' });
   list.push({ path: null, label: 'Statusseiten', hint: 'bald' });
   if (canSeeUsersArea(profile)) {
     list.push({

@@ -27,6 +27,9 @@ final class Settings
     /** Shell-Jobs (ADR 0004 E12, O8): Standard-Maximum 1 h, höchstens 24 h. */
     public const SHELL_DEFAULT_MAX_TIMEOUT_SECONDS = 3600;
     public const SHELL_MAX_TIMEOUT_LIMIT_SECONDS = 86400;
+    public const DEFAULT_RETENTION_DAYS = 30;
+    public const MIN_RETENTION_DAYS = 1;
+    public const MAX_RETENTION_DAYS = 3650;
 
     private const ENTRIES = 'SELECT s.key, s.value_json, s.updated_at, u.display_name FROM settings s LEFT JOIN users u ON u.id = s.updated_by';
 
@@ -50,6 +53,14 @@ final class Settings
         $value = $this->read(SettingKey::ShellMaxTimeout);
 
         return is_int($value) ? $value : Settings::SHELL_DEFAULT_MAX_TIMEOUT_SECONDS;
+    }
+
+    /** Wie lange einzelne Läufe aufbewahrt werden, bevor sie zu Tageswerten zusammengefasst werden. */
+    public function runRetentionDays(): int
+    {
+        $value = $this->read(SettingKey::RunsRetentionDays);
+
+        return is_int($value) ? $value : self::DEFAULT_RETENTION_DAYS;
     }
 
     public function responseStorage(): ResponseStorage
@@ -181,6 +192,12 @@ final class Settings
                 }
 
                 return $reveal->value;
+            case SettingKey::RunsRetentionDays:
+                if (!is_int($value) || $value < self::MIN_RETENTION_DAYS || $value > self::MAX_RETENTION_DAYS) {
+                    throw new InvalidSetting('Aufbewahrung des Verlaufs: ganze Zahl von 1 bis 3650 (Tage).');
+                }
+
+                return $value;
             case SettingKey::AppPublicUrl:
                 $url = is_string($value) ? ($value === '' ? '' : self::publicUrl($value)) : null;
                 if ($url === null) {

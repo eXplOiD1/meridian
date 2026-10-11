@@ -20,6 +20,8 @@ interface SettingSpec {
   numberLabel?: string;
   /** Freitext statt Zahl (z. B. eine Adresse). */
   text?: boolean;
+  /** Einheit der Anzeige bei Zahlen (Standard: Sekunden). */
+  unit?: string;
   extra?: (entry: SettingEntry) => ReactNode;
 }
 
@@ -111,6 +113,15 @@ const EDITOR_SPECS: SettingSpec[] = [
 
 const APP_SPECS: SettingSpec[] = [
   {
+    key: 'runs.retention_days',
+    title: 'Aufbewahrung einzelner Läufe',
+    lead: 'Wie viele Tage einzelne Läufe (mit Ausgabe und Live-Log) im Verlauf bleiben. Ältere Läufe werden zu Tageswerten je Job zusammengefasst und gelöscht: Die Statistik bleibt, Ausgabe und Einzelheiten sind danach nicht mehr da. 1 bis 3650 Tage, Standard 30.',
+    options: null,
+    numberLabel: 'Tage',
+    unit: 'Tage',
+    extra: () => <Alert tone="warn">Eine kürzere Zeit löscht ältere Läufe beim nächsten Durchgang (innerhalb von 10 Minuten). Das lässt sich nicht rückgängig machen.</Alert>,
+  },
+  {
     key: 'app.public_url',
     title: 'Adresse von Meridian',
     lead: 'Unter welcher Adresse du Meridian im Browser öffnest, z. B. http://192.168.0.110:8090 oder https://meridian.example.org. Sie wird für den Link zum Job in Benachrichtigungen gebraucht. Leer = Nachrichten enthalten keinen Link.',
@@ -125,7 +136,7 @@ function optionLabel(spec: SettingSpec, value: number | string): string {
     return value === '' ? '(nicht gesetzt)' : String(value);
   }
   if (spec.options === null) {
-    return String(value) + ' s';
+    return String(value) + ' ' + (spec.unit ?? 's');
   }
   return spec.options.find((option) => option.value === value)?.label ?? String(value);
 }

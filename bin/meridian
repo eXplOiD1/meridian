@@ -44,6 +44,7 @@ use Meridian\Runner\Shell\DbShellJobSource;
 use Meridian\Runner\Shell\DbShellTargetSource;
 use Meridian\Runner\Shell\Docker\DockerExecExecutor;
 use Meridian\Runner\Shell\Docker\DockerProxyClient;
+use Meridian\Job\RunRetention;
 use Meridian\Notify\ChannelNetwork;
 use Meridian\Notify\ChannelStore;
 use Meridian\Notify\NtfySender;
@@ -144,7 +145,7 @@ if (is_dir($config->dataDir)) {
     };
     // --inline-worker (Entwicklung/Übergang): HTTP-Läufe im Takt, Herzschlag verlängert zusätzlich die Sperre.
     $app->add(new SchedulerRunCommand(
-        new Scheduler($lease, $planner, $staleRuns),
+        new Scheduler($lease, $planner, $staleRuns, null, new RunRetention($db, $clock, new Settings($db, $clock))),
         static function () use ($db, $clock, $lease, $planner, $staleRuns, $authorizer, $runnersFor): Scheduler {
             $worker = new Worker(
                 $db,
@@ -157,7 +158,7 @@ if (is_dir($config->dataDir)) {
                 new DbLiveLogFactory($db, $clock),
             );
 
-            return new Scheduler($lease, $planner, $staleRuns, $worker);
+            return new Scheduler($lease, $planner, $staleRuns, $worker, new RunRetention($db, $clock, new Settings($db, $clock)));
         },
     ));
     // Wartung der Worker-Kinder alle 60 s: Shell-Kinder räumen exec_ref auf und prüfen den Docker-Proxy; HTTP-Kinder (Netz
