@@ -230,7 +230,7 @@ function SchedulePreview({ cron, timezone }: { cron: string; timezone: string })
   );
 }
 
-export function JobEdit({ profile, id }: { profile: Profile; id: string | null }) {
+export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile; id: string | null; onEditorModeChange: (mode: 'simple' | 'expert') => void }) {
   const editing = id !== null;
   const [job, setJob] = useState<JobDetail | null>(null);
   const [categories, setCategories] = useState<CategoryRef[] | null>(null);
@@ -252,23 +252,19 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const [revealed, setRevealed] = useState(false);
   const [tabState, setTab] = useState<TabId>('general');
   // Einfach zeigt nur „Allgemein“; Experte alle Reiter. Die Werte der verborgenen Reiter bleiben im Formular erhalten.
-  const [mode, setModeState] = useState<'simple' | 'expert'>(() => {
-    if (editing) {
-      return 'expert';
-    }
-    try {
-      return window.localStorage.getItem('meridian.jobeditor.mode') === 'expert' ? 'expert' : 'simple';
-    } catch {
-      return 'simple';
-    }
-  });
+  const [mode, setModeState] = useState<'simple' | 'expert'>(profile.job_editor_mode ?? 'simple');
+  const [modeSaving, setModeSaving] = useState(false);
   const tab: TabId = mode === 'simple' ? 'general' : tabState;
-  function setMode(next: 'simple' | 'expert'): void {
-    setModeState(next);
+  async function setMode(next: 'simple' | 'expert'): Promise<void> {
+    setModeSaving(true);
     try {
-      window.localStorage.setItem('meridian.jobeditor.mode', next);
-    } catch {
-      // ohne Speicher gilt die Wahl nur für diese Seite
+      await request('PUT', '/api/auth/job-editor-mode', { csrf: profile.csrf_token, body: { job_editor_mode: next } });
+      setModeState(next);
+      onEditorModeChange(next);
+    } catch (error) {
+      setFormError(errorMessage(error));
+    } finally {
+      setModeSaving(false);
     }
   }
   const [channelNames, setChannelNames] = useState<NotificationChannelName[]>([]);
@@ -707,8 +703,8 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       <div className="modebar">
         <div className="modebar__text">{mode === 'simple' ? t('Einfach: die wichtigsten Angaben. Weitere Optionen findest du im Experten-Modus.') : t('Experte: alle Optionen in Reitern. Nichts geht beim Umschalten verloren.')}</div>
         <div className="modebar__buttons" role="group" aria-label={t('Ansicht des Editors')}>
-          <button type="button" className="modebar__btn" aria-pressed={mode === 'simple'} onClick={() => setMode('simple')}>{t('Einfach')}</button>
-          <button type="button" className="modebar__btn" aria-pressed={mode === 'expert'} onClick={() => setMode('expert')}>{t('Experte')}</button>
+          <button type="button" className="modebar__btn" aria-pressed={mode === 'simple'} disabled={modeSaving} onClick={() => void setMode('simple')}>{t('Einfach')}</button>
+          <button type="button" className="modebar__btn" aria-pressed={mode === 'expert'} disabled={modeSaving} onClick={() => void setMode('expert')}>{t('Experte')}</button>
         </div>
       </div>
       {mode === 'expert' && (

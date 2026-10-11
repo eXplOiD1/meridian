@@ -222,14 +222,16 @@ export function Categories({ profile }: { profile: Profile }) {
         <p className="card__lead">
           {t('Kategorien gruppieren Jobs und begrenzen, was Benutzer sehen und tun dürfen. Umbenennen ändert nichts an Zuweisungen und Freigaben. Löschen geht nur ohne Jobs.')}</p>
         {error !== null && <Alert tone="err">{error}</Alert>}
-        <form className="row" onSubmit={(event) => void create(event)}>
-          <div className="row__grow">
-            <FormField label={t('Neue Kategorie')} error={fieldError}>
-              {(aria) => <input {...aria} className="input" name="name" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />}
-            </FormField>
-          </div>
-          <button type="submit" className="btn btn--solid" disabled={busy || name === ''}>
-            {t('Kategorie anlegen')}</button>
+        <form onSubmit={(event) => void create(event)}>
+          <FormField label={t('Neue Kategorie')} error={fieldError}>
+            {(aria) => <div className="row category-create">
+              <div className="row__grow">
+                <input {...aria} className="input" name="name" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <button type="submit" className="btn btn--solid" disabled={busy || name === ''}>
+                {t('Kategorie anlegen')}</button>
+            </div>}
+          </FormField>
         </form>
         <div className="table-wrap">
           <table className="table">
