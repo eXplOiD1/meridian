@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CRON_PRESETS } from '../lib/jobs';
 
 type Mode = 'minutes' | 'hours' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
@@ -110,6 +110,15 @@ export function ScheduleBuilder({ cron, onChange, error }: Props) {
   const [initial] = useState(() => detect(cron));
   const [mode, setMode] = useState<Mode>(initial.mode);
   const [parts, setParts] = useState<Parts>(initial.parts);
+
+  // Wird der Ausdruck im Textfeld von Hand geändert, folgt der Baukasten, soweit er ihn abbilden kann (sonst „Benutzerdefiniert“).
+  useEffect(() => {
+    if (mode !== 'custom' && build(mode, parts) !== cron.trim()) {
+      const found = detect(cron);
+      setMode(found.mode);
+      setParts(found.parts);
+    }
+  }, [cron, mode, parts]);
 
   function update(nextMode: Mode, nextParts: Parts): void {
     setMode(nextMode);
