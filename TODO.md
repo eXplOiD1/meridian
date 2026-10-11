@@ -145,6 +145,6 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 | [ ] | **Sekunden-Intervalle (Wunsch Alex):** Modus „Alle n Sekunden“ mit Untergrenze (Vorschlag 10 s) und vom Admin einstellbarer globaler Mindestzeit, Planer im Sekundentakt, Taktband gröber zusammenfassen. Voraussetzung: Verdichtung alter Läufe (Last: 8.000+ Läufe/Tag bei 10 s). Die Cron-Bibliothek kennt keine Sekunden, daher festes Intervall statt Cron | scheduler, backend, frontend |
 | [ ] | Öffentliche Statusseiten | frontend |
 | [x] | REST-API mit Tokens (ADR 0009) | backend |
-| [ ] | curl-Import für Jobs | backend |
+| [x] | curl-Import für Jobs (Browser-seitig, `frontend/src/lib/curl.ts`) | frontend |
 | [ ] | Backup und Wiederherstellung, Update-Ablauf, Doku | infra |
 | [ ] | Abschluss-Review vor Version 1.0 | sicherheit |

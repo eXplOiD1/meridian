@@ -12,6 +12,7 @@ import { canEditHttp, canEditShell } from '../lib/permissions';
 import { setPendingRun } from '../lib/pending';
 import { triggerRun } from '../lib/runs';
 import { hrefOf, navigate } from '../lib/useHashRoute';
+import { parseCurl } from '../lib/curl';
 import type { CategoryRef, HttpMethod, JobDetail, JobLimits, JobSource, JobType, NotificationChannelName, OverlapPolicy, Profile, StoreResponse } from '../types';
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
@@ -242,6 +243,8 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       cancelled = true;
     };
   }, []);
+  const [curlText, setCurlText] = useState('');
+  const [curlNote, setCurlNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const [sourceNote, setSourceNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -436,6 +439,21 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       setTab(next);
       document.getElementById('jobtab-' + next)?.focus();
     }
+  }
+
+  function importCurl(): void {
+    const parsed = parseCurl(curlText);
+    if (parsed === null) {
+      setCurlNote({ tone: 'err', text: 'Das ist kein erkennbarer curl-Befehl. Er muss mit „curl“ beginnen und eine URL enthalten.' });
+      return;
+    }
+    set('method', parsed.method);
+    let key = nextKey;
+    setDraft({ url: parsed.url, headers: parsed.headers.map((h) => ({ key: key++, name: h.name, value: h.value })), body: parsed.body ?? '' });
+    setNextKey(key);
+    setCurlText('');
+    const note = 'Übernommen: ' + parsed.method + ', ' + String(parsed.headers.length) + ' Header' + (parsed.body !== null ? ', Body' : '') + '. Bitte prüfen und speichern.';
+    setCurlNote({ tone: 'ok', text: parsed.ignored.length > 0 ? note + ' Nicht übernommen: ' + parsed.ignored.join(', ') + '.' : note });
   }
 
   function addHeader(): void {
@@ -751,6 +769,20 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
           {replacing && (
             <div className="replace">
               {editing && <Alert tone="info">URL, Header und Body werden zusammen ersetzt. Felder, die du leer lässt, sind danach leer.</Alert>}
+              {!editing && (
+                <details className="curlimport">
+                  <summary>Aus curl-Befehl übernehmen</summary>
+                  <FormField label="curl-Befehl" hint="Zum Beispiel „Als cURL kopieren“ aus den Entwicklerwerkzeugen. Es wird nur ausgelesen, nichts ausgeführt oder gesendet.">
+                    {(aria) => <textarea {...aria} className="input input--mono-plain" rows={4} name="curl-import" autoComplete="off" spellCheck={false} value={curlText} onChange={(e) => setCurlText(e.target.value)} />}
+                  </FormField>
+                  <div className="row">
+                    <button type="button" className="btn btn--ghost btn--small" disabled={curlText.trim() === ''} onClick={importCurl}>
+                      Übernehmen
+                    </button>
+                  </div>
+                </details>
+              )}
+              {curlNote !== null && <Alert tone={curlNote.tone === 'ok' ? 'info' : 'err'}>{curlNote.text}</Alert>}
               <FormField
                 label="URL"
                 error={errors['request.url'] ?? errors.request}
