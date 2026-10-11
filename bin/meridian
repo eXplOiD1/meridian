@@ -49,6 +49,8 @@ use Meridian\Notify\ChannelStore;
 use Meridian\Notify\NtfySender;
 use Meridian\Notify\Notifier;
 use Meridian\Notify\SmtpSender;
+use Meridian\Notify\TelegramSender;
+use Meridian\Notify\WebhookSender;
 use Meridian\Runner\Shell\Docker\ShellWorkerMaintenance;
 use Meridian\Runner\Shell\ShellRunner;
 use Meridian\Runner\Shell\ShellTargetPolicy;
@@ -169,12 +171,14 @@ if (is_dir($config->dataDir)) {
         static function (JobType $type, bool $first) use ($env, $db, $config, $clock, &$maintenance, &$notifier): array {
             if ($type === JobType::Http) {
                 $network = new ChannelNetwork(new SystemHostResolver(), InfrastructureTargets::fromConfig($config));
+                $curl = new CurlTransport('Meridian/' . $config->version);
                 $notifier ??= new Notifier(
                     $db,
                     $clock,
                     new ChannelStore($db, new SecretBox(KeyLoader::load($env)), $clock),
-                    ['email' => new SmtpSender($network), 'ntfy' => new NtfySender($network, new CurlTransport('Meridian/' . $config->version))],
+                    ['email' => new SmtpSender($network), 'ntfy' => new NtfySender($network, $curl), 'webhook' => new WebhookSender($network, $curl), 'telegram' => new TelegramSender($network, $curl)],
                     new SecretMasker(),
+                    static fn (): ?string => (new Settings($db, $clock))->publicBaseUrl(),
                 );
 
                 return $notifier->tick();
