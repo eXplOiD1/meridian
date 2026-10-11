@@ -859,15 +859,80 @@ export function Settings({ profile }: { profile: Profile }) {
   if (!settings && !targets && !shellTargets) {
     return <Alert tone="info">{t('Für die Einstellungen fehlt dir das Recht. Sie sind Administratoren vorbehalten.')}</Alert>;
   }
+  const csrf = profile.csrf_token;
+  const groups: Array<{ id: string; label: string; panel: ReactNode }> = [];
+  if (settings) {
+    groups.push({ id: 'general', label: 'Allgemein', panel: <AppSettings csrf={csrf} /> });
+    groups.push({ id: 'http', label: 'HTTP-Jobs', panel: <HttpSettings csrf={csrf} /> });
+    groups.push({ id: 'shell', label: 'Shell-Jobs', panel: <ShellSettings csrf={csrf} /> });
+    groups.push({ id: 'editor', label: 'Job-Editor', panel: <EditorSettings csrf={csrf} /> });
+    groups.push({ id: 'notify', label: 'Benachrichtigungen', panel: <NotificationChannels csrf={csrf} /> });
+  }
+  if (targets) {
+    groups.push({ id: 'internal', label: 'Interne Ziele', panel: <InternalTargets csrf={csrf} /> });
+  }
+  if (shellTargets) {
+    groups.push({ id: 'locations', label: 'Ausführungsorte', panel: <ShellTargets csrf={csrf} /> });
+  }
+  return <SettingsTabs groups={groups} />;
+}
+
+/** Gruppen-Menü wie im Klickdummy: ein Bereich zugleich, Pfeiltasten wechseln, die Wahl bleibt im Browser (nur eine Kennung). */
+function SettingsTabs({ groups }: { groups: Array<{ id: string; label: string; panel: ReactNode }> }) {
+  const [chosen, setChosen] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem('meridian.settings.group') ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const current = groups.find((g) => g.id === chosen) ?? groups[0];
+  if (current === undefined) {
+    return null;
+  }
+  function choose(id: string): void {
+    setChosen(id);
+    try {
+      window.localStorage.setItem('meridian.settings.group', id);
+    } catch {
+      // ohne Speicher gilt die Wahl nur für diese Seite
+    }
+  }
+  function onKey(event: React.KeyboardEvent<HTMLButtonElement>, index: number): void {
+    const step = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 0;
+    if (step === 0) {
+      return;
+    }
+    event.preventDefault();
+    const next = groups[(index + step + groups.length) % groups.length];
+    if (next !== undefined) {
+      choose(next.id);
+      document.getElementById('settab-' + next.id)?.focus();
+    }
+  }
   return (
-    <div className="settings">
-      {settings && <HttpSettings csrf={profile.csrf_token} />}
-      {settings && <ShellSettings csrf={profile.csrf_token} />}
-      {settings && <EditorSettings csrf={profile.csrf_token} />}
-      {settings && <AppSettings csrf={profile.csrf_token} />}
-      {settings && <NotificationChannels csrf={profile.csrf_token} />}
-      {targets && <InternalTargets csrf={profile.csrf_token} />}
-      {shellTargets && <ShellTargets csrf={profile.csrf_token} />}
+    <div className="settings-layout">
+      <div className="settings-menu" role="tablist" aria-orientation="vertical" aria-label={t('Einstellungen')}>
+        {groups.map((g, index) => (
+          <button
+            key={g.id}
+            type="button"
+            role="tab"
+            id={'settab-' + g.id}
+            className="settings-menu__item"
+            aria-selected={g.id === current.id}
+            aria-controls="settings-panel"
+            tabIndex={g.id === current.id ? 0 : -1}
+            onClick={() => choose(g.id)}
+            onKeyDown={(e) => onKey(e, index)}
+          >
+            {t(g.label)}
+          </button>
+        ))}
+      </div>
+      <div className="settings" role="tabpanel" id="settings-panel" aria-labelledby={'settab-' + current.id}>
+        {current.panel}
+      </div>
     </div>
   );
 }
