@@ -13,10 +13,10 @@ final class ChannelValidator
 
     private const HOST = '/^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/D';
 
-    private const EMAIL_KEYS = ['name', 'type', 'enabled', 'host', 'port', 'encryption', 'username', 'password', 'from', 'from_name', 'to'];
-    private const NTFY_KEYS = ['name', 'type', 'enabled', 'server', 'topic', 'priority', 'token'];
-    private const WEBHOOK_KEYS = ['name', 'type', 'enabled', 'url', 'token'];
-    private const TELEGRAM_KEYS = ['name', 'type', 'enabled', 'chat_id', 'token'];
+    private const EMAIL_KEYS = ['name', 'type', 'enabled', 'language', 'host', 'port', 'encryption', 'username', 'password', 'from', 'from_name', 'to'];
+    private const NTFY_KEYS = ['name', 'type', 'enabled', 'language', 'server', 'topic', 'priority', 'token'];
+    private const WEBHOOK_KEYS = ['name', 'type', 'enabled', 'language', 'url', 'token'];
+    private const TELEGRAM_KEYS = ['name', 'type', 'enabled', 'language', 'chat_id', 'token'];
 
     /**
      * @param array<mixed> $input
@@ -70,6 +70,12 @@ final class ChannelValidator
             ChannelType::Webhook => self::webhook($input),
             ChannelType::Telegram => self::telegram($input),
         };
+
+        $language = $input['language'] ?? 'ui';
+        if (!is_string($language) || !in_array($language, ['ui', 'de', 'en'], true)) {
+            throw new InvalidChannel('language', 'Sprache: „ui“, „de“ oder „en“.');
+        }
+        $config['language'] = $language;
 
         return new ChannelDraft($name, $type, $config, $secret, $enabled);
     }
