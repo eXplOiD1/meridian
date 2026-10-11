@@ -10,6 +10,8 @@ export interface Profile {
   roles: RoleInfo[];
   /** Oberflächensprache des Benutzers (ADR 0016). */
   language?: 'de' | 'en';
+  /** Farbschema des Benutzers (ADR 0017). */
+  theme?: 'dark' | 'light';
   totp_enabled: boolean;
   /** Einmalpasswort noch nicht gewechselt: Der Server gibt dann keine Rechte, nur den Passwortwechsel. */
   password_change_required?: boolean;

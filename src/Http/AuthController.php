@@ -251,6 +251,7 @@ final class AuthController
             'user' => ['id' => $user->id, 'username' => $user->username, 'display_name' => $this->masker->mask($user->displayName)],
             'roles' => $roles,
             'language' => $this->users->languageOf($user->id),
+            'theme' => $this->users->themeOf($user->id),
             'totp_enabled' => $this->twoFactor->isEnabled($user->id),
             'password_change_required' => $user->passwordMustChange,
             'csrf_token' => $this->csrf->tokenFor($session->token),

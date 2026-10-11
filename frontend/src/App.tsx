@@ -11,6 +11,7 @@ import { JobDetail } from './screens/JobDetail';
 import { JobEdit } from './screens/JobEdit';
 import { History } from './screens/History';
 import { setLang } from './i18n';
+import { setTheme } from './theme';
 import { Statistics } from './screens/Statistics';
 import { Monitors } from './screens/Monitors';
 import { StatusPages } from './screens/StatusPages';
@@ -58,6 +59,9 @@ export function App() {
       const profile = await request<Profile>('GET', '/api/auth/me');
       if (profile.language !== undefined) {
         setLang(profile.language);
+      }
+      if (profile.theme !== undefined) {
+        setTheme(profile.theme);
       }
       setSession({ status: 'in', profile });
     } catch (error) {
