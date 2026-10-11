@@ -199,17 +199,7 @@ beim nächsten `migrate` verschärft. Mit `http.display_host = hidden` verbirgt 
 ## Oberfläche
 
 Die Weboberfläche (React + Vite) liegt unter `frontend/` und wird vom Server unter
-`/app/` ausgeliefert, mit allen Sicherheits-Headern. Das Docker-Image baut sie selbst. Zum Entwickeln:
-
-```bash
-cd frontend && npm ci
-npm run dev        # Entwicklungsserver auf :5173, leitet /api an http://127.0.0.1:8080 weiter
-npm run build      # Produktionsbuild nach frontend/dist
-# Server lokal mit der gebauten Oberfläche (Entwicklungsmodus für lokale Tests):
-MERIDIAN_ENV=dev MERIDIAN_UI_DIR=frontend/dist php -S 127.0.0.1:8080 -t public public/index.php
-```
-
-Nach Änderungen an `docker/Dockerfile` die Build-Variante synchronisieren: `python3 docker/sync-compose.py`.
+`/app/` ausgeliefert, mit allen Sicherheits-Headern. Das Docker-Image baut sie selbst.
 
 ## Betrieb auf Linux mit systemd
 
