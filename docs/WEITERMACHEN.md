@@ -10,7 +10,7 @@ Die offenen Aufgaben stehen in [TODO.md](../TODO.md). Docker- und Host-Agent-Abn
 
 ## Prüfungen
 
-PHPStan max unter PHP 8.4 und Psalm-Taint-Analyse waren lokal erfolgreich. Frontend-Build sowie gezielte API-Tests für interne Ziele und Benachrichtigungssprache waren erfolgreich. Die vollständige Suite unter Linux/PHP 8.4 ist erfolgreich: 1.147 Tests, 179.664 Assertions, ohne Fehler oder Warnungen. Auch der Container-Workflow besteht die gesamte Suite und PHPStan. Testbericht: https://github.com/eXplOiD1/meridian/actions/runs/38164244272. Auf Ubuntu 26.04.1 mit PHP CLI 8.5.4 ist die vollständige Suite ebenfalls grün. FrankenPHP 1.13.0 (PHP 8.5.11), Node.js 22.22.1 und Docker 29.1.3 wurden für die reale Abnahme verwendet. Installation, erneute Installation mit unverändertem Schlüssel und automatischer Dienststart nach Server-Neustart sind geprüft. SMTP bleibt zurückgestellt.
+PHPStan max unter PHP 8.4 und Psalm-Taint-Analyse waren lokal erfolgreich. Frontend-Build sowie gezielte API-Tests für interne Ziele und Benachrichtigungssprache waren erfolgreich. Die vollständige Suite unter Linux/PHP 8.4 ist erfolgreich: 1.148 Tests, 179.690 Assertions, ohne Fehler oder Warnungen. Auch der Container-Workflow besteht die gesamte Suite und PHPStan. Testbericht: https://github.com/eXplOiD1/meridian/actions/runs/38165408170. Auf Ubuntu 26.04.1 mit PHP CLI 8.5.4 war die vorherige Suite mit 1.147 Tests ebenfalls grün. FrankenPHP 1.13.0 (PHP 8.5.11), Node.js 22.22.1 und Docker 29.1.3 wurden für die reale Abnahme verwendet. Installation, erneute Installation mit unverändertem Schlüssel und automatischer Dienststart nach Server-Neustart sind geprüft. SMTP bleibt zurückgestellt.
 
 ## Sprache
 
