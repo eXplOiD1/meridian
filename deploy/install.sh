@@ -59,10 +59,24 @@ fi
 
 sudo -u meridian env MERIDIAN_DATA_DIR="$DATA" php "$APP/bin/meridian" migrate
 
-install -m 0644 "$APP/deploy/systemd/meridian-web.service" /etc/systemd/system/
-install -m 0644 "$APP/deploy/systemd/meridian-scheduler.service" /etc/systemd/system/
+# Benutzer für den Host-Agenten: ohne Zugriff auf Schlüssel und Datenbank (ADR 0014).
+id meridian-run &>/dev/null || useradd --system --home /var/lib/meridian-run --shell /usr/sbin/nologin meridian-run
+
+for unit in meridian-web.service meridian-scheduler.service meridian-worker-http.service meridian-worker-shell.service meridian-shell.socket meridian-shell@.service; do
+  install -m 0644 "$APP/deploy/systemd/$unit" /etc/systemd/system/
+done
 systemctl daemon-reload
-systemctl enable --now meridian-web meridian-scheduler
+# Ohne Worker läuft kein Job: der Planer plant nur. Der HTTP-Worker stellt auch Benachrichtigungen zu.
+systemctl enable --now meridian-web meridian-scheduler meridian-worker-http
+
+# Shell-Jobs auf dem Host sind aus: MERIDIAN_ENABLE_SHELL=1 ./deploy/install.sh schaltet Agent und Shell-Worker ein.
+# Danach den Ausführungsort „host default“ in Meridian freigeben (Einstellungen → Ausführungsorte).
+if [[ "${MERIDIAN_ENABLE_SHELL:-0}" == "1" ]]; then
+  grep -q '^MERIDIAN_SHELL_HOST_SOCKETS=' "$ETC/meridian.env" || echo 'MERIDIAN_SHELL_HOST_SOCKETS=default=/run/meridian-shell/default.sock' >> "$ETC/meridian.env"
+  systemctl enable --now meridian-shell.socket meridian-worker-shell
+else
+  echo "Shell-Jobs auf dem Host sind nicht aktiviert (MERIDIAN_ENABLE_SHELL=1 beim Installieren, siehe docs/BETRIEB.md)."
+fi
 
 echo "Meridian ist installiert und läuft."
 

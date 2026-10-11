@@ -1,0 +1,31 @@
+[Unit]
+Description=Meridian Host-Agent (ein Lauf)
+
+[Service]
+# Eigener Benutzer ohne Zugriff auf Schlüssel und Datenbank (HostIsolation prüft das bei jedem Start zusätzlich).
+User=meridian-run
+Group=meridian-run
+ExecStart=/usr/bin/php /opt/meridian/bin/meridian-shell-agent
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+InaccessiblePaths=/var/lib/meridian /etc/meridian /run/meridian-docker
+StateDirectory=meridian-run
+MemoryMax=1G
+TasksMax=256
+CPUQuota=100%
+RuntimeMaxSec=86400
+KillMode=control-group
+UMask=0077
+CapabilityBoundingSet=
+SystemCallFilter=@system-service

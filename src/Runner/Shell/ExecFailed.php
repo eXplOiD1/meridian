@@ -17,6 +17,9 @@ final class ExecFailed extends \RuntimeException
     public const CONNECTION_LOST = 'Verbindung zum Docker-Proxy abgebrochen.';
     public const PROTOCOL = 'Protokollfehler bei der Ausführung im Container: Lauf beendet. Hat der Container /bin/sh, head und cut?';
     public const HOST_NOT_SET_UP = 'Host-Ausführung nicht eingerichtet: meridian-shell.socket prüfen.';
+    public const HOST_LOST = 'Verbindung zum Host-Agenten abgebrochen: Lauf beendet. Dienst meridian-shell.socket prüfen (journalctl -u "meridian-shell@*").';
+    public const HOST_PROTOCOL = 'Protokollfehler beim Host-Agenten: Lauf beendet. Versionen von Meridian und Agent prüfen.';
+    public const HOST_ISOLATION = 'Der Host-Agent verweigert die Ausführung: Er darf nicht als root, im Container oder mit Zugriff auf Schlüssel und Datenbank laufen (Benutzer meridian-run, Units aus deploy/systemd).';
     public const START_FAILED = 'Der Prozess konnte nicht gestartet werden.';
     public const NO_PROCESS_GROUP = 'Keine eigene Prozessgruppe (setsid): Lauf aus Sicherheitsgründen nicht gestartet.';
     public const INFRASTRUCTURE = 'Meridians eigene Container sind als Ausführungsort gesperrt: Job auf einen anderen Container umstellen.';
@@ -26,6 +29,16 @@ final class ExecFailed extends \RuntimeException
     public function __construct(string $note, public readonly bool $retryable)
     {
         parent::__construct($note);
+    }
+
+    public static function hostLost(): self
+    {
+        return new self(self::HOST_LOST, true);
+    }
+
+    public static function hostProtocol(): self
+    {
+        return new self(self::HOST_PROTOCOL, false);
     }
 
     public static function proxyUnreachable(): self
