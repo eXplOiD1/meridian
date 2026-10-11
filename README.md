@@ -15,15 +15,15 @@ Für die Installation genügt [compose.yaml](compose.yaml). In einer Docker-Verw
 1. Die Datei `compose.yaml` öffnen und ihren **gesamten Inhalt** kopieren.
 2. Einen neuen Stack bzw. ein neues Docker-Projekt mit dem Namen `meridian` erstellen.
 3. Den kopierten Inhalt in den Compose-Editor einfügen. Falls die Verwaltung eine Datei verlangt, den Inhalt als `compose.yaml` speichern und diese auswählen.
-4. Optional `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD` als Umgebungsvariablen des Stacks setzen. Ohne diese Angaben wird der Admin automatisch angelegt.
+4. Im eingefügten Compose-Inhalt unter `web` die Beispiel-Zugangsdaten durch den gewünschten Benutzernamen und ein eigenes Passwort mit mindestens acht Zeichen ersetzen (siehe unten). Den Proxy-Eintrag bei Bedarf anpassen.
 5. Den Stack bereitstellen bzw. das Projekt starten. Die Images werden heruntergeladen und die benötigten Volumes automatisch angelegt.
-6. Im Log des Containers `meridian-web` das einmalig ausgegebene Admin-Passwort ablesen, sofern kein eigenes gesetzt wurde. Anschließend `http://<IP-des-Docker-Hosts>:8090` öffnen und anmelden.
+6. `http://<IP-des-Docker-Hosts>:8090` öffnen und mit den eingetragenen Zugangsdaten anmelden.
 
 `compose.build.yaml` ist nur die Alternative zum Selbstbauen; für die normale Stack-Installation wird `compose.yaml` verwendet.
 
 ### Installation über die Kommandozeile
 
-Die Datei `compose.yaml` auf dem Docker-Host in einem eigenen Ordner speichern und dort ausführen:
+Die Datei `compose.yaml` auf dem Docker-Host in einem eigenen Ordner speichern, die Beispiel-Zugangsdaten wie unten beschrieben ersetzen und dort ausführen:
 
 ```bash
 docker compose up -d
@@ -31,10 +31,17 @@ docker compose up -d
 
 Das Image `ghcr.io/exploid1/meridian:latest` folgt dem Branch `main`. Docker-Verwaltungen können neue Images erkennen. Beim ersten Start legt der Container selbst an: den Hauptschlüssel
 (Volume `meridian-secrets`, wird nie überschrieben), die Datenbank (Volume `meridian-data`) und den ersten Admin.
-Ohne Angabe heißt er `admin` und bekommt ein zufälliges Passwort, das einmalig im Log steht
-(`docker compose logs web`). Eigene Zugangsdaten über `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD`
-(mind. 8 Zeichen, oder `MERIDIAN_ADMIN_PASSWORD_FILE`), siehe `.env.example`. Erreichbar unter
-`http://<host>:8090` (Port über `MERIDIAN_PORT`).
+Die Compose-Dateien enthalten diese direkt eingetragenen Beispielwerte unter `services.web.environment`:
+
+```yaml
+MERIDIAN_ADMIN_USER: "admin"
+MERIDIAN_ADMIN_PASSWORD: "BEISPIEL-passwort-bitte-aendern"
+MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"
+```
+
+Vor dem ersten Start den Benutzernamen nach Wunsch und das Beispielpasswort unbedingt durch ein eigenes Passwort mit mindestens acht Zeichen ersetzen. Die Anführungszeichen beibehalten. Dafür ist keine `.env`-Datei und keine zusätzliche Stack-Variable nötig. Erreichbar ist Meridian unter `http://<host>:8090` (Port über `MERIDIAN_PORT`).
+
+`MERIDIAN_TRUSTED_PROXIES` legt fest, von welchen Reverse-Proxys Meridian die weitergeleitete Client-IP übernimmt. Standardmäßig ist das Netz `172.19.0.0/16` eingetragen; dadurch wird dieses Netz nicht automatisch für Docker eingerichtet. Liegt dein Proxy in einem anderen Netz, den Wert durch seine IP oder sein tatsächliches Netz ersetzen. Mehrere Einträge mit Komma trennen. Nur vertrauenswürdige Proxy-Adressen eintragen, möglichst eine einzelne IP. Ohne Reverse-Proxy den Wert auf `""` setzen.
 
 ### Aktualisieren
 
@@ -48,6 +55,7 @@ Zum Selbstbauen aus GitHub dient `compose.build.yaml`: `docker compose -f compos
 
 Benutzer verwalten, Passwort zurücksetzen, Sperren aufheben: siehe [Befehle](#befehle).
 `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD` gelten nur beim allerersten Start, solange es noch keinen Benutzer gibt.
+Bei einer bestehenden Installation ändert das Bearbeiten der Compose-Zugangsdaten das Konto nicht. Das Passwort über „Mein Konto“ oder `user:password` ändern. Nach der ersten Einrichtung können die beiden Admin-Einträge aus der Compose-Datei entfernt werden; das Konto bleibt gespeichert.
 
 Das Volume `meridian-secrets` sicher aufbewahren (Sicherung mitnehmen): ohne den Schlüssel sind gespeicherte
 Geheimnisse verloren.
@@ -169,8 +177,8 @@ verzichtet Meridian auf `Secure`, und die Oberfläche zeigt eine Warnung: Passwo
 Außerhalb eines vertrauenswürdigen Heimnetzes Meridian hinter einem HTTPS-Proxy betreiben.
 Nach 5 Fehlversuchen pro Benutzername (50 pro IP) wird gesperrt, die Sperre wächst bis 15 Minuten.
 
-**Hinter einem Reverse-Proxy** (z. B. Nginx Proxy Manager) dessen IP oder Netz in `MERIDIAN_TRUSTED_PROXIES` eintragen,
-z. B. `MERIDIAN_TRUSTED_PROXIES=172.19.0.0/16`, und Meridian neu starten. Kommt eine Anmeldung mit einem Header
+**Hinter einem Reverse-Proxy** (z. B. Nginx Proxy Manager) dessen IP oder Netz in `MERIDIAN_TRUSTED_PROXIES` eintragen.
+In den Compose-Dateien ist dafür bereits `MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"` eingetragen; an das tatsächliche Proxy-Netz anpassen und Meridian neu bereitstellen. Bei der systemd-Installation den Wert in `/etc/meridian/meridian.env` setzen und den Web-Dienst neu starten. Kommt eine Anmeldung mit einem Header
 `X-Forwarded-For` oder `Forwarded` an, ohne dass `MERIDIAN_TRUSTED_PROXIES` gesetzt ist, lehnt Meridian sie ab
 (HTTP 503 mit Hinweis): Sonst sähe die Sperre nach Fehlversuchen nur die IP des Proxys, und alle Clients würden
 gemeinsam gesperrt. `X-Forwarded-For` gilt nur, wenn die Verbindung von einem eingetragenen Proxy kommt; ein
