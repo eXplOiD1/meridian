@@ -58,7 +58,7 @@ final class SchedulerMigrationTest extends TestCase
         );
 
         $db = Connection::open($this->file);
-        self::assertSame(['0005_scheduler.sql','0006_run_heartbeat.sql','0007_http_jobs.sql','0008_display_host.sql','0009_users_roles.sql','0010_workers_and_live_log.sql','0011_shell_jobs.sql','0012_reveal_for_edit.sql','0013_custom_roles.sql','0014_job_expires_at.sql','0015_notifications.sql','0016_notification_kinds_public_url.sql','0017_run_retention.sql','0018_api_token_read_only.sql','0019_monitoring.sql','0020_monitors_status_pages.sql','0021_min_interval_setting.sql','0022_session_days_setting.sql','0023_user_language.sql','0024_user_theme.sql','0025_active_monitors.sql','0026_notification_language.sql','0027_runtime_warning.sql'], (new Migrator($db, dirname(__DIR__, 3) . '/migrations'))->migrate());
+        self::assertSame(['0005_scheduler.sql','0006_run_heartbeat.sql','0007_http_jobs.sql','0008_display_host.sql','0009_users_roles.sql','0010_workers_and_live_log.sql','0011_shell_jobs.sql','0012_reveal_for_edit.sql','0013_custom_roles.sql','0014_job_expires_at.sql','0015_notifications.sql','0016_notification_kinds_public_url.sql','0017_run_retention.sql','0018_api_token_read_only.sql','0019_monitoring.sql','0020_monitors_status_pages.sql','0021_min_interval_setting.sql','0022_session_days_setting.sql','0023_user_language.sql','0024_user_theme.sql','0025_active_monitors.sql','0026_notification_language.sql','0027_runtime_warning.sql','0028_user_job_editor_mode.sql'], (new Migrator($db, dirname(__DIR__, 3) . '/migrations'))->migrate());
 
         $fresh = Connection::open($this->file);
         self::assertSame([
