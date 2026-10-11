@@ -44,6 +44,11 @@ use Meridian\Runner\Shell\DbShellJobSource;
 use Meridian\Runner\Shell\DbShellTargetSource;
 use Meridian\Runner\Shell\Docker\DockerExecExecutor;
 use Meridian\Runner\Shell\Docker\DockerProxyClient;
+use Meridian\Notify\ChannelNetwork;
+use Meridian\Notify\ChannelStore;
+use Meridian\Notify\NtfySender;
+use Meridian\Notify\Notifier;
+use Meridian\Notify\SmtpSender;
 use Meridian\Runner\Shell\Docker\ShellWorkerMaintenance;
 use Meridian\Runner\Shell\ShellRunner;
 use Meridian\Runner\Shell\ShellTargetPolicy;
@@ -153,13 +158,27 @@ if (is_dir($config->dataDir)) {
             return new Scheduler($lease, $planner, $staleRuns, $worker);
         },
     ));
-    // Shell-Kinder: beim Start und alle 60 s exec_ref aufräumen, Docker-Proxy prüfen.
+    // Wartung der Worker-Kinder alle 60 s: Shell-Kinder räumen exec_ref auf und prüfen den Docker-Proxy; HTTP-Kinder (Netz
+    // vorhanden) stellen Benachrichtigungen zu (ADR 0007 N5). Beides atomar, mehrere Kinder stellen nie doppelt zu.
     $maintenance = null;
+    $notifier = null;
     $app->add(new WorkerRunCommand(
         static fn (JobType $type): Worker => new Worker($db, $clock, WorkerIdentity::generate($type), [$type], $runnersFor($type), $authorizer, null, new DbLiveLogFactory($db, $clock)),
         $env,
         __FILE__,
-        static function (JobType $type, bool $first) use ($env, $db, &$maintenance): array {
+        static function (JobType $type, bool $first) use ($env, $db, $config, $clock, &$maintenance, &$notifier): array {
+            if ($type === JobType::Http) {
+                $network = new ChannelNetwork(new SystemHostResolver(), InfrastructureTargets::fromConfig($config));
+                $notifier ??= new Notifier(
+                    $db,
+                    $clock,
+                    new ChannelStore($db, new SecretBox(KeyLoader::load($env)), $clock),
+                    ['email' => new SmtpSender($network), 'ntfy' => new NtfySender($network, new CurlTransport('Meridian/' . $config->version))],
+                    new SecretMasker(),
+                );
+
+                return $notifier->tick();
+            }
             if ($type !== JobType::Shell) {
                 return [];
             }

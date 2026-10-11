@@ -39,6 +39,7 @@ final readonly class JobRecord
         public string $createdAt,
         public string $updatedAt,
         public ?string $expiresAt = null,
+        public ?NotifySettings $notify = null,
     ) {
     }
 }

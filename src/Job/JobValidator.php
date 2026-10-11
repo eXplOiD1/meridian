@@ -40,8 +40,8 @@ final class JobValidator
     /** Obergrenze des Anfragekörpers eines Shell-Jobs (Skript bis 256 KiB, ADR 0004 §4.3). */
     public const MAX_SHELL_BODY_BYTES = 327680;
 
-    private const TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'expires_at', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http', 'request'];
-    private const SHELL_TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'expires_at', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'shell', 'script'];
+    private const TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'expires_at', 'notify', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http', 'request'];
+    private const SHELL_TOP_KEYS = ['name', 'type', 'category_id', 'cron', 'timezone', 'is_enabled', 'catch_up', 'expires_at', 'notify', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'shell', 'script'];
     private const HTTP_KEYS = ['method', 'timeout_seconds', 'expected_status', 'max_redirects', 'store_response'];
     private const REQUEST_KEYS = ['url', 'headers', 'body'];
 
@@ -105,6 +105,7 @@ final class JobValidator
         $isEnabled = $this->bool($input, 'is_enabled', $existing === null ? true : $existing->isEnabled, $errors);
         $catchUp = $this->bool($input, 'catch_up', $existing === null ? false : $existing->catchUp, $errors);
         $expiresAt = $this->expiresAt($input, $existing, $timezone, $errors);
+        $notify = $this->notify($input, $existing, $errors);
         $overlap = $this->overlap($input, $existing, $errors);
         $retryCount = $this->integer($input, 'retry_count', $existing === null ? 0 : $existing->retryCount, 0, RetryPolicy::MAX_RETRIES, 'Wiederholungen: ganze Zahl von 0 bis ' . RetryPolicy::MAX_RETRIES . '.', $errors);
         $retryDelay = $this->integer($input, 'retry_delay_seconds', $existing === null ? self::DEFAULT_RETRY_DELAY_SECONDS : $existing->retryDelaySeconds, 1, RetryPolicy::MAX_DELAY_SECONDS, 'Abstand der Wiederholungen: ganze Zahl von 1 bis 3600 (Sekunden).', $errors);
@@ -148,6 +149,7 @@ final class JobValidator
             $config,
             $payload,
             $expiresAt === false ? null : $expiresAt,
+            $notify === false ? null : $notify,
         );
     }
 
@@ -169,6 +171,7 @@ final class JobValidator
         $isEnabled = $this->bool($input, 'is_enabled', $existing === null ? true : $existing->isEnabled, $errors);
         $catchUp = $this->bool($input, 'catch_up', $existing === null ? false : $existing->catchUp, $errors);
         $expiresAt = $this->expiresAt($input, $existing, $timezone, $errors);
+        $notify = $this->notify($input, $existing, $errors);
         $overlap = $this->overlap($input, $existing, $errors);
         $retryCount = $this->integer($input, 'retry_count', $existing === null ? 0 : $existing->retryCount, 0, RetryPolicy::MAX_RETRIES, 'Wiederholungen: ganze Zahl von 0 bis ' . RetryPolicy::MAX_RETRIES . '.', $errors);
         $retryDelay = $this->integer($input, 'retry_delay_seconds', $existing === null ? self::DEFAULT_RETRY_DELAY_SECONDS : $existing->retryDelaySeconds, 1, RetryPolicy::MAX_DELAY_SECONDS, 'Abstand der Wiederholungen: ganze Zahl von 1 bis 3600 (Sekunden).', $errors);
@@ -183,7 +186,7 @@ final class JobValidator
             throw new \LogicException('Validierung ohne Fehlermeldung abgebrochen.');
         }
 
-        return new JobDraft($name, JobType::Shell, $categoryId, $categoryName, $cron, $timezone, $isEnabled, $catchUp, $overlap, $retryCount, $retryDelay, $config, $payload, $expiresAt === false ? null : $expiresAt);
+        return new JobDraft($name, JobType::Shell, $categoryId, $categoryName, $cron, $timezone, $isEnabled, $catchUp, $overlap, $retryCount, $retryDelay, $config, $payload, $expiresAt === false ? null : $expiresAt, $notify === false ? null : $notify);
     }
 
     /**
@@ -338,6 +341,87 @@ final class JobValidator
         }
 
         return $value;
+    }
+
+    /**
+     * `notify`: Objekt mit `on_failure`, `failure_after` (1–100), `on_recovery`, `channels` (all|selected|none) und
+     * `channel_ids` (nur bei selected). Fehlende Felder behalten den bisherigen Wert (beim Anlegen den Standard); fehlt
+     * `notify` ganz, bleibt alles unverändert. `false` = Fehler (steht in `$errors`). Ob die Kanäle existieren, prüft das Schreiben.
+     *
+     * @param array<mixed>          $input
+     * @param array<string, string> $errors
+     */
+    private function notify(#[\SensitiveParameter] array $input, ?JobRecord $existing, array &$errors): NotifySettings|false|null
+    {
+        if (!array_key_exists('notify', $input)) {
+            return null;
+        }
+        /** @var mixed $given */
+        $given = $input['notify'];
+        $shape = 'Muss ein Objekt mit on_failure, failure_after, on_recovery, channels und channel_ids sein.';
+        if (!is_array($given)) {
+            $errors['notify'] = $shape;
+
+            return false;
+        }
+        if ($given !== [] && array_is_list($given)) {
+            $errors['notify'] = $shape;
+
+            return false;
+        }
+        $unknown = array_diff(array_map(strval(...), array_keys($given)), ['on_failure', 'failure_after', 'on_recovery', 'channels', 'channel_ids']);
+        if ($unknown !== []) {
+            $errors['notify'] = 'Unbekannte Felder. Erlaubt sind: on_failure, failure_after, on_recovery, channels, channel_ids.';
+
+            return false;
+        }
+        $base = $existing?->notify ?? new NotifySettings();
+        /** @var mixed $onFailure */
+        $onFailure = $given['on_failure'] ?? $base->onFailure;
+        /** @var mixed $onRecovery */
+        $onRecovery = $given['on_recovery'] ?? $base->onRecovery;
+        /** @var mixed $after */
+        $after = $given['failure_after'] ?? $base->failureAfter;
+        /** @var mixed $channels */
+        $channels = $given['channels'] ?? $base->channels;
+        /** @var mixed $ids */
+        $ids = $given['channel_ids'] ?? $base->channelIds;
+        if (!is_bool($onFailure) || !is_bool($onRecovery)) {
+            $errors['notify'] = 'on_failure und on_recovery müssen true oder false sein.';
+
+            return false;
+        }
+        if (!is_int($after) || $after < 1 || $after > NotifySettings::MAX_AFTER) {
+            $errors['notify.failure_after'] = 'Benachrichtigung nach: ganze Zahl von 1 bis ' . NotifySettings::MAX_AFTER . ' Fehlschlägen.';
+
+            return false;
+        }
+        if (!is_string($channels) || !in_array($channels, [NotifySettings::ALL, NotifySettings::SELECTED, NotifySettings::NONE], true)) {
+            $errors['notify.channels'] = 'Kanäle: „all“, „selected“ oder „none“.';
+
+            return false;
+        }
+        $list = [];
+        if ($channels === NotifySettings::SELECTED) {
+            if (!is_array($ids) || !array_is_list($ids) || count($ids) > NotifySettings::MAX_CHANNELS) {
+                $errors['notify.channel_ids'] = 'Kanäle: Liste von höchstens ' . NotifySettings::MAX_CHANNELS . ' Nummern.';
+
+                return false;
+            }
+            /** @var mixed $id */
+            foreach ($ids as $id) {
+                if (!is_int($id) || $id < 1) {
+                    $errors['notify.channel_ids'] = 'Kanäle: Liste von höchstens ' . NotifySettings::MAX_CHANNELS . ' Nummern.';
+
+                    return false;
+                }
+                $list[] = $id;
+            }
+            $list = array_values(array_unique($list));
+            sort($list);
+        }
+
+        return new NotifySettings($onFailure, $after, $onRecovery, $channels, $list);
     }
 
     /**
