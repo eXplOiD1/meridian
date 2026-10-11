@@ -8,7 +8,12 @@ use Meridian\Auth\LoginThrottle;
 use Meridian\Auth\SessionManager;
 use Meridian\Auth\SystemClock;
 use Meridian\Config;
+use Meridian\Backup\BackupService;
+use Meridian\Backup\ScheduledBackup;
 use Meridian\Console\AdminBootstrapCommand;
+use Meridian\Console\BackupCreateCommand;
+use Meridian\Console\BackupListCommand;
+use Meridian\Console\BackupRestoreCommand;
 use Meridian\Category\CategoryService;
 use Meridian\Console\CategoryCreateCommand;
 use Meridian\Console\CategoryDeleteCommand;
@@ -106,6 +111,22 @@ if (is_dir($config->dataDir)) {
     $app->add(new UserPasswordCommand(new PasswordReset($users, new PasswordHasher(), new SessionManager($db, new SystemClock()), $throttle, $audit, new SystemClock())));
     $app->add(new InternalTargetsCommand(new InternalTargetStore($db, new SystemClock(), InfrastructureTargets::fromConfig($config)), $audit));
     $app->add(new ShellTargetsCommand(new ShellTargetStore($db, new SystemClock()), $audit));
+    // Sicherung (mer-storage §7): VACUUM INTO, geprüft, ohne Hauptschlüssel; Wiederherstellung prüft den Schlüssel vor dem ersten Schreiben.
+    $backups = new BackupService($config->dataDir, $config->databasePath(), new SystemClock());
+    $app->add(new BackupCreateCommand($backups, $db, $audit));
+    $app->add(new BackupListCommand($backups));
+    $app->add(new BackupRestoreCommand(
+        $backups,
+        $db,
+        static function () use ($env): ?string {
+            try {
+                return KeyLoader::load($env);
+            } catch (\Throwable) {
+                return null;
+            }
+        },
+        static fn (): AuditLog => new AuditLog(Connection::open($config->databasePath()), new SystemClock(), new SecretMasker()),
+    ));
     $settingsService = new SettingsService($db, $audit, new SystemClock());
     $app->add(new SettingsGetCommand($settingsService));
     $app->add(new SettingsSetCommand($settingsService));
@@ -145,10 +166,11 @@ if (is_dir($config->dataDir)) {
 
         return $runners;
     };
+    $scheduledBackup = $config->backupKeep > 0 ? new ScheduledBackup($backups, $db, $audit, $clock, $config->backupKeep) : null;
     // --inline-worker (Entwicklung/Übergang): HTTP-Läufe im Takt, Herzschlag verlängert zusätzlich die Sperre.
     $app->add(new SchedulerRunCommand(
-        new Scheduler($lease, $planner, $staleRuns, null, new RunRetention($db, $clock, new Settings($db, $clock))),
-        static function () use ($db, $clock, $lease, $planner, $staleRuns, $authorizer, $runnersFor): Scheduler {
+        new Scheduler($lease, $planner, $staleRuns, null, new RunRetention($db, $clock, new Settings($db, $clock)), $scheduledBackup),
+        static function () use ($db, $clock, $lease, $planner, $staleRuns, $authorizer, $runnersFor, $scheduledBackup): Scheduler {
             $worker = new Worker(
                 $db,
                 $clock,
@@ -160,7 +182,7 @@ if (is_dir($config->dataDir)) {
                 new DbLiveLogFactory($db, $clock),
             );
 
-            return new Scheduler($lease, $planner, $staleRuns, $worker, new RunRetention($db, $clock, new Settings($db, $clock)));
+            return new Scheduler($lease, $planner, $staleRuns, $worker, new RunRetention($db, $clock, new Settings($db, $clock)), $scheduledBackup);
         },
     ));
     // Wartung der Worker-Kinder alle 60 s: Shell-Kinder räumen exec_ref auf und prüfen den Docker-Proxy; HTTP-Kinder (Netz
