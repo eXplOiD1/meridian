@@ -48,6 +48,7 @@ final class AccountController
     {
         $kernel->put('auth_profile', '/api/auth/profile', $this->profile(...));
         $kernel->put('auth_language', '/api/auth/language', $this->language(...));
+        $kernel->put('auth_theme', '/api/auth/theme', $this->theme(...));
         $kernel->post('auth_password', '/api/auth/password', $this->password(...));
         $kernel->get('auth_sessions', '/api/auth/sessions', $this->listSessions(...));
         $kernel->post('auth_sessions_end_others', '/api/auth/sessions/end-others', $this->endOthers(...));
@@ -92,6 +93,26 @@ final class AccountController
         $this->users->setLanguage($user->id, $language);
 
         return JsonReply::json(['language' => $language]);
+    }
+
+    /**
+     * Farbschema des angemeldeten Benutzers (`dark` oder `light`); eine persönliche Einstellung, ohne Passwort.
+     */
+    public function theme(#[\SensitiveParameter] Request $request): Response
+    {
+        $own = $this->own($request, mutating: true);
+        if ($own instanceof Response) {
+            return $own;
+        }
+        [, $user] = $own;
+        $data = self::body($request, ['theme']);
+        $theme = $data['theme'];
+        if (!is_string($theme) || !in_array($theme, UserRepository::THEMES, true)) {
+            throw ValidationFailed::field('theme', 'Farbschema: „dark“ oder „light“.');
+        }
+        $this->users->setTheme($user->id, $theme);
+
+        return JsonReply::json(['theme' => $theme]);
     }
 
     /**

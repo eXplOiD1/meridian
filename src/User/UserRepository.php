@@ -199,6 +199,27 @@ final class UserRepository
         return $language !== null && in_array($language, self::LANGUAGES, true) ? $language : 'de';
     }
 
+    public const THEMES = ['dark', 'light'];
+
+    /** Farbschema des Benutzers (ADR 0017); unbekannt → dunkel. */
+    public function themeOf(int $userId): string
+    {
+        $row = $this->db->fetchOne('SELECT theme FROM users WHERE id = :id', ['id' => $userId]);
+        $theme = $row === null ? 'dark' : \Meridian\Job\Row::stringOrNull($row, 'theme');
+
+        return $theme !== null && in_array($theme, self::THEMES, true) ? $theme : 'dark';
+    }
+
+    /** @return bool ob eine Zeile geändert wurde */
+    public function setTheme(int $userId, string $theme): bool
+    {
+        if (!in_array($theme, self::THEMES, true)) {
+            throw new \InvalidArgumentException('Unbekanntes Farbschema.');
+        }
+
+        return $this->db->execute('UPDATE users SET theme = :t WHERE id = :id AND deleted_at IS NULL', ['t' => $theme, 'id' => $userId]) === 1;
+    }
+
     /** @return bool ob eine Zeile geändert wurde */
     public function setLanguage(int $userId, string $language): bool
     {

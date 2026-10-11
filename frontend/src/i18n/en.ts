@@ -2,6 +2,15 @@
 export const EN: Record<string, string> = {
   // Navigation und Rahmen
   Hauptnavigation: 'Main navigation',
+  Farbschema: 'Colour scheme',
+  Dunkel: 'Dark',
+  Hell: 'Light',
+  'Menü öffnen': 'Open menu',
+  'Menü schließen': 'Close menu',
+  Betrieb: 'Operations',
+  Beobachten: 'Monitoring',
+  Verwaltung: 'Administration',
+  Konto: 'Account',
   Übersicht: 'Overview',
   Jobs: 'Jobs',
   Verlauf: 'History',
