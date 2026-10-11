@@ -37,6 +37,8 @@ final readonly class JobDraft implements \JsonSerializable
         #[\SensitiveParameter] public HttpPayload|ShellPayload|null $payload,
         /** Ende des Zeitplans (UTC, ISO 8601) oder null = läuft unbegrenzt. */
         public ?string $expiresAt = null,
+        /** null = Einstellungen unverändert lassen (beim Anlegen: Standard). */
+        public ?NotifySettings $notify = null,
     ) {
     }
 

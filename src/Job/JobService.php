@@ -206,6 +206,7 @@ final class JobService
         $add($new->isEnabled !== $old->isEnabled, 'is_enabled');
         $add($new->catchUp !== $old->catchUp, 'catch_up');
         $add($new->expiresAt !== $old->expiresAt, 'expires_at');
+        $add($new->notify !== null && ($old->notify === null || $new->notify->toArray() !== $old->notify->toArray()), 'notify');
         $add($new->overlapPolicy !== $old->overlapPolicy, 'overlap_policy');
         $add($new->retryCount !== $old->retryCount, 'retry_count');
         $add($new->retryDelaySeconds !== $old->retryDelaySeconds, 'retry_delay_seconds');

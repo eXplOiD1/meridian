@@ -193,6 +193,7 @@ final class JobPresenter
             'retry_delay_seconds' => $job->retryDelaySeconds,
             'catch_up' => $job->catchUp,
             'expires_at' => $job->expiresAt,
+            'notify' => ($job->notify ?? new \Meridian\Job\NotifySettings())->toArray(),
             'last_run' => $job->lastRun === null ? null : $this->lastRun($job->lastRun),
             'running' => $job->running,
             'can' => [

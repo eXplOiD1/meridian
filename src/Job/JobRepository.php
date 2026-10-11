@@ -7,6 +7,7 @@ namespace Meridian\Job;
 use Meridian\Auth\Clock;
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
+use Meridian\Http\ValidationFailed;
 use Meridian\Runner\JobType;
 use Meridian\Runner\Shell\ShellJobConfig;
 use Meridian\Schedule\OverlapPolicy;
@@ -138,8 +139,12 @@ final class JobRepository
                 'updated' => $now,
             ],
         );
+        $id = $this->db->lastInsertId();
+        if ($draft->notify !== null) {
+            $this->writeNotify($id, $draft->notify);
+        }
 
-        return $this->db->lastInsertId();
+        return $id;
     }
 
     /**
@@ -173,6 +178,9 @@ final class JobRepository
                 'id' => $id,
             ],
         );
+        if ($draft->notify !== null) {
+            $this->writeNotify($id, $draft->notify);
+        }
     }
 
     /** Löscht den Job; sein Verlauf geht per ON DELETE CASCADE mit (das Audit-Log bleibt). */
@@ -193,6 +201,54 @@ final class JobRepository
     }
 
     /**
+     * Schreibt die Benachrichtigungseinstellungen und die Kanalauswahl; läuft in der Transaktion des Aufrufers.
+     *
+     * @throws ValidationFailed ein gewählter Kanal existiert nicht
+     */
+    private function writeNotify(int $jobId, NotifySettings $notify): void
+    {
+        $this->db->execute(
+            'UPDATE jobs SET notify_on_failure = :failure, notify_failure_after = :after, notify_on_recovery = :recovery, notify_channels = :channels WHERE id = :id',
+            ['failure' => $notify->onFailure ? 1 : 0, 'after' => $notify->failureAfter, 'recovery' => $notify->onRecovery ? 1 : 0, 'channels' => $notify->channels, 'id' => $jobId],
+        );
+        $this->db->execute('DELETE FROM job_channels WHERE job_id = :id', ['id' => $jobId]);
+        if ($notify->channels !== NotifySettings::SELECTED) {
+            return;
+        }
+        foreach ($notify->channelIds as $channelId) {
+            $exists = $this->db->fetchOne('SELECT id FROM notification_channels WHERE id = :id', ['id' => $channelId]);
+            if ($exists === null) {
+                throw ValidationFailed::field('notify.channel_ids', 'Mindestens ein gewählter Kanal existiert nicht (mehr).');
+            }
+            $this->db->execute('INSERT INTO job_channels (job_id, channel_id) VALUES (:job, :channel)', ['job' => $jobId, 'channel' => $channelId]);
+        }
+    }
+
+    /**
+     * @param list<int> $ids
+     *
+     * @return array<int, NotifySettings>
+     */
+    private function notifyFor(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $json = json_encode($ids, JSON_THROW_ON_ERROR);
+        $channels = [];
+        foreach ($this->db->fetchAll('SELECT job_id, channel_id FROM job_channels WHERE job_id IN (SELECT value FROM json_each(:ids)) ORDER BY channel_id', ['ids' => $json]) as $row) {
+            $channels[Row::int($row, 'job_id')][] = Row::int($row, 'channel_id');
+        }
+        $out = [];
+        foreach ($this->db->fetchAll('SELECT id, notify_on_failure, notify_failure_after, notify_on_recovery, notify_channels FROM jobs WHERE id IN (SELECT value FROM json_each(:ids))', ['ids' => $json]) as $row) {
+            $id = Row::int($row, 'id');
+            $out[$id] = new NotifySettings(Row::bool($row, 'notify_on_failure'), Row::int($row, 'notify_failure_after'), Row::bool($row, 'notify_on_recovery'), Row::string($row, 'notify_channels'), $channels[$id] ?? []);
+        }
+
+        return $out;
+    }
+
+    /**
      * @param list<array<string, mixed>> $rows
      *
      * @return list<JobRecord>
@@ -204,6 +260,7 @@ final class JobRepository
             $ids[] = Row::int($row, 'id');
         }
         $states = $this->runStates($ids);
+        $notify = $this->notifyFor($ids);
 
         $records = [];
         foreach ($rows as $row) {
@@ -236,6 +293,7 @@ final class JobRepository
                 Row::string($row, 'created_at'),
                 Row::string($row, 'updated_at'),
                 Row::stringOrNull($row, 'expires_at'),
+                $notify[$id] ?? null,
             );
         }
 
