@@ -489,7 +489,8 @@ final class SettingsApiTest extends TestCase
         }
 
         self::assertSame(500, $response->getStatusCode());
-        self::assertSame(0, $this->settingRows(), 'Einstellung zurückgerollt');
+        self::assertSame(1, $this->settingRows(), 'Vorhandene Einstellung erhalten');
+        self::assertSame('auto', (new \Meridian\Settings\Settings($this->db(), $this->clock()))->displayPath()->value, 'Einstellung zurückgerollt');
         self::assertSame('https://img.example.org/tools/api/cron.php', $this->storedDisplayUrl($ids['Job']), 'Anzeige-URL zurückgerollt');
     }
 

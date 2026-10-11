@@ -173,14 +173,14 @@ final class AddressPolicyTest extends TestCase
         // Eine Quelle, die (fehlerhaft) Freigaben fremder Kategorien liefert: die Policy filtert selbst.
         $policy = new AddressPolicy(self::targets([
             InternalTarget::create('cidr', '192.168.1.0/24', 0, 1),
-            InternalTarget::create('cidr', '10.0.0.0/8', 8080, null),
+            InternalTarget::create('cidr', '10.0.0.0/8', 8081, null),
         ]));
 
         self::assertNull($policy->check('192.168.1.5', 'x.example', 80, 1));
         self::assertSame(BlockReason::Private, $policy->check('192.168.1.5', 'x.example', 80, 2));
         self::assertSame(BlockReason::Private, $policy->check('192.168.1.5', 'x.example', 80, null), 'ohne Kategorie nur globale');
         self::assertNull($policy->check('10.0.0.1', 'x.example', 8081, null));
-        self::assertSame(BlockReason::Private, $policy->check('10.0.0.1', 'x.example', 8081, null));
+        self::assertSame(BlockReason::Private, $policy->check('10.0.0.1', 'x.example', 8082, null));
     }
 
     public function testRuntimeChecksHoldEvenForForgedReleases(): void

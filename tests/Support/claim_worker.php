@@ -21,7 +21,6 @@ require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 $db = Connection::open($argv[1] ?? '');
 $clock = new SystemClock();
-$lease = new SchedulerLease($db, $clock, $argv[2] ?? 'x');
 $worker = new Worker($db, $clock, new \Meridian\Schedule\WorkerIdentity($argv[2] ?? 'x', \Meridian\Runner\JobType::Http), [\Meridian\Runner\JobType::Http], new RunnerRegistry(), new DbRunAuthorizer($db, new UserRepository($db, new PasswordHasher())));
 $ids = [];
 foreach ($db->fetchAll('SELECT id FROM runs ORDER BY id') as $row) {
