@@ -38,7 +38,7 @@ const SPECS: SettingSpec[] = [
     numberLabel: 'Sekunden',
     extra: () => (
       <Alert tone="info">
-        {t('Alle Jobs laufen derzeit nacheinander. Ein Lauf mit langem Zeitlimit kann andere Läufe so lange aufhalten; Termine, die dabei mehr als 5 Minuten überfällig werden, gelten als verpasst.')}</Alert>
+        {t('HTTP-Jobs und Shell-Jobs laufen in getrennten Workern. Die Anzahl gleichzeitiger Läufe wird beim Start der Worker festgelegt.') }</Alert>
     ),
   },
   {

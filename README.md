@@ -2,20 +2,16 @@
 
 Selbst gehosteter Job-Scheduler für HTTP- und Shell-Jobs, mit Benutzern, Rollen und Rechten pro Kategorie.
 
-> Stand: Phase 1 (Fundament) in Arbeit. Noch nicht für den Betrieb geeignet.
-
-Plan und Aufgaben: [`docs/PLAN.md`](docs/PLAN.md), [`TODO.md`](TODO.md).
-
 ## Betrieb mit Docker
 
 Es genügt die Datei `compose.yaml`, vorbereitet werden muss nichts. Als Projekt in Docker bereitstellen
 (UGOS-Docker-App) oder auf dem Server:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-Das Image wird dabei aus GitHub gebaut. Beim ersten Start legt der Container selbst an: den Hauptschlüssel
+Das Image `ghcr.io/exploid1/meridian:latest` folgt dem Branch `main`. Docker-Verwaltungen können neue Images erkennen. Beim ersten Start legt der Container selbst an: den Hauptschlüssel
 (Volume `meridian-secrets`, wird nie überschrieben), die Datenbank (Volume `meridian-data`) und den ersten Admin.
 Ohne Angabe heißt er `admin` und bekommt ein zufälliges Passwort, das einmalig im Log steht
 (`docker compose logs web`). Eigene Zugangsdaten über `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD`
@@ -25,8 +21,10 @@ Ohne Angabe heißt er `admin` und bekommt ein zufälliges Passwort, das einmalig
 Aktualisieren auf die neueste Version:
 
 ```bash
-docker compose build --pull --no-cache && docker compose up -d
+docker compose pull && docker compose up -d
 ```
+
+Zum Selbstbauen aus GitHub dient `compose.build.yaml`: `docker compose -f compose.build.yaml up -d --build`. `MERIDIAN_REPO_REF` wählt dabei einen Branch, Tag oder Commit (Standard `main`).
 
 Benutzer verwalten, Passwort zurücksetzen, Sperren aufheben: siehe [Befehle](#befehle).
 `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD` gelten nur beim allerersten Start, solange es noch keinen Benutzer gibt.
@@ -55,14 +53,11 @@ Weitere Container freigeben: nur in Meridian unter Einstellungen -> Ausführungs
 stimmen. Meridians eigene Container (`web`, `scheduler`, `worker-http`, `worker-shell`, `docker-proxy`, alles mit dem
 Präfix `meridian-` außer `meridian-sandbox`) lehnt Meridian als Ausführungsort ab.
 
-Das Proxy-Image mit Digest festnageln (nie `:latest`): `MERIDIAN_PROXY_IMAGE=wollomatic/socket-proxy:1.13.1@sha256:<Digest>`
-in der `.env`. Den Digest vorher selbst prüfen und eintragen, z. B. mit `docker buildx imagetools inspect
-wollomatic/socket-proxy:1.13.1`. Hat `/var/run/docker.sock` eine andere Gruppe als root, `MERIDIAN_DOCKER_GID` setzen.
+Das Proxy-Image ist standardmäßig mit Version und Digest festgelegt. `MERIDIAN_PROXY_IMAGE` erlaubt einen eigenen geprüften Digest. Hat `/var/run/docker.sock` eine andere Gruppe als root, `MERIDIAN_DOCKER_GID` setzen.
 
 **Sicherheitshinweis:** Ein Zugang zur Docker-API ist faktisch Root auf dem Host. Der Proxy begrenzt ihn auf Exec in den
 eingetragenen Containern, kann aber den Inhalt einer Anfrage nicht prüfen. Nur Container freigeben, in denen Admins mit
-dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle ausführen dürfen. Beim Update von einer älteren Version die
-`compose.yaml` komplett neu einfügen; die Volumes `meridian-data` und `meridian-secrets` bleiben bestehen.
+dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle ausführen dürfen. Die Volumes `meridian-data` und `meridian-secrets` beim Aktualisieren erhalten.
 
 Sicherung, Wiederherstellung und Aktualisieren: [`docs/BETRIEB.md`](docs/BETRIEB.md).
 
@@ -175,14 +170,14 @@ beim nächsten `migrate` verschärft. Mit `http.display_host = hidden` verbirgt 
 
 ## Oberfläche
 
-Die Weboberfläche (React + Vite, im Stil des Klickdummys „Takt“) liegt unter `frontend/` und wird vom Server unter
+Die Weboberfläche (React + Vite) liegt unter `frontend/` und wird vom Server unter
 `/app/` ausgeliefert, mit allen Sicherheits-Headern. Das Docker-Image baut sie selbst. Zum Entwickeln:
 
 ```bash
 cd frontend && npm ci
 npm run dev        # Entwicklungsserver auf :5173, leitet /api an http://127.0.0.1:8080 weiter
 npm run build      # Produktionsbuild nach frontend/dist
-# Server lokal mit der gebauten Oberfläche (Entwicklungsmodus, weil die Anmeldung sonst HTTPS braucht):
+# Server lokal mit der gebauten Oberfläche (Entwicklungsmodus für lokale Tests):
 MERIDIAN_ENV=dev MERIDIAN_UI_DIR=frontend/dist php -S 127.0.0.1:8080 -t public public/index.php
 ```
 

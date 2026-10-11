@@ -1,0 +1,10 @@
+parameters:
+    level: max
+    phpVersion: 80400
+    paths:
+        - src
+        - bin
+        - public
+    treatPhpDocTypesAsCertain: false
+    checkUninitializedProperties: true
+    checkBenevolentUnionTypes: true

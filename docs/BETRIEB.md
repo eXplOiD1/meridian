@@ -68,7 +68,7 @@ Vorher immer: `backup:create`, und prüfen, dass die Schlüsseldatei getrennt ge
 **Docker**
 
 ```bash
-docker compose build --pull --no-cache && docker compose up -d
+docker compose pull && docker compose up -d
 ```
 
 Die Volumes bleiben bestehen, Migrationen laufen beim Start automatisch. Auf dem NAS ohne `git`: die aktuelle `compose.yaml`
