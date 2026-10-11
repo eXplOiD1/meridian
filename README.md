@@ -183,12 +183,72 @@ npm run build      # Produktionsbuild nach frontend/dist
 MERIDIAN_ENV=dev MERIDIAN_UI_DIR=frontend/dist php -S 127.0.0.1:8080 -t public public/index.php
 ```
 
-Nach Änderungen an `docker/Dockerfile` den Inline-Teil der `compose.yaml` neu erzeugen: `python3 docker/sync-compose.py`.
+Nach Änderungen an `docker/Dockerfile` die Build-Variante synchronisieren: `python3 docker/sync-compose.py`.
 
 ## Betrieb auf Linux mit systemd
 
+Voraussetzungen: ein Linux-Host mit systemd, PHP 8.3 oder neuer für die CLI (mit `pdo_sqlite`, `sodium`, `curl`, `pcntl` und `posix`), Composer, rsync und FrankenPHP unter `/usr/local/bin/frankenphp`. Zum Bauen der Oberfläche wird Node.js 22 oder neuer mit npm benötigt. Der Host-Agent verwendet `setsid` aus `util-linux`; für Ping-Prüfungen wird `iputils-ping` benötigt.
+
+Unter Debian/Ubuntu die Pakete installieren (die PHP-Version der Distribution muss mindestens 8.3 sein):
+
 ```bash
-sudo ./deploy/install.sh
+sudo apt update
+sudo apt install php-cli php-curl php-sqlite3 php-mbstring php-xml \
+  composer git curl ca-certificates rsync sudo util-linux iputils-ping nodejs npm
+php --version
+node --version
 ```
 
-Der Installer fragt nach dem Benutzernamen und dem Passwort des ersten Admins.
+FrankenPHP enthält eine eigene PHP-Laufzeit; die CLI-Pakete werden trotzdem für Scheduler, Worker und Verwaltungsbefehle benötigt. Die passende Linux-Binärdatei von den [offiziellen Releases](https://github.com/php/frankenphp/releases) herunterladen, die dort angegebene SHA-256-Prüfsumme prüfen und installieren. Beispiel für x86_64 mit Version 1.13.0:
+
+```bash
+curl -fL -o frankenphp https://github.com/php/frankenphp/releases/download/v1.13.0/frankenphp-linux-x86_64
+echo 'ddfedcc4597e502aa1b6c91da248fea88163c43b46acd4790c6e39dc1ed89a1f  frankenphp' | sha256sum -c
+sudo install -m 0755 frankenphp /usr/local/bin/frankenphp
+```
+
+Quellcode holen, Oberfläche bauen und installieren:
+
+```bash
+git clone https://github.com/eXplOiD1/meridian.git
+cd meridian
+cd frontend
+npm ci
+npm run build
+cd ..
+sudo bash deploy/install.sh
+```
+
+Der Installer legt Programmcode und Oberfläche unter `/opt/meridian`, Daten unter `/var/lib/meridian` und Konfiguration sowie Hauptschlüssel unter `/etc/meridian` ab. Er erzeugt den Schlüssel nur beim ersten Mal, spielt Migrationen ein und startet Web, Scheduler und HTTP-Worker. Die Dienste lesen den Hauptschlüssel über systemd-Credentials. Bestehende Daten, Schlüssel und Konfiguration bleiben bei erneuter Installation erhalten.
+
+Beim interaktiven Start fragt der Installer nach dem ersten Admin. Bei einer Installation ohne Terminal anschließend selbst anlegen; das Passwort wird verdeckt abgefragt:
+
+```bash
+sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian \
+  php /opt/meridian/bin/meridian user:create admin --role Admin
+```
+
+Die Oberfläche ist unter `http://SERVER:8080/app/` erreichbar. Für Zugriff außerhalb eines vertrauenswürdigen Heimnetzes einen HTTPS-Reverse-Proxy verwenden; dessen IP in `/etc/meridian/meridian.env` als `MERIDIAN_TRUSTED_PROXIES` eintragen und `meridian-web` neu starten.
+
+Shell-Jobs auf dem Host zusätzlich aktivieren:
+
+```bash
+sudo env MERIDIAN_ENABLE_SHELL=1 bash deploy/install.sh
+```
+
+Danach unter Einstellungen → Ausführungsorte **Host-Profil `default`** freigeben. Der Agent läuft für jeden Auftrag über `meridian-shell.socket` als eigener Benutzer `meridian-run`, ohne Zugriff auf Schlüssel oder Datenbank. Der Shell-Worker verbindet sich ausschließlich über den Unix-Socket; Docker ist für Host-Jobs nicht erforderlich.
+
+Installation prüfen:
+
+```bash
+systemctl is-active meridian-web meridian-scheduler meridian-worker-http
+curl -fsS http://127.0.0.1:8080/api/health
+# Bei aktivierten Host-Jobs:
+systemctl is-active meridian-shell.socket meridian-worker-shell
+# Bei Fehlern:
+sudo journalctl -u meridian-web -u meridian-scheduler -u meridian-worker-http -n 50 --no-pager
+sudo journalctl -u meridian-worker-shell --no-pager
+sudo journalctl --unit='meridian-shell@*' --no-pager
+```
+
+Änderungen an `/etc/meridian/meridian.env` werden nach dem Neustart der betreffenden Dienste wirksam. Aktualisieren: Sicherung erstellen, neue Quellen holen, die Oberfläche erneut bauen und den Installer erneut ausführen; bereits aktivierte Host-Jobs bleiben aktiviert. Einzelheiten zu Sicherung und Wiederherstellung stehen in [BETRIEB.md](docs/BETRIEB.md).

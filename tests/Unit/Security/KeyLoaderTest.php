@@ -58,6 +58,18 @@ final class KeyLoaderTest extends TestCase
         }
     }
 
+    public function testCredentialEnvironmentCannotAllowAnOrdinaryGroupReadableFile(): void
+    {
+        $file = $this->keyFile(KeyLoader::generate() . "\n", 0o440);
+        try {
+            $this->expectException(SecretException::class);
+            KeyLoader::load(['MERIDIAN_KEY_FILE' => $file, 'CREDENTIALS_DIRECTORY' => dirname($file)]);
+        } finally {
+            chmod($file, 0o600);
+            unlink($file);
+        }
+    }
+
     private function keyFile(string $content, int $mode): string
     {
         $file = tempnam(sys_get_temp_dir(), 'meridian-key-');
