@@ -37,7 +37,7 @@ final readonly class HostIsolation
      *
      * @param array<string, string> $env
      */
-    public static function fromEnvironment(#[\SensitiveParameter] array $env): self
+    public static function fromEnvironment(#[\SensitiveParameter] array $env, bool $developmentContainer = false): self
     {
         $paths = self::DEFAULT_PROTECTED_PATHS;
         foreach (['MERIDIAN_KEY_FILE', 'MERIDIAN_DATA_DIR'] as $name) {
@@ -46,7 +46,9 @@ final readonly class HostIsolation
             }
         }
 
-        return new self(self::DEFAULT_CONTAINER_MARKERS, array_values(array_unique($paths)));
+        $markers = $developmentContainer && ($env['MERIDIAN_ENV'] ?? '') === 'dev' ? [] : self::DEFAULT_CONTAINER_MARKERS;
+
+        return new self($markers, array_values(array_unique($paths)));
     }
 
     /** null = erlaubt, sonst eine feste Meldung. */

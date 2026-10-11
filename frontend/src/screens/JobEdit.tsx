@@ -54,6 +54,8 @@ interface Form {
   notifyDisable: boolean;
   tlsEnabled: boolean;
   tlsDays: string;
+  runtimeEnabled: boolean;
+  runtimePercent: string;
   notifyRecovery: boolean;
   notifyChannels: 'all' | 'selected' | 'none';
   notifyIds: number[];
@@ -125,6 +127,8 @@ function formFromJob(job: JobDetail): Form {
     notifyDisable: job.notify.on_disable,
     tlsEnabled: job.notify.tls_warn_days !== null,
     tlsDays: String(job.notify.tls_warn_days ?? 14),
+    runtimeEnabled: job.notify.runtime_warn_percent != null,
+    runtimePercent: String(job.notify.runtime_warn_percent ?? 200),
     notifyRecovery: job.notify.on_recovery,
     notifyChannels: job.notify.channels,
     notifyIds: job.notify.channel_ids,
@@ -156,6 +160,8 @@ function initialForm(limits: JobLimits | null, categories: CategoryRef[]): Form 
     notifyDisable: true,
     tlsEnabled: false,
     tlsDays: '14',
+    runtimeEnabled: false,
+    runtimePercent: '200',
     notifyRecovery: false,
     notifyChannels: 'all',
     notifyIds: [],
@@ -442,7 +448,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const inheritLabel = t('Wie global ({state})', { state: limits.response_storage === 'on' ? t('an') : t('aus') });
 
   const shownKeys = new Set([
-    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'notify', 'notify.failure_after', 'notify.disable_after', 'notify.tls_warn_days', 'notify.channels', 'notify.channel_ids', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
+    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'notify', 'notify.failure_after', 'notify.disable_after', 'notify.tls_warn_days', 'notify.runtime_warn_percent', 'notify.channels', 'notify.channel_ids', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
     'http.timeout_seconds', 'http.expected_status', 'http.max_redirects', 'http.store_response', 'request.url', 'request.body',
     'shell.target', 'shell.interpreter', 'shell.user', 'shell.workdir', 'shell.timeout_seconds', 'script.source',
   ]);
@@ -594,6 +600,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
         channel_ids: form.notifyChannels === 'selected' ? form.notifyIds : [],
         disable_after: form.disableEnabled ? (/^\d+$/.test(form.disableAfter) ? Number.parseInt(form.disableAfter, 10) : form.disableAfter) : null,
         on_disable: form.notifyDisable,
+        runtime_warn_percent: form.runtimeEnabled ? (/^\d+$/.test(form.runtimePercent) ? Number.parseInt(form.runtimePercent, 10) : form.runtimePercent) : null,
         tls_warn_days: form.tlsEnabled && !shellActive ? (/^\d+$/.test(form.tlsDays) ? Number.parseInt(form.tlsDays, 10) : form.tlsDays) : null,
       },
       overlap_policy: form.overlap,
@@ -1136,6 +1143,15 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
                 <span>{t('Mich benachrichtigen, wenn der Job deaktiviert wurde')}</span>
               </label>
             </div>
+          )}
+          <label className="check">
+            <input type="checkbox" checked={form.runtimeEnabled} onChange={(e) => set('runtimeEnabled', e.target.checked)} />
+            <span>{t('Mich benachrichtigen, wenn der Job länger als üblich braucht')}</span>
+          </label>
+          {form.runtimeEnabled && (
+            <FormField label={t('Warnen ab … Prozent der üblichen Laufzeit')} error={errors['notify.runtime_warn_percent']} hint={t('110 bis 1000. 200 bedeutet doppelt so lange. Vergleich mit dem Median der letzten 20 erfolgreichen Läufe, ab fünf Vergleichswerten. Testläufe zählen nicht. Die Warnung erfolgt nach dem Lauf.')}>
+              {(aria) => <input {...aria} className="input" name="runtime-percent" inputMode="numeric" value={form.runtimePercent} onChange={(e) => set('runtimePercent', e.target.value)} />}
+            </FormField>
           )}
           {!shellActive && (
             <>

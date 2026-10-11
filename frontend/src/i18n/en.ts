@@ -1,5 +1,10 @@
 /** Englische Fassungen; Schlüssel ist der deutsche Quelltext. Fehlt ein Eintrag, bleibt die Oberfläche deutsch. */
 export const EN: Record<string, string> = {
+  'Mich benachrichtigen, wenn der Job länger als üblich braucht': 'Notify me when the job takes longer than usual',
+  'Warnen ab … Prozent der üblichen Laufzeit': 'Warn from … percent of the usual duration',
+  '110 bis 1000. 200 bedeutet doppelt so lange. Vergleich mit dem Median der letzten 20 erfolgreichen Läufe, ab fünf Vergleichswerten. Testläufe zählen nicht. Die Warnung erfolgt nach dem Lauf.': '110 to 1000. 200 means twice as long. Compared with the median of the last 20 successful runs, once five samples are available. Test runs do not count. The warning is sent after the run.',
+
+
   "erreichbar": "reachable",
   "{name} testen": "Test {name}",
   "Prüft …": "Checking …",
