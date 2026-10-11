@@ -12,14 +12,15 @@ export function ThemeSwitch({ csrf }: { csrf?: string }) {
     if (next === getTheme()) {
       return;
     }
-    setTheme(next);
+    // Erst speichern, dann umschalten: Ein zwischenzeitliches Neuladen des Profils darf das alte Schema nicht zurückholen.
     if (csrf !== undefined) {
       try {
         await request('PUT', '/api/auth/theme', { csrf, body: { theme: next } });
       } catch {
-        // Die Anzeige bleibt im gewählten Schema; gespeichert wird beim nächsten Wechsel erneut.
+        // Die Anzeige wechselt trotzdem; gespeichert wird beim nächsten Wechsel erneut.
       }
     }
+    setTheme(next);
   }
   return (
     <div className="themeswitch" role="group" aria-label={t('Farbschema')}>
