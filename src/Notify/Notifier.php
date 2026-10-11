@@ -268,15 +268,20 @@ final class Notifier
         );
         try {
             $secret = $this->channels->secret($channel->id);
+        } catch (\Throwable) {
+            return SendFailed::SECRET;
+        }
+        try {
             $sender->send($channel, $secret, $message);
-            $secret?->wipe();
 
             return null;
         } catch (SendFailed $e) {
             return $e->getMessage();
         } catch (\Throwable) {
             // Meldung und Stacktrace können Hosts oder Zugangsdaten enthalten: nichts davon weitergeben.
-            return SendFailed::SECRET;
+            return SendFailed::UNEXPECTED;
+        } finally {
+            $secret?->wipe();
         }
     }
 
