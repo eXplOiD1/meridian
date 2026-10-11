@@ -5,9 +5,10 @@ import { FormField } from '../components/FormField';
 import { request } from '../lib/api';
 import { errorMessage, fieldErrors } from '../lib/errors';
 import type { CategoryUsage, Profile } from '../types';
+import { t } from '../i18n';
 
 function plural(n: number, one: string, many: string): string {
-  return String(n) + ' ' + (n === 1 ? one : many);
+  return String(n) + ' ' + t(n === 1 ? one : many);
 }
 
 /** Folgen des Löschens in Worten (ADR 0005 E9): nur wenn kein Job die Kategorie hat. */
@@ -15,15 +16,15 @@ function consequences(c: CategoryUsage): string {
   const parts: string[] = [];
   if (c.assignments > 0) {
     parts.push(
-      plural(c.assignments, 'Zuweisung verliert', 'Zuweisungen verlieren') +
-        ' diese Kategorie' +
-        (c.assignments_ineffective > 0 ? ', ' + String(c.assignments_ineffective) + ' davon ' + (c.assignments_ineffective === 1 ? 'wird' : 'werden') + ' wirkungslos' : ''),
+      plural(c.assignments, t('Zuweisung verliert'), t('Zuweisungen verlieren')) +
+        ' ' + t('diese Kategorie') +
+        (c.assignments_ineffective > 0 ? ', ' + t('{n} davon werden wirkungslos', { n: c.assignments_ineffective }) : ''),
     );
   }
   if (c.internal_targets > 0) {
-    parts.push(plural(c.internal_targets, 'Freigabe interner Ziele wird', 'Freigaben interner Ziele werden') + ' gelöscht (nie global)');
+    parts.push(plural(c.internal_targets, t('Freigabe interner Ziele wird'), t('Freigaben interner Ziele werden')) + ' ' + t('gelöscht (nie global)'));
   }
-  return parts.length === 0 ? 'Es hängen keine Zuweisungen oder Freigaben an dieser Kategorie.' : parts.join('. ') + '.';
+  return parts.length === 0 ? t('Es hängen keine Zuweisungen oder Freigaben an dieser Kategorie.') : parts.join('. ') + '.';
 }
 
 interface RowProps {
@@ -92,7 +93,7 @@ function Row({ category, csrf, onChanged }: RowProps) {
       <td>{category.jobs}</td>
       <td>
         {category.assignments}
-        {category.assignments_ineffective > 0 && <span className="hint"> ({category.assignments_ineffective} wirkungslos)</span>}
+        {category.assignments_ineffective > 0 && <span className="hint"> ({category.assignments_ineffective} {t('wirkungslos')})</span>}
       </td>
       <td>{category.internal_targets}</td>
     </>
@@ -104,12 +105,11 @@ function Row({ category, csrf, onChanged }: RowProps) {
         <td>
           {mode === 'rename' ? (
             <form className="inline-edit" onSubmit={(event) => void rename(event)}>
-              <FormField label={'Neuer Name für ' + category.name} error={fieldError}>
+              <FormField label={t('Neuer Name für {name}', { name: category.name })} error={fieldError}>
                 {(aria) => <input {...aria} className="input" name="name" autoComplete="off" required autoFocus value={name} onChange={(e) => setName(e.target.value)} />}
               </FormField>
               <button type="submit" className="btn btn--solid btn--small" disabled={busy || name === '' || name === category.name}>
-                Speichern
-              </button>
+                {t('Speichern')}</button>
               <button
                 type="button"
                 className="btn btn--ghost btn--small"
@@ -119,8 +119,7 @@ function Row({ category, csrf, onChanged }: RowProps) {
                   setFieldError(undefined);
                 }}
               >
-                Abbrechen
-              </button>
+                {t('Abbrechen')}</button>
             </form>
           ) : (
             <strong>{category.name}</strong>
@@ -130,20 +129,18 @@ function Row({ category, csrf, onChanged }: RowProps) {
         <td>
           <div className="row">
             <button type="button" className="btn btn--ghost btn--small" disabled={busy || mode !== 'view'} aria-label={category.name + ' umbenennen'} onClick={() => setMode('rename')}>
-              Umbenennen
-            </button>
+              {t('Umbenennen')}</button>
             <button
               type="button"
               className="btn btn--ghost btn--small btn--danger-text"
               disabled={busy || mode !== 'view' || blocked}
-              aria-label={category.name + ' löschen'}
-              title={blocked ? 'Die Kategorie enthält Jobs, Überwachungen oder Statusseiten. Zuerst verschieben oder löschen.' : undefined}
+              aria-label={t('{name} löschen', { name: category.name })}
+              title={blocked ? t('Die Kategorie enthält Jobs, Überwachungen oder Statusseiten. Zuerst verschieben oder löschen.') : undefined}
               onClick={() => void startDelete()}
             >
-              Löschen
-            </button>
+              {t('Löschen')}</button>
           </div>
-          {blocked && <div className="hint">Enthält Jobs, Überwachungen oder Statusseiten: Löschen erst nach dem Verschieben oder Löschen.</div>}
+          {blocked && <div className="hint">{t('Enthält Jobs, Überwachungen oder Statusseiten: Löschen erst nach dem Verschieben oder Löschen.')}</div>}
           {error !== null && (
             <p className="field__error" role="alert">
               {error}
@@ -154,22 +151,20 @@ function Row({ category, csrf, onChanged }: RowProps) {
       {mode === 'delete' && preview !== null && (
         <tr>
           <td colSpan={5}>
-            <div className="confirm confirm--form" role="group" aria-label={category.name + ' löschen bestätigen'}>
-              <span className="confirm__q">Kategorie „{preview.name}“ löschen?</span>
+            <div className="confirm confirm--form" role="group" aria-label={t('Kategorie „{name}“ löschen?', { name: category.name })}>
+              <span className="confirm__q">{t('Kategorie „{name}“ löschen?', { name: preview.name })}</span>
               {preview.jobs > 0 || preview.watchers > 0 ? (
                 <p className="confirm__err" role="alert">
-                  Die Kategorie enthält jetzt {preview.jobs > 0 ? plural(preview.jobs, 'Job', 'Jobs') : plural(preview.watchers, 'Überwachung oder Statusseite', 'Überwachungen oder Statusseiten')}. Zuerst verschieben oder löschen.
+                  {t('Die Kategorie enthält jetzt {what}. Zuerst verschieben oder löschen.', { what: preview.jobs > 0 ? plural(preview.jobs, t('Job'), t('Jobs')) : plural(preview.watchers, t('Überwachung oder Statusseite'), t('Überwachungen oder Statusseiten')) })}
                 </p>
               ) : (
                 <p className="hint">{consequences(preview)}</p>
               )}
               <div className="row">
                 <button type="button" className="btn btn--danger btn--small" disabled={busy || preview.jobs > 0 || preview.watchers > 0} onClick={() => void remove()}>
-                  Endgültig löschen
-                </button>
+                  {t('Endgültig löschen')}</button>
                 <button type="button" className="btn btn--ghost btn--small" autoFocus onClick={() => setMode('view')}>
-                  Abbrechen
-                </button>
+                  {t('Abbrechen')}</button>
               </div>
             </div>
           </td>
@@ -222,31 +217,29 @@ export function Categories({ profile }: { profile: Profile }) {
 
   return (
     <div className="settings">
-      <section className="card" aria-label="Kategorien">
-        <h2>Kategorien</h2>
+      <section className="card" aria-label={t('Kategorien')}>
+        <h2>{t('Kategorien')}</h2>
         <p className="card__lead">
-          Kategorien gruppieren Jobs und begrenzen, was Benutzer sehen und tun dürfen. Umbenennen ändert nichts an Zuweisungen und Freigaben. Löschen geht nur ohne Jobs.
-        </p>
+          {t('Kategorien gruppieren Jobs und begrenzen, was Benutzer sehen und tun dürfen. Umbenennen ändert nichts an Zuweisungen und Freigaben. Löschen geht nur ohne Jobs.')}</p>
         {error !== null && <Alert tone="err">{error}</Alert>}
         <form className="row" onSubmit={(event) => void create(event)}>
           <div className="row__grow">
-            <FormField label="Neue Kategorie" error={fieldError}>
+            <FormField label={t('Neue Kategorie')} error={fieldError}>
               {(aria) => <input {...aria} className="input" name="name" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />}
             </FormField>
           </div>
           <button type="submit" className="btn btn--solid" disabled={busy || name === ''}>
-            Kategorie anlegen
-          </button>
+            {t('Kategorie anlegen')}</button>
         </form>
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Jobs</th>
-                <th scope="col">Zuweisungen</th>
-                <th scope="col">Freigaben</th>
-                <th scope="col">Aktionen</th>
+                <th scope="col">{t('Name')}</th>
+                <th scope="col">{t('Jobs')}</th>
+                <th scope="col">{t('Zuweisungen')}</th>
+                <th scope="col">{t('Freigaben')}</th>
+                <th scope="col">{t('Aktionen')}</th>
               </tr>
             </thead>
             <tbody>
@@ -256,8 +249,7 @@ export function Categories({ profile }: { profile: Profile }) {
               {list !== null && list.length === 0 && (
                 <tr>
                   <td colSpan={5} className="hint">
-                    Noch keine Kategorien.
-                  </td>
+                    {t('Noch keine Kategorien.')}</td>
                 </tr>
               )}
             </tbody>

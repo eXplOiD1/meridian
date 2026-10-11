@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CRON_PRESETS } from '../lib/jobs';
+import { t } from '../i18n';
 
 type Mode = 'seconds' | 'minutes' | 'hours' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
 
@@ -145,7 +146,7 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
   const timeValue = pad(parts.hour) + ':' + pad(parts.minute);
   const timeField = (
     <label className="field sb__field">
-      <span className="field__label">Uhrzeit</span>
+      <span className="field__label">{t('Uhrzeit')}</span>
       <input
         className="input input--short"
         type="time"
@@ -162,7 +163,7 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
 
   return (
     <div className="sb">
-      <div className="chips" role="group" aria-label="Schnellwahl">
+      <div className="chips" role="group" aria-label={t('Schnellwahl')}>
         {CRON_PRESETS.map((preset) => (
           <button
             key={preset.cron}
@@ -176,13 +177,13 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
               onChange(preset.cron);
             }}
           >
-            {preset.label}
+            {t(preset.label)}
           </button>
         ))}
       </div>
 
       <div className="sb__box">
-        <div className="sb__modes" role="group" aria-label="Zeitplan zusammenstellen">
+        <div className="sb__modes" role="group" aria-label={t('Zeitplan zusammenstellen')}>
           {MODES.map((entry) => (
             <button
               key={entry.id}
@@ -191,7 +192,7 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
               aria-pressed={mode === entry.id}
               onClick={() => update(entry.id, parts)}
             >
-              {entry.label}
+              {t(entry.label)}
             </button>
           ))}
         </div>
@@ -199,13 +200,13 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
         <div className="sb__params">
           {mode === 'seconds' && (
             <label className="field sb__field">
-              <span className="field__label">{'Alle n Sekunden (' + String(minSeconds) + '–86400)'}</span>
+              <span className="field__label">{t('Alle n Sekunden') + ' (' + String(minSeconds) + '–86400)'}</span>
               <input className="input input--short" inputMode="numeric" value={parts.n} onChange={(e) => patch({ n: clamp(e.target.value, 1, 86400, minSeconds) })} />
             </label>
           )}
           {(mode === 'minutes' || mode === 'hours') && (
             <label className="field sb__field">
-              <span className="field__label">{mode === 'minutes' ? 'Alle n Minuten (1–59)' : 'Alle n Stunden (1–23)'}</span>
+              <span className="field__label">{mode === 'minutes' ? t('Alle n Minuten') + ' (1–59)' : t('Alle n Stunden') + ' (1–23)'}</span>
               <input
                 className="input input--short"
                 inputMode="numeric"
@@ -216,7 +217,7 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
           )}
           {mode === 'weekly' && (
             <fieldset className="sb__days">
-              <legend className="field__label">Wochentage</legend>
+              <legend className="field__label">{t('Wochentage')}</legend>
               <div className="chips">
                 {WEEKDAYS.map((day) => (
                   <button
@@ -226,7 +227,7 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
                     aria-pressed={parts.days.includes(day.n)}
                     onClick={() => patch({ days: parts.days.includes(day.n) ? (parts.days.length > 1 ? parts.days.filter((x) => x !== day.n) : parts.days) : [...parts.days, day.n] })}
                   >
-                    {day.label}
+                    {t(day.label)}
                   </button>
                 ))}
               </div>
@@ -234,11 +235,11 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
           )}
           {mode === 'yearly' && (
             <label className="field sb__field">
-              <span className="field__label">Monat</span>
+              <span className="field__label">{t('Monat')}</span>
               <select className="input" value={parts.month} onChange={(e) => patch({ month: clamp(e.target.value, 1, 12, 1) })}>
                 {MONTHS.map((name, index) => (
                   <option key={name} value={index + 1}>
-                    {name}
+                    {t(name)}
                   </option>
                 ))}
               </select>
@@ -246,16 +247,16 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
           )}
           {(mode === 'monthly' || mode === 'yearly') && (
             <label className="field sb__field">
-              <span className="field__label">Tag des Monats (1–31)</span>
+              <span className="field__label">{t('Tag des Monats (1–31)')}</span>
               <input className="input input--short" inputMode="numeric" value={parts.dom} onChange={(e) => patch({ dom: clamp(e.target.value, 1, 31, 1) })} />
             </label>
           )}
           {(mode === 'daily' || mode === 'weekly' || mode === 'monthly' || mode === 'yearly') && timeField}
           {mode === 'custom' && (
-            <div className="sb__cron5" role="group" aria-label="Die fünf Cron-Felder">
+            <div className="sb__cron5" role="group" aria-label={t('Die fünf Cron-Felder')}>
               {FIELD_NAMES.map((name, index) => (
                 <label key={name} className="field sb__field">
-                  <span className="field__label">{name}</span>
+                  <span className="field__label">{t(name)}</span>
                   <input
                     className="input input--mono"
                     spellCheck={false}
@@ -273,10 +274,10 @@ export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Prop
         </div>
         {mode === 'seconds' && (
           <p className="hint">
-            Feste Abstände, ausgerichtet auf Vielfache von n Sekunden. Der kleinste erlaubte Abstand ist {minSeconds} s (Einstellung des Admins); sehr kurze Abstände erzeugen viele Läufe. Dauert ein Lauf länger als der Abstand, entscheidet „Überlappung“ über das Überspringen.
+            {t('Feste Abstände, ausgerichtet auf Vielfache von n Sekunden. Der kleinste erlaubte Abstand ist {n} s (Einstellung des Admins); sehr kurze Abstände erzeugen viele Läufe. Dauert ein Lauf länger als der Abstand, entscheidet „Überlappung“ über das Überspringen.', { n: minSeconds })}
           </p>
         )}
-        {mode === 'minutes' && <p className="hint">Läuft zu jeder n-ten Minute einer Stunde, nicht n Minuten nach dem letzten Lauf.</p>}
+        {mode === 'minutes' && <p className="hint">{t('Läuft zu jeder n-ten Minute einer Stunde, nicht n Minuten nach dem letzten Lauf.')}</p>}
       </div>
       {error !== undefined && <div className="field__error">{error}</div>}
     </div>

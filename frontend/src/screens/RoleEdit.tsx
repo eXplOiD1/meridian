@@ -8,6 +8,7 @@ import { errorMessage, fieldErrors, isStatus } from '../lib/errors';
 import { canManageRoles, holdsUnrestricted, permissionLabel, PERMISSION_HINTS } from '../lib/permissions';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { ManagedRole, ManagedRoles, PermissionDef, Profile } from '../types';
+import { t } from '../i18n';
 
 const MAX_NAME = 40;
 const MAX_DESCRIPTION = 200;
@@ -69,7 +70,7 @@ export function RoleEdit({ profile, id }: Props) {
         }
         const found = reply.roles.find((r) => String(r.id) === id);
         if (found === undefined) {
-          setLoadError('Diese Rolle gibt es nicht (mehr).');
+          setLoadError(t('Diese Rolle gibt es nicht (mehr).'));
         } else {
           adopt(found);
         }
@@ -93,8 +94,7 @@ export function RoleEdit({ profile, id }: Props) {
           navigate('benutzer/rollen');
         }}
       >
-        Zurück zu den Rollen
-      </a>
+        {t('Zurück zu den Rollen')}</a>
     </p>
   );
 
@@ -102,7 +102,7 @@ export function RoleEdit({ profile, id }: Props) {
     return (
       <div className="settings">
         {back}
-        <Alert tone="warn">Dir fehlt das Recht „Rollen und Rechte verwalten“. Die Rollen kannst du in der Rechte-Matrix ansehen.</Alert>
+        <Alert tone="warn">{t('Dir fehlt das Recht „Rollen und Rechte verwalten“. Die Rollen kannst du in der Rechte-Matrix ansehen.')}</Alert>
       </div>
     );
   }
@@ -115,7 +115,7 @@ export function RoleEdit({ profile, id }: Props) {
     );
   }
   if (data === null || (id !== null && role === null)) {
-    return <div className="center">Lädt …</div>;
+    return <div className="center">{t('Lädt …')}</div>;
   }
 
   const catalog: PermissionDef[] = data.permissions;
@@ -148,9 +148,9 @@ export function RoleEdit({ profile, id }: Props) {
   }
 
   function question(): string {
-    let text = 'Änderung: ' + (changeList() || 'nur Name oder Beschreibung') + '. Gilt sofort für ' + String(role?.active_users ?? 0) + ' Benutzer, auch in offenen Sitzungen.';
+    let text = t('Änderung: {what}. Gilt sofort für {n} Benutzer, auch in offenen Sitzungen.', { what: changeList() || t('nur Name oder Beschreibung'), n: role?.active_users ?? 0 });
     if (lockout.length > 0) {
-      text += ' ' + String(role?.active_users ?? 0) + ' Benutzer verlieren den Zugang zur ' + (lockout.includes('users.manage') ? 'Benutzer' : 'Rollen') + 'verwaltung.';
+      text += ' ' + t('{n} Benutzer verlieren den Zugang zur {area}verwaltung.', { n: role?.active_users ?? 0, area: lockout.includes('users.manage') ? t('Benutzer') : t('Rollen') });
     }
     return text;
   }
@@ -201,7 +201,7 @@ export function RoleEdit({ profile, id }: Props) {
         current = (await request<{ role: ManagedRole }>('PUT', '/api/roles/' + String(current.id) + '/permissions', { csrf, body })).role;
         adopt(current);
       }
-      setNotice('Gespeichert. Die Änderung gilt sofort.');
+      setNotice(t('Gespeichert. Die Änderung gilt sofort.'));
     } catch (caught) {
       fail(caught);
       throw caught;
@@ -251,36 +251,35 @@ export function RoleEdit({ profile, id }: Props) {
         navigate('benutzer?rolle=' + String(role.id));
       }}
     >
-      Benutzer mit dieser Rolle
-    </a>
+      {t('Benutzer mit dieser Rolle')}</a>
   );
 
   const saveButton = (() => {
     if (needsPassword) {
       return (
         <PasswordConfirm
-          label={isNew ? 'Rolle anlegen' : 'Speichern'}
+          label={isNew ? t('Rolle anlegen') : t('Speichern')}
           tone="normal"
-          confirmLabel={isNew ? 'Rolle anlegen' : 'Speichern'}
-          question={isNew ? 'Die Rolle enthält gefährliche Rechte.' : question()}
+          confirmLabel={isNew ? t('Rolle anlegen') : t('Speichern')}
+          question={isNew ? t('Die Rolle enthält gefährliche Rechte.') : question()}
           disabled={busy || !dirty || name === ''}
           onSubmit={(password) => save(password)}
         />
       );
     }
     if (permissionsChanged || lockout.length > 0) {
-      return <Confirm label="Speichern" confirmLabel="Speichern" question={question()} busy={busy} disabled={!dirty} onConfirm={() => void save(null).catch(() => undefined)} />;
+      return <Confirm label={t('Speichern')} confirmLabel={t('Speichern')} question={question()} busy={busy} disabled={!dirty} onConfirm={() => void save(null).catch(() => undefined)} />;
     }
     return (
       <button type="button" className="btn btn--solid" disabled={busy || !dirty || name === ''} onClick={() => void submit()}>
-        {isNew ? 'Rolle anlegen' : 'Speichern'}
+        {isNew ? t('Rolle anlegen') : t('Speichern')}
       </button>
     );
   })();
 
   const groups: { title: string; keys: PermissionDef[]; danger: boolean }[] = [
-    { title: 'Rechte', keys: catalog.filter((p) => !p.dangerous), danger: false },
-    { title: 'Gefährlich – nur für alle Kategorien', keys: catalog.filter((p) => p.dangerous), danger: true },
+    { title: t('Rechte'), keys: catalog.filter((p) => !p.dangerous), danger: false },
+    { title: t('Gefährlich – nur für alle Kategorien'), keys: catalog.filter((p) => p.dangerous), danger: true },
   ];
 
   return (
@@ -288,29 +287,29 @@ export function RoleEdit({ profile, id }: Props) {
       {back}
       {failure !== null && <Alert tone="err">{failure}</Alert>}
       {errors.delete !== undefined && filterLink !== null && (
-        <Alert tone="warn">Die Rolle ist noch zugewiesen. Entziehe sie zuerst den Benutzern: {filterLink}.</Alert>
+        <Alert tone="warn">{t('Die Rolle ist noch zugewiesen. Entziehe sie zuerst den Benutzern:')} {filterLink}.</Alert>
       )}
       {notice !== null && <Alert tone="ok">{notice}</Alert>}
       <div className="form">
-        <section className="card" aria-label="Stammdaten">
-          <h2>Stammdaten</h2>
+        <section className="card" aria-label={t('Stammdaten')}>
+          <h2>{t('Stammdaten')}</h2>
           {role !== null && (
             <div className="badges">
-              <span className={role.builtin ? 'badge' : 'badge badge--ok'}>{role.builtin ? 'Standardrolle' : 'Eigene Rolle'}</span>
+              <span className={role.builtin ? 'badge' : 'badge badge--ok'}>{role.builtin ? 'Standardrolle' : t('Eigene Rolle')}</span>
             </div>
           )}
           {nameLocked ? (
             <p>
               <strong>{role.name}</strong>
               <br />
-              <span className="hint">{role.description ?? 'Name und Beschreibung der Standardrollen sind fest.'}</span>
+              <span className="hint">{role.description ?? t('Name und Beschreibung der Standardrollen sind fest.')}</span>
             </p>
           ) : (
             <>
-              <FormField label="Name" hint="2 bis 40 Zeichen: Buchstaben, Ziffern, Leerzeichen, Punkt, Unterstrich, Bindestrich." error={errors.name}>
+              <FormField label={t('Name')} hint={t('2 bis 40 Zeichen: Buchstaben, Ziffern, Leerzeichen, Punkt, Unterstrich, Bindestrich.')} error={errors.name}>
                 {(aria) => <input {...aria} className="input" name="role-name" value={name} maxLength={MAX_NAME} onChange={(event) => setName(event.target.value)} />}
               </FormField>
-              <FormField label="Beschreibung (optional)" hint={String(description.length) + ' von ' + String(MAX_DESCRIPTION) + ' Zeichen'} error={errors.description}>
+              <FormField label={t('Beschreibung (optional)')} hint={t('{n} von {max} Zeichen', { n: description.length, max: MAX_DESCRIPTION })} error={errors.description}>
                 {(aria) => (
                   <input {...aria} className="input" name="role-description" value={description} maxLength={MAX_DESCRIPTION} onChange={(event) => setDescription(event.target.value)} />
                 )}
@@ -319,15 +318,15 @@ export function RoleEdit({ profile, id }: Props) {
           )}
         </section>
 
-        <section className="card" aria-label="Rechte">
-          <h2>Rechte</h2>
-          {isAdmin && <Alert tone="info">Die Rolle Admin hat immer alle Rechte.</Alert>}
-          {!isAdmin && heldByMe && <Alert tone="info">Diese Rolle ist dir selbst zugewiesen. Rechte ändert ein anderer Administrator.</Alert>}
-          {!isAdmin && !heldByMe && role !== null && !role.permissions_editable && <Alert tone="info">Die Rechte dieser Rolle kannst du nicht ändern.</Alert>}
+        <section className="card" aria-label={t('Rechte')}>
+          <h2>{t('Rechte')}</h2>
+          {isAdmin && <Alert tone="info">{t('Die Rolle Admin hat immer alle Rechte.')}</Alert>}
+          {!isAdmin && heldByMe && <Alert tone="info">{t('Diese Rolle ist dir selbst zugewiesen. Rechte ändert ein anderer Administrator.')}</Alert>}
+          {!isAdmin && !heldByMe && role !== null && !role.permissions_editable && <Alert tone="info">{t('Die Rechte dieser Rolle kannst du nicht ändern.')}</Alert>}
           {errors.permissions !== undefined && <p className="field__error">{errors.permissions}</p>}
           {newDangerousOnRestricted && (
             <Alert tone="warn">
-              {String(restricted)} Zuweisungen dieser Rolle gelten nur für ausgewählte Kategorien. Ein gefährliches Recht geht nur mit „alle Kategorien“: {filterLink}.
+              {t('{n} Zuweisungen dieser Rolle gelten nur für ausgewählte Kategorien. Ein gefährliches Recht geht nur mit „alle Kategorien“:', { n: String(restricted) })} {filterLink}.
             </Alert>
           )}
           {groups.map((group) => (
@@ -342,10 +341,10 @@ export function RoleEdit({ profile, id }: Props) {
                     <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => toggle(permission.key, event.target.checked)} />
                     <span>
                       <strong>{permissionLabel(permission.key)}</strong>
-                      {permission.dangerous && <span className="badge badge--danger perm__badge">gefährlich</span>}
+                      {permission.dangerous && <span className="badge badge--danger perm__badge">{t('gefährlich')}</span>}
                       <span className="hint perm__hint">
-                        {PERMISSION_HINTS[permission.key] ?? ''}
-                        {lacking && !permissionsLocked && ' Du hast dieses Recht selbst nicht.'}
+                        {t(PERMISSION_HINTS[permission.key] ?? '')}
+                        {lacking && !permissionsLocked && ' ' + t('Du hast dieses Recht selbst nicht.')}
                       </span>
                     </span>
                   </label>
@@ -356,10 +355,10 @@ export function RoleEdit({ profile, id }: Props) {
         </section>
 
         {role !== null && (
-          <section className="card" aria-label="Auswirkung">
-            <h2>Auswirkung</h2>
+          <section className="card" aria-label={t('Auswirkung')}>
+            <h2>{t('Auswirkung')}</h2>
             <p>
-              Gilt sofort für {String(role.active_users)} Benutzer, auch in offenen Sitzungen. Zuweisungen: {String(role.assignments)}.
+              {t('Gilt sofort für {n} Benutzer, auch in offenen Sitzungen. Zuweisungen: {a}.', { n: String(role.active_users), a: String(role.assignments) })}
               {role.assignments > 0 && <> {filterLink}.</>}
             </p>
           </section>
@@ -369,27 +368,26 @@ export function RoleEdit({ profile, id }: Props) {
           {saveButton}
           {role !== null && (
             <button type="button" className="btn btn--ghost" onClick={duplicate}>
-              Duplizieren
-            </button>
+              {t('Duplizieren')}</button>
           )}
         </div>
       </div>
 
       {role !== null && !role.builtin && (
-        <section className="card" aria-label="Rolle löschen">
-          <h2>Rolle löschen</h2>
+        <section className="card" aria-label={t('Rolle löschen')}>
+          <h2>{t('Rolle löschen')}</h2>
           {role.deletable ? (
-            <p className="hint">Die Rolle ist niemandem zugewiesen und kann gelöscht werden.</p>
+            <p className="hint">{t('Die Rolle ist niemandem zugewiesen und kann gelöscht werden.')}</p>
           ) : heldByMe ? (
-            <p className="hint">Diese Rolle ist dir selbst zugewiesen und lässt sich nicht löschen.</p>
+            <p className="hint">{t('Diese Rolle ist dir selbst zugewiesen und lässt sich nicht löschen.')}</p>
           ) : (
-            <p className="hint">Die Rolle ist {String(role.assignments)} Mal zugewiesen. Entziehe sie zuerst den Benutzern: {filterLink}.</p>
+            <p className="hint">{t('Die Rolle ist {n} Mal zugewiesen. Entziehe sie zuerst den Benutzern:', { n: String(role.assignments) })} {filterLink}.</p>
           )}
           <div className="row">
             <Confirm
-              label="Rolle löschen"
-              question={'Rolle „' + role.name + '“ endgültig löschen?'}
-              confirmLabel="Endgültig löschen"
+              label={t('Rolle löschen')}
+              question={t('Rolle „{name}“ endgültig löschen?', { name: role.name })}
+              confirmLabel={t('Endgültig löschen')}
               busy={busy}
               disabled={!role.deletable}
               onConfirm={() => void remove()}

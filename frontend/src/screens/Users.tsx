@@ -6,6 +6,7 @@ import { formatTime } from '../lib/format';
 import { canManageRoles, canManageUsers, permissionLabel } from '../lib/permissions';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { ManagedRoles, Profile, RoleCatalog, RoleDef, UserRow, UserStatus } from '../types';
+import { t } from '../i18n';
 
 type Filter = UserStatus | 'all';
 
@@ -20,7 +21,7 @@ export const STATUS_LABEL: Record<UserStatus, string> = { active: 'aktiv', inact
 
 function Tabs({ current, profile }: { current: 'users' | 'roles'; profile: Profile }) {
   return (
-    <nav className="tabs" aria-label="Benutzer und Rollen">
+    <nav className="tabs" aria-label={t('Benutzer und Rollen')}>
       {canManageUsers(profile) && (
       <a
         href={hrefOf('benutzer')}
@@ -30,8 +31,7 @@ function Tabs({ current, profile }: { current: 'users' | 'roles'; profile: Profi
           navigate('benutzer');
         }}
       >
-        Benutzer
-      </a>
+        {t('Benutzer')}</a>
       )}
       <a
         href={hrefOf('benutzer/rollen')}
@@ -41,18 +41,17 @@ function Tabs({ current, profile }: { current: 'users' | 'roles'; profile: Profi
           navigate('benutzer/rollen');
         }}
       >
-        Rollen und Rechte
-      </a>
+        {t('Rollen und Rechte')}</a>
     </nav>
   );
 }
 
 function assignmentText(user: UserRow): string {
   if (user.assignments.length === 0) {
-    return 'keine Rolle';
+    return t('keine Rolle');
   }
   return user.assignments
-    .map((a) => a.role + (a.all_categories ? ' (alle Kategorien)' : ' (' + (a.categories.length === 0 ? 'keine Kategorie' : a.categories.map((c) => c.name).join(', ')) + ')'))
+    .map((a) => a.role + (a.all_categories ? ' (' + t('alle Kategorien') + ')' : ' (' + (a.categories.length === 0 ? t('keine Kategorie') : a.categories.map((c) => c.name).join(', ')) + ')'))
     .join('; ');
 }
 
@@ -100,9 +99,9 @@ export function Users({ profile, roleId }: { profile: Profile; roleId: string | 
   return (
     <div className="settings">
       <Tabs current="users" profile={profile} />
-      <section className="card" aria-label="Benutzer">
+      <section className="card" aria-label={t('Benutzer')}>
         <div className="row">
-          <h2>Benutzer</h2>
+          <h2>{t('Benutzer')}</h2>
           <a
             className="btn btn--solid"
             href={hrefOf('benutzer/neu')}
@@ -111,30 +110,27 @@ export function Users({ profile, roleId }: { profile: Profile; roleId: string | 
               navigate('benutzer/neu');
             }}
           >
-            Benutzer anlegen
-          </a>
+            {t('Benutzer anlegen')}</a>
         </div>
         <div className="row">
           <label className="field__label" htmlFor="user-status">
-            Status
-          </label>
+            {t('Status')}</label>
           <select id="user-status" className="select" value={filter} onChange={(event) => setFilter(event.target.value as Filter)}>
             {FILTERS.map((entry) => (
               <option key={entry.value} value={entry.value}>
-                {entry.label}
+                {t(entry.label)}
               </option>
             ))}
           </select>
           <label className="field__label" htmlFor="user-role">
-            Rolle
-          </label>
+            {t('Rolle')}</label>
           <select
             id="user-role"
             className="select"
             value={roleId ?? ''}
             onChange={(event) => navigate(event.target.value === '' ? 'benutzer' : 'benutzer?rolle=' + event.target.value)}
           >
-            <option value="">Alle Rollen</option>
+            <option value="">{t('Alle Rollen')}</option>
             {roles.map((role) => (
               <option key={role.id} value={role.id}>
                 {role.name}
@@ -147,12 +143,12 @@ export function Users({ profile, roleId }: { profile: Profile; roleId: string | 
           <table className="table">
             <thead>
               <tr>
-                <th scope="col">Benutzer</th>
-                <th scope="col">Anzeigename</th>
-                <th scope="col">Rollen</th>
-                <th scope="col">2FA</th>
-                <th scope="col">Status</th>
-                <th scope="col">Letzte Anmeldung</th>
+                <th scope="col">{t('Benutzer')}</th>
+                <th scope="col">{t('Anzeigename')}</th>
+                <th scope="col">{t('Rollen')}</th>
+                <th scope="col">{t('2FA')}</th>
+                <th scope="col">{t('Status')}</th>
+                <th scope="col">{t('Letzte Anmeldung')}</th>
               </tr>
             </thead>
             <tbody>
@@ -174,17 +170,17 @@ export function Users({ profile, roleId }: { profile: Profile; roleId: string | 
                     {assignmentText(user)}
                     {user.assignments.some((a) => !a.effective) && (
                       <div className="badges">
-                        <span className="badge badge--warn">wirkungslose Zuweisung</span>
+                        <span className="badge badge--warn">{t('wirkungslose Zuweisung')}</span>
                       </div>
                     )}
                   </td>
-                  <td>{user.totp_enabled ? 'aktiv' : <span className="hint">aus</span>}</td>
+                  <td>{user.totp_enabled ? t('aktiv') : <span className="hint">{t('aus')}</span>}</td>
                   <td>
-                    {STATUS_LABEL[user.status]}
+                    {t(STATUS_LABEL[user.status])}
                     {(user.password_change_required || user.locked) && (
                       <div className="badges">
-                        {user.password_change_required && <span className="badge badge--warn">Passwortwechsel offen</span>}
-                        {user.locked && <span className="badge badge--err">gesperrt</span>}
+                        {user.password_change_required && <span className="badge badge--warn">{t('Passwortwechsel offen')}</span>}
+                        {user.locked && <span className="badge badge--err">{t('gesperrt')}</span>}
                       </div>
                     )}
                   </td>
@@ -194,15 +190,13 @@ export function Users({ profile, roleId }: { profile: Profile; roleId: string | 
               {users !== null && users.length === 0 && (
                 <tr>
                   <td colSpan={6} className="hint">
-                    Keine Benutzer mit diesem Status und dieser Rolle.
-                  </td>
+                    {t('Keine Benutzer mit diesem Status und dieser Rolle.')}</td>
                 </tr>
               )}
               {users === null && error === null && (
                 <tr>
                   <td colSpan={6} className="hint">
-                    Lädt …
-                  </td>
+                    {t('Lädt …')}</td>
                 </tr>
               )}
             </tbody>
@@ -249,9 +243,9 @@ export function Roles({ profile }: { profile: Profile }) {
   return (
     <div className="settings">
       <Tabs current="roles" profile={profile} />
-      <section className="card" aria-label="Rollen">
+      <section className="card" aria-label={t('Rollen')}>
         <div className="row">
-          <h2>Rollen</h2>
+          <h2>{t('Rollen')}</h2>
           {manage && (
             <a
               className="btn btn--solid"
@@ -261,13 +255,12 @@ export function Roles({ profile }: { profile: Profile }) {
                 navigate('benutzer/rollen/neu');
               }}
             >
-              Rolle anlegen
-            </a>
+              {t('Rolle anlegen')}</a>
           )}
         </div>
         <p className="card__lead">
-          Eine Rolle ist eine Zusammenstellung von Rechten. Einem Benutzer lassen sich mehrere Rollen zuweisen, jeweils für alle oder für ausgewählte Kategorien. Gefährliche Rechte gelten nur für „alle Kategorien“.
-          {!manage && ' Du kannst die Rollen ansehen, aber nicht ändern.'}
+          {t('Eine Rolle ist eine Zusammenstellung von Rechten. Einem Benutzer lassen sich mehrere Rollen zuweisen, jeweils für alle oder für ausgewählte Kategorien. Gefährliche Rechte gelten nur für „alle Kategorien“.')}
+          {!manage && ' ' + t('Du kannst die Rollen ansehen, aber nicht ändern.')}
         </p>
         {error !== null && <Alert tone="err">{error}</Alert>}
         {catalog !== null && (
@@ -275,11 +268,11 @@ export function Roles({ profile }: { profile: Profile }) {
             <table className="table">
               <thead>
                 <tr>
-                  <th scope="col">Rolle</th>
-                  <th scope="col">Art</th>
-                  <th scope="col">Rechte</th>
-                  {managed !== null && <th scope="col">Zuweisungen</th>}
-                  {managed !== null && <th scope="col">Aktive Benutzer</th>}
+                  <th scope="col">{t('Rolle')}</th>
+                  <th scope="col">{t('Art')}</th>
+                  <th scope="col">{t('Rechte')}</th>
+                  {managed !== null && <th scope="col">{t('Zuweisungen')}</th>}
+                  {managed !== null && <th scope="col">{t('Aktive Benutzer')}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -305,13 +298,13 @@ export function Roles({ profile }: { profile: Profile }) {
                         {role.description !== null && <div className="hint">{role.description}</div>}
                       </td>
                       <td>
-                        <span className={role.builtin ? 'badge' : 'badge badge--ok'}>{role.builtin ? 'Standard' : 'Eigene'}</span>
+                        <span className={role.builtin ? 'badge' : 'badge badge--ok'}>{role.builtin ? t('Standard') : 'Eigene'}</span>
                       </td>
                       <td>
                         {String(role.permissions.length)}
                         {danger > 0 && (
                           <div className="badges">
-                            <span className="badge badge--danger">{String(danger)} gefährlich</span>
+                            <span className="badge badge--danger">{String(danger)} {t('gefährlich')}</span>
                           </div>
                         )}
                       </td>
@@ -325,14 +318,14 @@ export function Roles({ profile }: { profile: Profile }) {
           </div>
         )}
       </section>
-      <section className="card" aria-label="Rechte-Matrix">
-        <h2>Rechte-Matrix</h2>
+      <section className="card" aria-label={t('Rechte-Matrix')}>
+        <h2>{t('Rechte-Matrix')}</h2>
         {catalog !== null && (
           <div className="table-wrap">
             <table className="table matrix">
               <thead>
                 <tr>
-                  <th scope="col">Recht</th>
+                  <th scope="col">{t('Recht')}</th>
                   {catalog.roles.map((role) => (
                     <th scope="col" key={role.id}>
                       {role.name}
@@ -346,8 +339,8 @@ export function Roles({ profile }: { profile: Profile }) {
                     <th scope="row">
                       {permissionLabel(permission.key)}
                       <div className="badges">
-                        {permission.dangerous && <span className="badge badge--danger">gefährlich, nur für alle Kategorien</span>}
-                        {!permission.scoped && !permission.dangerous && <span className="badge">ohne Kategoriebezug</span>}
+                        {permission.dangerous && <span className="badge badge--danger">{t('gefährlich, nur für alle Kategorien')}</span>}
+                        {!permission.scoped && !permission.dangerous && <span className="badge">{t('ohne Kategoriebezug')}</span>}
                       </div>
                     </th>
                     {catalog.roles.map((role) => {

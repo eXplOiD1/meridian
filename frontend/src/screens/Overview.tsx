@@ -184,7 +184,7 @@ export function Overview({ profile }: { profile: Profile }) {
     <>
       {!profile.totp_enabled && (
         <Alert tone="warn">
-          Dein Konto ist noch nicht mit einem zweiten Faktor geschützt.{' '}
+          {t('Dein Konto ist noch nicht mit einem zweiten Faktor geschützt.')}{' '}
           <a
             href="#/konto"
             onClick={(event) => {
@@ -192,17 +192,16 @@ export function Overview({ profile }: { profile: Profile }) {
               navigate('konto');
             }}
           >
-            Jetzt einrichten
-          </a>
+            {t('Jetzt einrichten')}</a>
           .
         </Alert>
       )}
       <Hero jobs={jobs} attention={today.data !== null ? today.data.attention.length : null} mayView={mayView} />
-      <section className="board" aria-label="Nächste Läufe">
+      <section className="board" aria-label={t('Nächste Läufe')}>
         <div className="board__head">
           <div>
-            <div className="board__title">NÄCHSTE LÄUFE</div>
-            <div className="board__sub">Aktive Jobs, sortiert nach dem nächsten Ausführungszeitpunkt</div>
+            <div className="board__title">{t('NÄCHSTE LÄUFE')}</div>
+            <div className="board__sub">{t('Aktive Jobs, sortiert nach dem nächsten Ausführungszeitpunkt')}</div>
           </div>
           <BoardClock />
         </div>
@@ -210,14 +209,14 @@ export function Overview({ profile }: { profile: Profile }) {
         {jobs !== null && jobs.length > 0 && (
           <div className="board__scroll">
             <table className="board__table">
-              <caption className="visually-hidden">Nächste Läufe aktiver Jobs</caption>
+              <caption className="visually-hidden">{t('Nächste Läufe aktiver Jobs')}</caption>
               <thead>
                 <tr>
-                  <th scope="col">Zeit</th>
-                  <th scope="col">Job</th>
-                  <th scope="col">Kategorie</th>
-                  <th scope="col">Ziel</th>
-                  <th scope="col">Status</th>
+                  <th scope="col">{t('Zeit')}</th>
+                  <th scope="col">{t('Job')}</th>
+                  <th scope="col">{t('Kategorie')}</th>
+                  <th scope="col">{t('Ziel')}</th>
+                  <th scope="col">{t('Status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -245,15 +244,15 @@ export function Overview({ profile }: { profile: Profile }) {
         )}
         {jobs !== null && jobs.length === 0 && (
           <div className="board__empty">
-            <strong>Noch keine aktiven Jobs</strong>
-            <span>Sobald ein Job angelegt und aktiv ist, erscheint er hier mit Zeitpunkt, Kategorie, Ziel und Status.</span>
+            <strong>{t('Noch keine aktiven Jobs')}</strong>
+            <span>{t('Sobald ein Job angelegt und aktiv ist, erscheint er hier mit Zeitpunkt, Kategorie, Ziel und Status.')}</span>
           </div>
         )}
-        {jobs === null && error === null && mayView && <div className="board__empty"><span>Lädt …</span></div>}
+        {jobs === null && error === null && mayView && <div className="board__empty"><span>{t('Lädt …')}</span></div>}
         {!mayView && (
           <div className="board__empty">
-            <strong>Keine Jobs sichtbar</strong>
-            <span>Deine Rolle darf keine Jobs ansehen.</span>
+            <strong>{t('Keine Jobs sichtbar')}</strong>
+            <span>{t('Deine Rolle darf keine Jobs ansehen.')}</span>
           </div>
         )}
       </section>
@@ -261,35 +260,35 @@ export function Overview({ profile }: { profile: Profile }) {
       {today.data !== null && <TaktBand data={today.data} from={today.from} />}
       {today.data !== null && (
         <div className="overview-grid">
-          <section className="card" aria-label="Braucht Aufmerksamkeit">
-            <h2>Braucht Aufmerksamkeit</h2>
-            {today.data.attention.length === 0 && <p className="card__lead">Nichts auffällig: Alle aktiven Jobs liefen zuletzt fehlerfrei.</p>}
+          <section className="card" aria-label={t('Braucht Aufmerksamkeit')}>
+            <h2>{t('Braucht Aufmerksamkeit')}</h2>
+            {today.data.attention.length === 0 && <p className="card__lead">{t('Nichts auffällig: Alle aktiven Jobs liefen zuletzt fehlerfrei.')}</p>}
             <ul className="attention">
               {today.data.attention.map((item) => (
                 <li key={item.job.id} className="attention__item">
                   <a href={hrefOf(item.kind === 'monitor' ? 'ueberwachung' : 'jobs/' + String(item.job.id))}>{item.job.name}</a>{' '}
                   {item.status === 'down'
-                    ? 'hat sich seit ' + (item.finished_at !== null ? formatTime(item.finished_at) : 'einiger Zeit') + ' nicht mehr gemeldet.'
+                    ? t('hat sich seit {since} nicht mehr gemeldet.', { since: item.finished_at !== null ? formatTime(item.finished_at) : t('einiger Zeit') })
                     : item.status === 'slow'
-                    ? 'läuft schon ' + String(Math.round((item.running_seconds ?? 0) / 60)) + ' min, üblich sind etwa ' + String(Math.max(1, Math.round((item.usual_seconds ?? 0) / 60))) + ' min (braucht länger als üblich).'
-                    : 'ist zuletzt ' + (item.status === 'timeout' ? 'wegen Zeitlimit ' : '') + 'fehlgeschlagen' + (item.finished_at !== null ? ' (' + formatTime(item.finished_at) + ').' : '.')}
+                    ? t('läuft schon {a} min, üblich sind etwa {b} min (braucht länger als üblich).', { a: Math.round((item.running_seconds ?? 0) / 60), b: Math.max(1, Math.round((item.usual_seconds ?? 0) / 60)) })
+                    : (item.status === 'timeout' ? t('ist zuletzt wegen Zeitlimit fehlgeschlagen') : t('ist zuletzt fehlgeschlagen')) + (item.finished_at !== null ? ' (' + formatTime(item.finished_at) + ').' : '.')}
                 </li>
               ))}
             </ul>
           </section>
-          <section className="card" aria-label="Heute bisher">
-            <h2>Heute bisher</h2>
+          <section className="card" aria-label={t('Heute bisher')}>
+            <h2>{t('Heute bisher')}</h2>
             <dl className="stats">
               <div>
-                <dt>Läufe seit Mitternacht</dt>
+                <dt>{t('Läufe seit Mitternacht')}</dt>
                 <dd>{today.data.totals.runs.toLocaleString('de-DE')}</dd>
               </div>
               <div>
-                <dt>fehlgeschlagen</dt>
+                <dt>{t('fehlgeschlagen')}</dt>
                 <dd className={today.data.totals.failed > 0 ? 'stats__bad' : undefined}>{today.data.totals.failed.toLocaleString('de-DE')}</dd>
               </div>
               <div>
-                <dt>mittlere Laufzeit</dt>
+                <dt>{t('mittlere Laufzeit')}</dt>
                 <dd>{today.data.totals.avg_duration_ms === null ? '–' : formatDuration(today.data.totals.avg_duration_ms)}</dd>
               </div>
             </dl>

@@ -1,3 +1,4 @@
+import { locale, t } from '../i18n';
 import type { JobSummary, RunStatus, RunTrigger } from '../types';
 
 /** Voreinstellungen für den Zeitplan: Name → Cron-Ausdruck. Ein eigener Ausdruck bleibt immer möglich. */
@@ -15,9 +16,10 @@ export const CRON_PRESETS: ReadonlyArray<{ label: string; cron: string }> = [
 export function presetName(cron: string): string | null {
   const every = /^@every ([1-9][0-9]{0,4})s$/.exec(cron.trim());
   if (every !== null && every[1] !== undefined) {
-    return 'Alle ' + every[1] + ' Sekunden';
+    return t('Alle {n} Sekunden', { n: every[1] });
   }
-  return CRON_PRESETS.find((preset) => preset.cron === cron.trim().replace(/\s+/g, ' '))?.label ?? null;
+  const found = CRON_PRESETS.find((preset) => preset.cron === cron.trim().replace(/\s+/g, ' '));
+  return found === undefined ? null : t(found.label);
 }
 
 /** Der Server liefert bei http.display_host = hidden „https://••••“: Host und Port sind verborgen. */
@@ -56,27 +58,27 @@ export function stateOf(job: JobSummary): JobState {
 }
 
 export const STATE_LABEL: Record<JobState, string> = {
-  running: 'läuft',
-  disabled: 'deaktiviert',
-  failed: 'letzter Lauf fehlgeschlagen',
-  scheduled: 'geplant',
+  get running() { return t('läuft'); },
+  get disabled() { return t('deaktiviert'); },
+  get failed() { return t('letzter Lauf fehlgeschlagen'); },
+  get scheduled() { return t('geplant'); },
 };
 
 export const RUN_STATUS: Record<RunStatus, { label: string; tone: 'ok' | 'warn' | 'err' | 'info' }> = {
-  queued: { label: 'wartet', tone: 'info' },
-  running: { label: 'läuft', tone: 'warn' },
-  ok: { label: 'erfolgreich', tone: 'ok' },
-  failed: { label: 'fehlgeschlagen', tone: 'err' },
-  timeout: { label: 'Zeitlimit überschritten', tone: 'err' },
-  aborted: { label: 'abgebrochen', tone: 'err' },
-  skipped: { label: 'übersprungen', tone: 'warn' },
+  queued: { get label() { return t('wartet'); }, tone: 'info' },
+  running: { get label() { return t('läuft'); }, tone: 'warn' },
+  ok: { get label() { return t('erfolgreich'); }, tone: 'ok' },
+  failed: { get label() { return t('fehlgeschlagen'); }, tone: 'err' },
+  timeout: { get label() { return t('Zeitlimit überschritten'); }, tone: 'err' },
+  aborted: { get label() { return t('abgebrochen'); }, tone: 'err' },
+  skipped: { get label() { return t('übersprungen'); }, tone: 'warn' },
 };
 
 export const TRIGGER_LABEL: Record<RunTrigger, string> = {
-  schedule: 'Zeitplan',
-  manual: 'manuell',
-  retry: 'Wiederholung',
-  test: 'Testlauf',
+  get schedule() { return t('Zeitplan'); },
+  get manual() { return t('manuell'); },
+  get retry() { return t('Wiederholung'); },
+  get test() { return t('Testlauf'); },
 };
 
 export function isFinished(status: RunStatus): boolean {
@@ -85,12 +87,12 @@ export function isFinished(status: RunStatus): boolean {
 
 const OVERLAP_LABEL = { skip: 'überspringen', parallel: 'parallel', queue: 'einreihen' } as const;
 export function overlapLabel(policy: keyof typeof OVERLAP_LABEL): string {
-  return OVERLAP_LABEL[policy];
+  return t(OVERLAP_LABEL[policy]);
 }
 
 export function formatDuration(ms: number | null): string {
   if (ms === null) {
     return '–';
   }
-  return ms < 1000 ? String(ms) + ' ms' : (ms / 1000).toFixed(ms < 10000 ? 1 : 0).replace('.', ',') + ' s';
+  return ms < 1000 ? String(ms) + ' ms' : (ms / 1000).toFixed(ms < 10000 ? 1 : 0).replace('.', locale() === 'de-DE' ? ',' : '.') + ' s';
 }

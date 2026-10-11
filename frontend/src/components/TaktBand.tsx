@@ -1,5 +1,6 @@
 import { hrefOf } from '../lib/useHashRoute';
 import type { Overview } from '../types';
+import { t } from '../i18n';
 
 const ROW_HEIGHT = 18;
 const AXIS_HOURS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
@@ -19,12 +20,12 @@ export function TaktBand({ data, from }: { data: Overview; from: Date }) {
   const pad = (n: number): string => String(n).padStart(2, '0');
 
   return (
-    <section className="card takt" aria-label="Heute im Takt">
+    <section className="card takt" aria-label={t('Heute im Takt')}>
       <div className="takt__head">
-        <h2>Heute im Takt</h2>
-        <span className="takt__legend">Jeder Strich ist ein Zeitabschnitt mit Läufen. Rot heißt: fehlgeschlagen. Hell: noch geplant.</span>
+        <h2>{t('Heute im Takt')}</h2>
+        <span className="takt__legend">{t('Jeder Strich ist ein Zeitabschnitt mit Läufen. Rot heißt: fehlgeschlagen. Hell: noch geplant.')}</span>
       </div>
-      {data.jobs.length === 0 && <p className="card__lead">Heute keine Läufe und keine geplanten Läufe.</p>}
+      {data.jobs.length === 0 && <p className="card__lead">{t('Heute keine Läufe und keine geplanten Läufe.')}</p>}
       {data.jobs.length > 0 && (
         <div className="takt__grid">
           <div />
@@ -48,7 +49,7 @@ export function TaktBand({ data, from }: { data: Overview; from: Date }) {
       )}
       {data.jobs.length > 0 && nowBucket >= 0 && nowBucket < buckets && (
         <p className="takt__now">
-          Jetzt: <strong>{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</strong>
+          {t('Jetzt:')} <strong>{pad(new Date().getHours())}:{pad(new Date().getMinutes())}</strong>
         </p>
       )}
     </section>
@@ -68,7 +69,7 @@ function TaktRow({ job, buckets, nowBucket }: { job: Overview['jobs'][number]; b
         viewBox={'0 0 ' + String(buckets) + ' ' + String(ROW_HEIGHT)}
         preserveAspectRatio="none"
         role="img"
-        aria-label={job.name + ': ' + String(summary) + ' Läufe heute, ' + String(failed) + ' fehlgeschlagen, ' + String(job.planned.length) + ' Abschnitte noch geplant'}
+        aria-label={t('{name}: {runs} Läufe heute, {failed} fehlgeschlagen, {planned} Abschnitte noch geplant', { name: job.name, runs: summary, failed, planned: job.planned.length })}
       >
         <rect x={0} y={ROW_HEIGHT - 3} width={buckets} height={3} className="takt__track" />
         {job.planned.map((index) => (

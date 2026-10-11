@@ -148,6 +148,6 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 | [x] | curl-Import für Jobs (Browser-seitig, `frontend/src/lib/curl.ts`) | frontend |
 | [x] | Backup und Wiederherstellung (`backup:create/list/restore`, tägliche Sicherung im Planer, `docs/BETRIEB.md` mit Update-Ablauf) | infra |
 | [x] | Einstellbare Sitzungsdauer (ADR 0015) | backend, frontend |
-| [~] | Mehrsprachigkeit de/en (ADR 0016): Umschalter, Speicherung je Benutzer, Rahmen übersetzt; **Bildschirme folgen mit dem Redesign** | frontend |
-| [ ] | Redesign der Oberfläche nach Umsetzungsauftrag und Klickdummy von Alex (alle Funktionen erhalten; Lücken im Auftrag ergänzen); Texte dabei über `t()` | frontend |
+| [x] | Mehrsprachigkeit de/en (ADR 0016): Umschalter, Speicherung je Benutzer, alle Bildschirme über `t()`; Servermeldungen bleiben deutsch, soweit nicht in `en.ts` eingetragen | frontend |
+| [x] | Redesign „Material Aurora“ (ADR 0017): Tokens dunkel/hell je Benutzer, feste Sidebar, Mobil-Schublade, Übersicht mit Lage-Kopf, Job-Editor Einfach/Experte, Einstellungen mit „Mehr erfahren“; Inventar `docs/redesign/funktionsinventar.md`, Abnahme `docs/redesign/abnahme.md` | frontend |
 | [ ] | Abschluss-Review vor Version 1.0 (nach dem Redesign) | sicherheit |

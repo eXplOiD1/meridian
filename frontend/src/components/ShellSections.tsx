@@ -5,6 +5,7 @@ import { FormField } from './FormField';
 import { request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import type { ShellDetail, ShellTargetOption } from '../types';
+import { t } from '../i18n';
 
 /** Nicht geheime Felder eines Shell-Jobs. */
 export interface ShellForm {
@@ -131,28 +132,27 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
 
   if (part === 'advanced') {
     return (
-      <section className="card" aria-label="Umgebungsvariablen">
-        <h2>Umgebungsvariablen</h2>
+      <section className="card" aria-label={t('Umgebungsvariablen')}>
+        <h2>{t('Umgebungsvariablen')}</h2>
         {!replacing ? (
           <div className="stored">
             <div className="stored__facts">
-              <span>{saved?.has_env === true ? 'Umgebungsvariablen: ' + String(saved.env_count) + ' (Namen und Werte verborgen)' : 'Umgebungsvariablen: keine'}</span>
+              <span>{saved?.has_env === true ? t('Umgebungsvariablen: {n} (Namen und Werte verborgen)', { n: saved.env_count }) : t('Umgebungsvariablen: keine')}</span>
             </div>
-            <p className="hint">Skript und Umgebungsvariablen werden nur zusammen ersetzt. Wähle dazu im Reiter „Allgemein“ „Skript ersetzen“.</p>
+            <p className="hint">{t('Skript und Umgebungsvariablen werden nur zusammen ersetzt. Wähle dazu im Reiter „Allgemein“ „Skript ersetzen“.')}</p>
           </div>
         ) : (
           <div className="replace">
               <fieldset className="headers">
-                <legend className="field__label">Umgebungsvariablen</legend>
+                <legend className="field__label">{t('Umgebungsvariablen')}</legend>
                 <p className="hint">
-                  Geheimnisse gehören in Umgebungsvariablen (mindestens 4 Zeichen, sonst kann Meridian sie in der Ausgabe nicht verbergen). Werte werden verschlüsselt gespeichert und nie wieder angezeigt.
-                </p>
+                  {t('Geheimnisse gehören in Umgebungsvariablen (mindestens 4 Zeichen, sonst kann Meridian sie in der Ausgabe nicht verbergen). Werte werden verschlüsselt gespeichert und nie wieder angezeigt.')}</p>
                 {draft.env.map((row, index) => (
                   <div key={row.key} className="row headers__row">
                     <input
                       className="input input--mono-plain"
                       aria-label={'Variable ' + String(index + 1) + ' Name'}
-                      placeholder="NAME"
+                      placeholder={t('NAME')}
                       autoComplete="off"
                       autoCapitalize="off"
                       spellCheck={false}
@@ -162,16 +162,15 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
                     <input
                       className="input input--mono-plain"
                       type={revealed ? 'text' : 'password'}
-                      aria-label={'Variable ' + String(index + 1) + ' Wert'}
-                      placeholder="Wert"
+                      aria-label={t('Wert der Variable {n}', { n: index + 1 })}
+                      placeholder={t('Wert')}
                       autoComplete="new-password"
                       spellCheck={false}
                       value={row.value}
                       onChange={(e) => setDraft((current) => ({ ...current, env: current.env.map((r) => (r.key === row.key ? { ...r, value: e.target.value } : r)) }))}
                     />
                     <button type="button" className="btn btn--ghost btn--small" onClick={() => setDraft((current) => ({ ...current, env: current.env.filter((r) => r.key !== row.key) }))}>
-                      Entfernen
-                    </button>
+                      {t('Entfernen')}</button>
                   </div>
                 ))}
                 {envErrors.map(([key, message]) => (
@@ -180,8 +179,7 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
                   </div>
                 ))}
                 <button type="button" className="btn btn--ghost btn--small" onClick={() => setDraft((current) => ({ ...current, env: [...current.env, { key: nextKey(), name: '', value: '' }] }))}>
-                  Variable hinzufügen
-                </button>
+                  {t('Variable hinzufügen')}</button>
               </fieldset>
           </div>
         )}
@@ -191,20 +189,19 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
 
   return (
     <>
-      <section className="card" aria-label="Ausführungsort">
-        <h2>Ausführungsort</h2>
+      <section className="card" aria-label={t('Ausführungsort')}>
+        <h2>{t('Ausführungsort')}</h2>
         {targetsError !== null && <Alert tone="err">{targetsError}</Alert>}
         {targets !== null && targets.length === 0 && targetsError === null && (
-          <Alert tone="warn">Noch kein Ausführungsort freigegeben (Einstellungen → Ausführungsorte).</Alert>
+          <Alert tone="warn">{t('Noch kein Ausführungsort freigegeben (Einstellungen → Ausführungsorte).')}</Alert>
         )}
         <div className="grid-2">
-          <FormField label="Ausführungsort" error={errors['shell.target']} hint="Nur Orte, die für die gewählte Kategorie freigegeben sind.">
+          <FormField label={t('Ausführungsort')} error={errors['shell.target']} hint={t('Nur Orte, die für die gewählte Kategorie freigegeben sind.')}>
             {(aria) => (
               <select {...aria} className="input" name="shell-target" value={form.target} onChange={(e) => onChange({ target: e.target.value, user: '' })}>
                 {form.target === '' && (
                   <option value="" disabled>
-                    Bitte wählen …
-                  </option>
+                    {t('Bitte wählen …')}</option>
                 )}
                 {list.map((option) => (
                   <option key={targetKey(option.kind, option.name)} value={targetKey(option.kind, option.name)}>
@@ -215,24 +212,24 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
               </select>
             )}
           </FormField>
-          <FormField label="Interpreter" error={errors['shell.interpreter']}>
+          <FormField label={t('Interpreter')} error={errors['shell.interpreter']}>
             {(aria) => (
               <select {...aria} className="input input--short" name="interpreter" value={form.interpreter} onChange={(e) => onChange({ interpreter: e.target.value === 'bash' ? 'bash' : 'sh' })}>
-                <option value="sh">sh</option>
-                <option value="bash">bash</option>
+                <option value="sh">{t('sh')}</option>
+                <option value="bash">{t('bash')}</option>
               </select>
             )}
           </FormField>
         </div>
-        {missing && <Alert tone="warn">Dieser Ausführungsort ist für die gewählte Kategorie nicht freigegeben. Wähle einen anderen oder gib ihn in den Einstellungen frei.</Alert>}
+        {missing && <Alert tone="warn">{t('Dieser Ausführungsort ist für die gewählte Kategorie nicht freigegeben. Wähle einen anderen oder gib ihn in den Einstellungen frei.')}</Alert>}
 
         {(selected !== null || parsed !== null) && (
           <div className="grid-2">
             {isDocker ? (
               <FormField
-                label="Benutzer im Container"
+                label={t('Benutzer im Container')}
                 error={errors['shell.user']}
-                hint={selected !== null && selected.default_user !== null ? 'Leer = Standard des Ausführungsorts (' + selected.default_user + ').' : 'Nur freigegebene Benutzer.'}
+                hint={selected !== null && selected.default_user !== null ? t('Leer = Standard des Ausführungsorts ({user}).', { user: selected.default_user }) : t('Nur freigegebene Benutzer.')}
               >
                 {(aria) => (
                   <select {...aria} className="input" name="shell-user" value={form.user} onChange={(e) => onChange({ user: e.target.value })}>
@@ -249,12 +246,12 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
               </FormField>
             ) : (
               <div className="field">
-                <span className="field__label">Benutzer</span>
-                <span className="hint">Host-Profile laufen als fester Benutzer ohne Anmeldung (meridian-run).</span>
+                <span className="field__label">{t('Benutzer')}</span>
+                <span className="hint">{t('Host-Profile laufen als fester Benutzer ohne Anmeldung (meridian-run).')}</span>
               </div>
             )}
             {isDocker && (
-              <FormField label="Arbeitsverzeichnis" error={errors['shell.workdir']} hint="Absoluter Pfad im Container, z. B. /var/www. Leer = Standard des Containers.">
+              <FormField label={t('Arbeitsverzeichnis')} error={errors['shell.workdir']} hint={t('Absoluter Pfad im Container, z. B. /var/www. Leer = Standard des Containers.')}>
                 {(aria) => (
                   <input
                     {...aria}
@@ -263,7 +260,7 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
                     autoComplete="off"
                     autoCapitalize="off"
                     spellCheck={false}
-                    placeholder="/var/www"
+                    placeholder={t('/var/www')}
                     value={form.workdir}
                     onChange={(e) => onChange({ workdir: e.target.value })}
                   />
@@ -274,40 +271,39 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
         )}
         {root && (
           <Alert tone="err">
-            <strong>Achtung: Das Skript läuft als root.</strong> Ein Fehler oder ein falsches Skript kann den gesamten Container verändern. Wähle nur dann root, wenn es unbedingt nötig ist.
+            <strong>{t('Achtung: Das Skript läuft als root.')}</strong> Ein Fehler oder ein falsches Skript kann den gesamten Container verändern. Wähle nur dann root, wenn es unbedingt nötig ist.
           </Alert>
         )}
         {selected !== null && selected.allows_root && !root && isDocker && (
-          <p className="hint">Dieser Ausführungsort erlaubt auch root. Es gilt nur, was oben ausgewählt ist.</p>
+          <p className="hint">{t('Dieser Ausführungsort erlaubt auch root. Es gilt nur, was oben ausgewählt ist.')}</p>
         )}
       </section>
 
-      <section className="card" aria-label="Skript">
-        <h2>Skript</h2>
+      <section className="card" aria-label={t('Skript')}>
+        <h2>{t('Skript')}</h2>
         {saved !== null && !replacing && (
           <div className="stored">
-            <div className="stored__label">Gespeichertes Skript</div>
+            <div className="stored__label">{t('Gespeichertes Skript')}</div>
             <div className="stored__facts">
-              <span>{saved.has_script ? 'Skript gesetzt (Inhalt verborgen)' : 'Kein Skript gesetzt'}</span>
-              <span>{saved.has_env ? 'Umgebungsvariablen: ' + String(saved.env_count) + ' (Namen und Werte verborgen)' : 'Umgebungsvariablen: keine'}</span>
+              <span>{saved.has_script ? t('Skript gesetzt (Inhalt verborgen)') : t('Kein Skript gesetzt')}</span>
+              <span>{saved.has_env ? t('Umgebungsvariablen: {n} (Namen und Werte verborgen)', { n: saved.env_count }) : t('Umgebungsvariablen: keine')}</span>
             </div>
-            <p className="hint">Das Skript ist nach dem Speichern nicht mehr lesbar. Bewahre es zusätzlich in deiner Versionsverwaltung auf.</p>
+            <p className="hint">{t('Das Skript ist nach dem Speichern nicht mehr lesbar. Bewahre es zusätzlich in deiner Versionsverwaltung auf.')}</p>
             {errors.script !== undefined && <div className="field__error">{errors.script}</div>}
             <div className="row">
               <button type="button" className="btn btn--ghost" onClick={onStartReplacing}>
-                Skript ersetzen
-              </button>
+                {t('Skript ersetzen')}</button>
             </div>
           </div>
         )}
 
         {replacing && (
           <div className="replace">
-            {saved !== null && <Alert tone="info">Skript und Umgebungsvariablen werden zusammen ersetzt. Felder, die du leer lässt, sind danach leer.</Alert>}
+            {saved !== null && <Alert tone="info">{t('Skript und Umgebungsvariablen werden zusammen ersetzt. Felder, die du leer lässt, sind danach leer.')}</Alert>}
             <FormField
-              label="Skript"
+              label={t('Skript')}
               error={errors['script.source']}
-              hint={revealed ? 'Wird verschlüsselt gespeichert. Bewahre es zusätzlich in deiner Versionsverwaltung auf.' : 'Wird verschlüsselt gespeichert und nie wieder angezeigt. Bewahre es zusätzlich in deiner Versionsverwaltung auf.'}
+              hint={revealed ? t('Wird verschlüsselt gespeichert. Bewahre es zusätzlich in deiner Versionsverwaltung auf.') : t('Wird verschlüsselt gespeichert und nie wieder angezeigt. Bewahre es zusätzlich in deiner Versionsverwaltung auf.')}
             >
               {(aria) => (
                 <textarea
@@ -330,8 +326,7 @@ export function ShellSections({ form, onChange, targets, targetsError, errors, s
             {saved !== null && (
               <div className="row">
                 <button type="button" className="btn btn--ghost" onClick={onCancelReplacing}>
-                  Abbrechen (gespeichertes Skript behalten)
-                </button>
+                  {t('Abbrechen (gespeichertes Skript behalten)')}</button>
               </div>
             )}
           </div>

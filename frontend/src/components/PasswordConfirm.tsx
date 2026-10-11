@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { errorMessage, fieldErrors, isStatus } from '../lib/errors';
+import { t } from '../i18n';
 
 interface PasswordConfirmProps {
   label: string;
@@ -88,8 +89,7 @@ export function PasswordConfirm({ label, question, confirmLabel, onSubmit, disab
       <span className="confirm__q">{question}</span>
       <div className="field">
         <label className="field__label" htmlFor={id}>
-          Dein Passwort zur Bestätigung
-        </label>
+          {t('Dein Passwort zur Bestätigung')}</label>
         <input
           id={id}
           ref={inputRef}
@@ -120,8 +120,7 @@ export function PasswordConfirm({ label, question, confirmLabel, onSubmit, disab
           {confirmLabel}
         </button>
         <button type="button" className="btn btn--ghost btn--small" onClick={close}>
-          Abbrechen
-        </button>
+          {t('Abbrechen')}</button>
       </div>
     </form>
   );

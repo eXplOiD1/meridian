@@ -6,6 +6,7 @@ import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatDuration, isFinished } from '../lib/jobs';
 import type { LogChunk, LogPage, Run, RunStatus } from '../types';
+import { t } from '../i18n';
 
 const POLL_MS = 2000;
 const POLL_LIMIT = 200;
@@ -245,9 +246,9 @@ export function RunLog({ runId, csrf, canCancel, onFinished }: Props) {
         }
         es.close();
         if (reason === 'forbidden') {
-          setProblem('Das Live-Log ist für dich nicht mehr freigegeben.');
+          setProblem(t('Das Live-Log ist für dich nicht mehr freigegeben.'));
         } else if (reason === 'gone') {
-          setProblem('Der Lauf existiert nicht mehr.');
+          setProblem(t('Der Lauf existiert nicht mehr.'));
         } else if (reason === 'error') {
           startPolling();
         } else {
@@ -351,34 +352,34 @@ export function RunLog({ runId, csrf, canCancel, onFinished }: Props) {
   const requested = cancelRequested || run?.cancel_requested_at != null;
 
   return (
-    <div className="runlog" aria-label="Live-Ausgabe des Laufs">
+    <div className="runlog" aria-label={t('Live-Ausgabe des Laufs')}>
       <div className="runlog__bar">
         <RunBadge status={status} />
         {!done && mode === 'live' && (
           <span className="livetag" data-testid="live-indicator">
             <span className="dot dot--now pulse" aria-hidden="true" />
-            live
+            {t('live')}
           </span>
         )}
-        {!done && mode === 'poll' && <span className="muted">Abfrage alle 2 Sekunden</span>}
-        {!done && mode === 'connecting' && <span className="muted">Verbindet …</span>}
-        {elapsed !== null && <span className="muted">Dauer {elapsed}</span>}
+        {!done && mode === 'poll' && <span className="muted">{t('Abfrage alle 2 Sekunden')}</span>}
+        {!done && mode === 'connecting' && <span className="muted">{t('Verbindet …')}</span>}
+        {elapsed !== null && <span className="muted">{t('Dauer')} {elapsed}</span>}
         <span className="runlog__spacer" />
         <label className="check runlog__follow">
           <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
-          <span>Automatisch mitlaufen</span>
+          <span>{t('Automatisch mitlaufen')}</span>
         </label>
-        {canCancel && !done && <Confirm label="Lauf abbrechen" question="Lauf wirklich abbrechen? Der Prozess erhält SIGTERM, nach 10 s SIGKILL." confirmLabel="Ja, abbrechen" busy={cancelBusy || requested} onConfirm={() => void cancel()} />}
+        {canCancel && !done && <Confirm label={t('Lauf abbrechen')} question={t('Lauf wirklich abbrechen? Der Prozess erhält SIGTERM, nach 10 s SIGKILL.')} confirmLabel={t('Ja, abbrechen')} busy={cancelBusy || requested} onConfirm={() => void cancel()} />}
       </div>
 
-      {requested && !done && <Alert tone="warn">Abbruch angefordert … Der Lauf endet, sobald der Prozess beendet ist.</Alert>}
+      {requested && !done && <Alert tone="warn">{t('Abbruch angefordert … Der Lauf endet, sobald der Prozess beendet ist.')}</Alert>}
       {cancelError !== null && <Alert tone="err">{cancelError}</Alert>}
       {problem !== null && <Alert tone="err">{problem}</Alert>}
-      {trimmed && <p className="hint">Sehr lange Ausgabe: Der Anfang wird hier nicht mehr angezeigt.</p>}
+      {trimmed && <p className="hint">{t('Sehr lange Ausgabe: Der Anfang wird hier nicht mehr angezeigt.')}</p>}
 
-      <pre ref={preRef} className="runout runlog__out" tabIndex={0} aria-label="Ausgabe" onScroll={onScroll} data-testid="runlog-out">
+      <pre ref={preRef} className="runout runlog__out" tabIndex={0} aria-label={t('Ausgabe')} onScroll={onScroll} data-testid="runlog-out">
         {pieces.length === 0 ? (
-          <span className="runlog__sys">{done ? '(keine Ausgabe)' : 'Noch keine Ausgabe …'}</span>
+          <span className="runlog__sys">{done ? t('(keine Ausgabe)') : t('Noch keine Ausgabe …')}</span>
         ) : (
           pieces.map((piece) => (
             <Fragment key={piece.key}>

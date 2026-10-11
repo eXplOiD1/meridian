@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { Profile } from '../types';
 
 /**
@@ -59,7 +60,8 @@ export const PERMISSION_HINTS: Record<string, string> = {
 };
 
 export function permissionLabel(key: string): string {
-  return PERMISSION_LABELS[key] ?? key;
+  const label = PERMISSION_LABELS[key];
+  return label === undefined ? key : t(label);
 }
 
 /** Gefährliche Rechte gelten nur uneingeschränkt (alle Kategorien ausdrücklich). */

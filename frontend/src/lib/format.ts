@@ -1,4 +1,4 @@
-import { locale } from '../i18n';
+import { locale, t } from '../i18n';
 
 const ACTIONS: Record<string, { label: string; tone: 'ok' | 'warn' | 'err' | 'info' }> = {
   'auth.login': { label: 'Angemeldet', tone: 'ok' },
@@ -20,7 +20,8 @@ const ACTIONS: Record<string, { label: string; tone: 'ok' | 'warn' | 'err' | 'in
 };
 
 export function describeAction(action: string): { label: string; tone: 'ok' | 'warn' | 'err' | 'info' } {
-  return ACTIONS[action] ?? { label: action, tone: 'info' };
+  const known = ACTIONS[action];
+  return known !== undefined ? { label: t(known.label), tone: known.tone } : { label: action, tone: 'info' };
 }
 
 const dateFormat = new Intl.DateTimeFormat('de-DE', {
@@ -49,11 +50,11 @@ export function retryHint(seconds: number | null): string {
   if (seconds === null) {
     return '';
   }
-  return seconds >= 60 ? ' Nächster Versuch in etwa ' + String(Math.ceil(seconds / 60)) + ' Minuten.' : ' Nächster Versuch in ' + String(seconds) + ' Sekunden.';
+  return seconds >= 60 ? ' ' + t('Nächster Versuch in etwa {n} Minuten.', { n: Math.ceil(seconds / 60) }) : ' ' + t('Nächster Versuch in {n} Sekunden.', { n: seconds });
 }
 
-const shortFormat = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-const timeFormat = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
+const shortFormat = { format: (date: Date): string => new Intl.DateTimeFormat(locale(), { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date) };
+const timeFormat = { format: (date: Date): string => new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' }).format(date) };
 
 /** Zeitpunkt ohne Sekunden in der Zeitzone des Browsers. */
 export function formatShort(iso: string | null): string {

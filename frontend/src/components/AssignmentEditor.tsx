@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import type { AssignmentInput, CategoryRef, RoleCatalog, RoleDef } from '../types';
 import { Alert } from './Alert';
+import { t } from '../i18n';
 
 interface Props {
   catalog: RoleCatalog;
@@ -36,25 +37,23 @@ export function AssignmentEditor({ catalog, categories, value, onChange, disable
 
   return (
     <div className="form">
-      {value.length === 0 && <p className="hint">Keine Rolle zugewiesen: Der Benutzer kann sich anmelden, sieht aber nur „Mein Konto“.</p>}
+      {value.length === 0 && <p className="hint">{t('Keine Rolle zugewiesen: Der Benutzer kann sich anmelden, sieht aber nur „Mein Konto“.')}</p>}
       {value.map((entry, index) => {
         const role = roleOf(catalog, entry.role_id);
         const dangerous = isDangerousRole(catalog, entry.role_id);
         const key = base + '-' + String(entry.role_id);
         const ineffective = !entry.all_categories && entry.category_ids.length === 0;
         return (
-          <div className="assign" key={entry.role_id} role="group" aria-label={'Zuweisung ' + (role?.name ?? 'Rolle')}>
+          <div className="assign" key={entry.role_id} role="group" aria-label={t('Zuweisung {name}', { name: role?.name ?? t('Rolle') })}>
             <div className="assign__head">
-              <strong>{role?.name ?? 'Unbekannte Rolle'}</strong>
+              <strong>{role?.name ?? t('Unbekannte Rolle')}</strong>
               <button type="button" className="btn btn--ghost btn--small" disabled={disabled} onClick={() => onChange(value.filter((_, i) => i !== index))}>
-                Zuweisung entfernen
-              </button>
+                {t('Zuweisung entfernen')}</button>
             </div>
             {role?.description != null && <p className="hint">{role.description}</p>}
             {dangerous && (
               <Alert tone="warn">
-                Diese Rolle enthält gefährliche Rechte. Sie gilt nur für alle Kategorien. Das Ändern verlangt dein Passwort.
-              </Alert>
+                {t('Diese Rolle enthält gefährliche Rechte. Sie gilt nur für alle Kategorien. Das Ändern verlangt dein Passwort.')}</Alert>
             )}
             <label className="check">
               <input
@@ -63,12 +62,12 @@ export function AssignmentEditor({ catalog, categories, value, onChange, disable
                 disabled={disabled || dangerous}
                 onChange={(event) => update(index, { all_categories: event.target.checked, category_ids: [] })}
               />
-              <span>Alle Kategorien{dangerous ? ' (für diese Rolle vorgeschrieben)' : ''}</span>
+              <span>{t('Alle Kategorien')}{dangerous ? ' ' + t('(für diese Rolle vorgeschrieben)') : ''}</span>
             </label>
             {!entry.all_categories && (
               <fieldset className="assign__cats">
-                <legend>Nur diese Kategorien</legend>
-                {categories.length === 0 && <p className="hint">Es gibt noch keine Kategorien.</p>}
+                <legend>{t('Nur diese Kategorien')}</legend>
+                {categories.length === 0 && <p className="hint">{t('Es gibt noch keine Kategorien.')}</p>}
                 {categories.map((category) => {
                   const checked = entry.category_ids.includes(category.id);
                   return (
@@ -88,7 +87,7 @@ export function AssignmentEditor({ catalog, categories, value, onChange, disable
                 })}
               </fieldset>
             )}
-            {ineffective && <p className="field__error">Kategorien wählen oder „Alle Kategorien“ ankreuzen. Ohne Auswahl bleibt die Zuweisung wirkungslos und wird nicht gespeichert.</p>}
+            {ineffective && <p className="field__error">{t('Kategorien wählen oder „Alle Kategorien“ ankreuzen. Ohne Auswahl bleibt die Zuweisung wirkungslos und wird nicht gespeichert.')}</p>}
           </div>
         );
       })}
@@ -96,8 +95,7 @@ export function AssignmentEditor({ catalog, categories, value, onChange, disable
       {free.length > 0 && value.length < (catalog.max_assignments ?? 10) && (
         <div className="row">
           <label className="field__label" htmlFor={base + '-add'}>
-            Rolle hinzufügen
-          </label>
+            {t('Rolle hinzufügen')}</label>
           <select
             id={base + '-add'}
             className="select"
@@ -110,7 +108,7 @@ export function AssignmentEditor({ catalog, categories, value, onChange, disable
               }
             }}
           >
-            <option value="">Auswählen …</option>
+            <option value="">{t('Auswählen …')}</option>
             {free.map((role) => (
               <option key={role.id} value={role.id}>
                 {role.name}

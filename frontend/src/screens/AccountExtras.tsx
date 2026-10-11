@@ -7,6 +7,7 @@ import { request } from '../lib/api';
 import { errorMessage, fieldErrors, isStatus } from '../lib/errors';
 import { formatTime } from '../lib/format';
 import type { Profile, SessionRow } from '../types';
+import { t } from '../i18n';
 
 export function DisplayNameCard({ profile, onChanged }: { profile: Profile; onChanged: () => Promise<void> }) {
   const [name, setName] = useState(profile.user.display_name);
@@ -37,17 +38,16 @@ export function DisplayNameCard({ profile, onChanged }: { profile: Profile; onCh
   }
 
   return (
-    <form className="card" aria-label="Anzeigename" onSubmit={(event) => void submit(event)}>
-      <h2>Anzeigename</h2>
+    <form className="card" aria-label={t('Anzeigename')} onSubmit={(event) => void submit(event)}>
+      <h2>{t('Anzeigename')}</h2>
       {error !== null && <Alert tone="err">{error}</Alert>}
-      {done && <Alert tone="ok">Anzeigename gespeichert.</Alert>}
-      <FormField label="Anzeigename" hint="1 bis 64 Zeichen, ohne Leerzeichen am Rand. Der Benutzername bleibt unverändert." error={fieldError}>
+      {done && <Alert tone="ok">{t('Anzeigename gespeichert.')}</Alert>}
+      <FormField label={t('Anzeigename')} hint={t('1 bis 64 Zeichen, ohne Leerzeichen am Rand. Der Benutzername bleibt unverändert.')} error={fieldError}>
         {(aria) => <input {...aria} className="input" name="display_name" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} />}
       </FormField>
       <div className="row">
         <button type="submit" className="btn btn--solid" disabled={busy || name === '' || name === profile.user.display_name}>
-          Speichern
-        </button>
+          {t('Speichern')}</button>
       </div>
     </form>
   );
@@ -81,7 +81,7 @@ export function PasswordCard({ profile, forced = false, onChanged, onCsrfToken }
     setFields({});
     setDone(false);
     if (next !== repeat) {
-      setFields({ repeat: 'Die beiden neuen Passwörter stimmen nicht überein.' });
+      setFields({ repeat: t('Die beiden neuen Passwörter stimmen nicht überein.') });
       return;
     }
     setBusy(true);
@@ -109,27 +109,27 @@ export function PasswordCard({ profile, forced = false, onChanged, onCsrfToken }
   }
 
   return (
-    <form className={forced ? 'form' : 'card'} aria-label="Passwort ändern" onSubmit={(event) => void submit(event)}>
-      <h2>{forced ? 'Passwort festlegen' : 'Passwort ändern'}</h2>
+    <form className={forced ? 'form' : 'card'} aria-label={t('Passwort ändern')} onSubmit={(event) => void submit(event)}>
+      <h2>{forced ? t('Passwort festlegen') : t('Passwort ändern')}</h2>
       <p className="card__lead">
         {forced
-          ? 'Du hast ein Einmalpasswort erhalten. Lege jetzt ein eigenes Passwort fest, bevor du Meridian benutzt.'
-          : 'Nach dem Ändern enden alle anderen Sitzungen dieses Kontos.'}
+          ? t('Du hast ein Einmalpasswort erhalten. Lege jetzt ein eigenes Passwort fest, bevor du Meridian benutzt.')
+          : t('Nach dem Ändern enden alle anderen Sitzungen dieses Kontos.')}
       </p>
       {error !== null && <Alert tone="err">{error}</Alert>}
-      {done && !forced && <Alert tone="ok">Passwort geändert. Andere Sitzungen wurden beendet.</Alert>}
-      <FormField label={forced ? 'Einmalpasswort' : 'Aktuelles Passwort'} error={fields.current_password}>
+      {done && !forced && <Alert tone="ok">{t('Passwort geändert. Andere Sitzungen wurden beendet.')}</Alert>}
+      <FormField label={forced ? t('Einmalpasswort') : t('Aktuelles Passwort')} error={fields.current_password}>
         {(aria) => <input {...aria} className="input" type="password" name="current_password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} />}
       </FormField>
-      <FormField label="Neues Passwort" hint="Mindestens 8 Zeichen." error={fields.new_password}>
+      <FormField label={t('Neues Passwort')} hint={t('Mindestens 8 Zeichen.')} error={fields.new_password}>
         {(aria) => <input {...aria} className="input" type="password" name="new_password" autoComplete="new-password" required value={next} onChange={(e) => setNext(e.target.value)} />}
       </FormField>
-      <FormField label="Neues Passwort wiederholen" error={fields.repeat}>
+      <FormField label={t('Neues Passwort wiederholen')} error={fields.repeat}>
         {(aria) => <input {...aria} className="input" type="password" name="repeat" autoComplete="new-password" required value={repeat} onChange={(e) => setRepeat(e.target.value)} />}
       </FormField>
       <div className="row">
         <button type="submit" className="btn btn--solid" disabled={busy || current === '' || next === '' || repeat === ''}>
-          {forced ? 'Passwort festlegen' : 'Passwort ändern'}
+          {forced ? t('Passwort festlegen') : t('Passwort ändern')}
         </button>
       </div>
     </form>
@@ -172,30 +172,30 @@ export function SessionsCard({ profile }: { profile: Profile }) {
   const others = (sessions ?? []).filter((s) => !s.current).length;
 
   return (
-    <section className="card" aria-label="Sitzungen">
-      <h2>Sitzungen</h2>
-      <p className="card__lead">Wo dein Konto gerade angemeldet ist. Eine Sitzung, die du nicht erkennst, beende sofort und ändere dein Passwort.</p>
+    <section className="card" aria-label={t('Sitzungen')}>
+      <h2>{t('Sitzungen')}</h2>
+      <p className="card__lead">{t('Wo dein Konto gerade angemeldet ist. Eine Sitzung, die du nicht erkennst, beende sofort und ändere dein Passwort.')}</p>
       {error !== null && <Alert tone="err">{error}</Alert>}
       {info !== null && <Alert tone="ok">{info}</Alert>}
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
-              <th scope="col">Browser</th>
-              <th scope="col">Adresse</th>
-              <th scope="col">Angemeldet</th>
-              <th scope="col">Zuletzt aktiv</th>
-              <th scope="col">Aktion</th>
+              <th scope="col">{t('Browser')}</th>
+              <th scope="col">{t('Adresse')}</th>
+              <th scope="col">{t('Angemeldet')}</th>
+              <th scope="col">{t('Zuletzt aktiv')}</th>
+              <th scope="col">{t('Aktion')}</th>
             </tr>
           </thead>
           <tbody>
             {(sessions ?? []).map((s) => (
               <tr key={s.id}>
                 <td className="ua">
-                  {s.user_agent ?? <span className="hint">unbekannt</span>}
+                  {s.user_agent ?? <span className="hint">{t('unbekannt')}</span>}
                   {s.current && (
                     <div className="badges">
-                      <span className="badge badge--ok">diese Sitzung</span>
+                      <span className="badge badge--ok">{t('diese Sitzung')}</span>
                     </div>
                   )}
                 </td>
@@ -205,9 +205,9 @@ export function SessionsCard({ profile }: { profile: Profile }) {
                 <td>
                   {!s.current && (
                     <Confirm
-                      label="Beenden"
-                      question="Diese Sitzung beenden?"
-                      confirmLabel="Beenden"
+                      label={t('Beenden')}
+                      question={t('Diese Sitzung beenden?')}
+                      confirmLabel={t('Beenden')}
                       busy={busy}
                       accessibleName={'Sitzung vom ' + formatTime(s.created_at) + ' beenden'}
                       onConfirm={() =>
@@ -224,8 +224,7 @@ export function SessionsCard({ profile }: { profile: Profile }) {
             {sessions !== null && sessions.length === 0 && (
               <tr>
                 <td colSpan={5} className="hint">
-                  Keine Sitzungen.
-                </td>
+                  {t('Keine Sitzungen.')}</td>
               </tr>
             )}
           </tbody>
@@ -233,15 +232,15 @@ export function SessionsCard({ profile }: { profile: Profile }) {
       </div>
       <div className="row">
         <Confirm
-          label="Alle anderen beenden"
-          question="Alle anderen Sitzungen beenden?"
-          confirmLabel="Alle anderen beenden"
+          label={t('Alle anderen beenden')}
+          question={t('Alle anderen Sitzungen beenden?')}
+          confirmLabel={t('Alle anderen beenden')}
           busy={busy}
           disabled={others === 0}
           onConfirm={() =>
             void act(async () => {
               await request('POST', '/api/auth/sessions/end-others', { csrf });
-              return 'Alle anderen Sitzungen sind beendet.';
+              return t('Alle anderen Sitzungen sind beendet.');
             })
           }
         />

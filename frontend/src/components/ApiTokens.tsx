@@ -7,6 +7,7 @@ import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatTime } from '../lib/format';
 import type { ApiTokenEntry } from '../types';
+import { t } from '../i18n';
 
 const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
   { value: '30', label: '30 Tage' },
@@ -65,7 +66,7 @@ export function ApiTokens({ csrf }: { csrf: string }) {
       setPassword('');
       if (caught instanceof ApiError && caught.status === 422) {
         setErrors(caught.fields);
-        setFormError('Bitte die markierten Felder korrigieren.');
+        setFormError(t('Bitte die markierten Felder korrigieren.'));
       } else {
         setFormError(errorMessage(caught));
       }
@@ -90,49 +91,46 @@ export function ApiTokens({ csrf }: { csrf: string }) {
   const origin = window.location.origin;
 
   return (
-    <section className="card" aria-label="API-Zugriff">
-      <h2>API-Zugriff</h2>
+    <section className="card" aria-label={t('API-Zugriff')}>
+      <h2>{t('API-Zugriff')}</h2>
       <p className="card__lead">
-        Zugriffstoken lassen Skripte und andere Programme Jobs, Läufe, Übersicht und Statistik abrufen (und mit „Lesen und Schreiben“ auch Jobs anlegen, ändern und starten). Ein Token hat genau die Rechte seines Benutzers, nie mehr. Für Konto, Einstellungen, Benutzer
-        und gespeicherte Skripte gilt es nie.
-      </p>
+        {t('Zugriffstoken lassen Skripte und andere Programme Jobs, Läufe, Übersicht und Statistik abrufen (und mit „Lesen und Schreiben“ auch Jobs anlegen, ändern und starten). Ein Token hat genau die Rechte seines Benutzers, nie mehr. Für Konto, Einstellungen, Benutzer und gespeicherte Skripte gilt es nie.')}</p>
       {loadError !== null && <Alert tone="err">{loadError}</Alert>}
       {formError !== null && <Alert tone="err">{formError}</Alert>}
       {created !== null && (
         <Alert tone="warn">
-          <strong>Dein neues Token (wird nur jetzt angezeigt):</strong>
-          <pre className="runout" aria-label="Neues Zugriffstoken">{created}</pre>
-          Beispiel: <code>curl -H &quot;Authorization: Bearer …&quot; {origin}/api/jobs</code>
+          <strong>{t('Dein neues Token (wird nur jetzt angezeigt):')}</strong>
+          <pre className="runout" aria-label={t('Neues Zugriffstoken')}>{created}</pre>
+          {t('Beispiel:')} <code>curl -H &quot;Authorization: Bearer …&quot; {origin}/api/jobs</code>
           <div className="row">
             <button type="button" className="btn btn--ghost btn--small" onClick={() => setCreated(null)}>
-              Habe ich gespeichert, ausblenden
-            </button>
+              {t('Habe ich gespeichert, ausblenden')}</button>
           </div>
         </Alert>
       )}
-      {tokens !== null && tokens.length === 0 && <p className="card__lead">Noch kein Token angelegt.</p>}
+      {tokens !== null && tokens.length === 0 && <p className="card__lead">{t('Noch kein Token angelegt.')}</p>}
       {tokens !== null && tokens.length > 0 && (
         <div className="table-wrap">
           <table className="table">
-            <caption className="visually-hidden">Zugriffstoken</caption>
+            <caption className="visually-hidden">{t('Zugriffstoken')}</caption>
             <thead>
               <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Umfang</th>
-                <th scope="col">Läuft ab</th>
-                <th scope="col">Zuletzt benutzt</th>
-                <th scope="col">Aktion</th>
+                <th scope="col">{t('Name')}</th>
+                <th scope="col">{t('Umfang')}</th>
+                <th scope="col">{t('Läuft ab')}</th>
+                <th scope="col">{t('Zuletzt benutzt')}</th>
+                <th scope="col">{t('Aktion')}</th>
               </tr>
             </thead>
             <tbody>
               {tokens.map((token) => (
                 <tr key={token.id}>
                   <td>{token.name}</td>
-                  <td>{token.read_only ? 'Nur lesen' : 'Lesen und Schreiben'}</td>
+                  <td>{token.read_only ? 'Nur lesen' : t('Lesen und Schreiben')}</td>
                   <td>{token.expires_at === null ? 'nie' : formatTime(token.expires_at)}</td>
-                  <td>{token.last_used_at === null ? <span className="muted">noch nie</span> : formatTime(token.last_used_at)}</td>
+                  <td>{token.last_used_at === null ? <span className="muted">{t('noch nie')}</span> : formatTime(token.last_used_at)}</td>
                   <td>
-                    <Confirm label="Widerrufen" question="Token widerrufen? Programme damit verlieren sofort den Zugriff." confirmLabel="Ja, widerrufen" busy={busy} accessibleName={'Token ' + token.name + ' widerrufen'} onConfirm={() => void revoke(token.id)} />
+                    <Confirm label={t('Widerrufen')} question={t('Token widerrufen? Programme damit verlieren sofort den Zugriff.')} confirmLabel={t('Ja, widerrufen')} busy={busy} accessibleName={t('Token {name} widerrufen', { name: token.name })} onConfirm={() => void revoke(token.id)} />
                   </td>
                 </tr>
               ))}
@@ -141,41 +139,40 @@ export function ApiTokens({ csrf }: { csrf: string }) {
         </div>
       )}
       <form className="form" onSubmit={(event) => void create(event)} noValidate>
-        <h3>Token anlegen</h3>
+        <h3>{t('Token anlegen')}</h3>
         <div className="grid-2">
-          <FormField label="Name" error={errors.name} hint="Wofür das Token gedacht ist, z. B. „Grafana“.">
+          <FormField label={t('Name')} error={errors.name} hint={t('Wofür das Token gedacht ist, z. B. „Grafana“.')}>
             {(aria) => <input {...aria} className="input" name="token-name" value={name} maxLength={60} autoComplete="off" onChange={(e) => setName(e.target.value)} />}
           </FormField>
-          <FormField label="Umfang" error={errors.read_only}>
+          <FormField label={t('Umfang')} error={errors.read_only}>
             {(aria) => (
               <select {...aria} className="input" name="token-mode" value={mode} onChange={(e) => setMode(e.target.value === 'write' ? 'write' : 'read')}>
-                <option value="read">Nur lesen (empfohlen)</option>
-                <option value="write">Lesen und Schreiben</option>
+                <option value="read">{t('Nur lesen (empfohlen)')}</option>
+                <option value="write">{t('Lesen und Schreiben')}</option>
               </select>
             )}
           </FormField>
         </div>
         <div className="grid-2">
-          <FormField label="Gültigkeit" error={errors.expires_in_days}>
+          <FormField label={t('Gültigkeit')} error={errors.expires_in_days}>
             {(aria) => (
               <select {...aria} className="input" name="token-expiry" value={expiry} onChange={(e) => setExpiry(e.target.value)}>
                 {EXPIRY_CHOICES.map((choice) => (
                   <option key={choice.value} value={choice.value}>
-                    {choice.label}
+                    {t(choice.label)}
                   </option>
                 ))}
               </select>
             )}
           </FormField>
-          <FormField label="Dein Passwort zur Bestätigung" error={errors.current_password}>
+          <FormField label={t('Dein Passwort zur Bestätigung')} error={errors.current_password}>
             {(aria) => <input {...aria} className="input" type="password" name="token-password" value={password} autoComplete="current-password" onChange={(e) => setPassword(e.target.value)} />}
           </FormField>
         </div>
-        {mode === 'write' && <Alert tone="warn">Ein Token mit Schreibrecht kann Jobs anlegen, ändern, löschen und starten, so wie du es darfst. Gib es nur Programmen, denen du vertraust.</Alert>}
+        {mode === 'write' && <Alert tone="warn">{t('Ein Token mit Schreibrecht kann Jobs anlegen, ändern, löschen und starten, so wie du es darfst. Gib es nur Programmen, denen du vertraust.')}</Alert>}
         <div className="row">
           <button type="submit" className="btn btn--solid" disabled={busy || name.trim() === '' || password === ''}>
-            Token erzeugen
-          </button>
+            {t('Token erzeugen')}</button>
         </div>
       </form>
     </section>
