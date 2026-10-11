@@ -26,7 +26,7 @@ final class MonitorRepository
     {
         $rows = $this->db->fetchAll(
             'SELECT m.id, m.name, m.category_id, c.name AS category_name, m.interval_seconds, m.grace_seconds, m.is_enabled, m.state, m.state_since,
-                    m.last_ping_at, m.notify_on_down, m.notify_on_up, m.notify_channels, m.notify_channel_ids, m.created_at,
+                    m.last_ping_at, m.notify_on_down, m.notify_on_up, m.notify_channels, m.notify_channel_ids, (SELECT json_group_array(mc.channel_id) FROM monitor_channels mc WHERE mc.monitor_id = m.id) AS channel_ids, m.created_at,
                     m.kind, m.display_target, m.expected_status, m.fail_after, m.consecutive_failures, m.last_check_at, m.last_check_ok, m.last_latency_ms, m.last_check_note
              FROM monitors m LEFT JOIN categories c ON c.id = m.category_id
              WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))
@@ -41,7 +41,7 @@ final class MonitorRepository
     {
         $row = $this->db->fetchOne(
             'SELECT m.id, m.name, m.category_id, c.name AS category_name, m.interval_seconds, m.grace_seconds, m.is_enabled, m.state, m.state_since,
-                    m.last_ping_at, m.notify_on_down, m.notify_on_up, m.notify_channels, m.notify_channel_ids, m.created_at,
+                    m.last_ping_at, m.notify_on_down, m.notify_on_up, m.notify_channels, m.notify_channel_ids, (SELECT json_group_array(mc.channel_id) FROM monitor_channels mc WHERE mc.monitor_id = m.id) AS channel_ids, m.created_at,
                     m.kind, m.display_target, m.expected_status, m.fail_after, m.consecutive_failures, m.last_check_at, m.last_check_ok, m.last_latency_ms, m.last_check_note
              FROM monitors m LEFT JOIN categories c ON c.id = m.category_id
              WHERE m.id = :id AND (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))',
@@ -49,6 +49,16 @@ final class MonitorRepository
         );
 
         return $row === null ? null : self::record($row);
+    }
+
+    private function writeChannels(int $id, MonitorDraft $draft): void
+    {
+        $this->db->execute('DELETE FROM monitor_channels WHERE monitor_id = :id', ['id' => $id]);
+        if ($draft->notifyChannels === 'selected') {
+            foreach ($draft->channelIds as $channelId) {
+                $this->db->execute('INSERT INTO monitor_channels (monitor_id, channel_id) VALUES (:monitor, :channel)', ['monitor' => $id, 'channel' => $channelId]);
+            }
+        }
     }
 
     private function validateChannels(MonitorDraft $draft): void
@@ -99,7 +109,9 @@ final class MonitorRepository
             ],
         );
 
-        return $this->db->lastInsertId();
+        $id = $this->db->lastInsertId();
+        $this->writeChannels($id, $draft);
+        return $id;
     }
 
     /**
@@ -127,6 +139,7 @@ final class MonitorRepository
                 'id' => $id,
             ],
         );
+        $this->writeChannels($id, $draft);
         if ($targetEnc !== null) {
             $this->db->execute('UPDATE monitors SET target_enc = :target, display_target = :display WHERE id = :id', ['target' => $targetEnc, 'display' => $draft->displayTarget, 'id' => $id]);
         }
@@ -296,7 +309,7 @@ final class MonitorRepository
             ($row['last_check_ok'] ?? null) === null ? null : Row::bool($row, 'last_check_ok'),
             Row::intOrNull($row, 'last_latency_ms'),
             Row::stringOrNull($row, 'last_check_note'),
-            \Meridian\Notify\ChannelIds::decode(Row::stringOrNull($row, 'notify_channel_ids') ?? '[]'),
+            \Meridian\Notify\ChannelIds::decode(Row::string($row, 'channel_ids')),
         );
     }
 }

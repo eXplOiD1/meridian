@@ -200,7 +200,7 @@ final class Notifier
         foreach ($rows as $row) {
             $id = Row::int($row, 'id');
             $state = Row::string($row, 'state');
-            $job = ['id' => null, 'category_id' => Row::intOrNull($row, 'category_id'), 'name' => Row::string($row, 'name'), 'notify_channels' => Row::string($row, 'notify_channels'), 'channel_ids' => Row::stringOrNull($row, 'notify_channel_ids')];
+            $job = ['id' => null, 'monitor_id' => $id, 'category_id' => Row::intOrNull($row, 'category_id'), 'name' => Row::string($row, 'name'), 'notify_channels' => Row::string($row, 'notify_channels'), 'channel_ids' => Row::stringOrNull($row, 'notify_channel_ids')];
             if (Row::bool($row, 'recovery_pending')) {
                 $queued += $this->db->immediate(function () use ($id, $row, $job, $nowText): int {
                     if ($this->db->execute('UPDATE monitors SET recovery_pending = 0 WHERE id = :id AND recovery_pending = 1', ['id' => $id]) !== 1) {
@@ -368,7 +368,7 @@ final class Notifier
             ? $this->db->fetchAll('SELECT c.id FROM notification_channels c JOIN job_channels j ON j.channel_id = c.id WHERE j.job_id = :job AND c.is_enabled = 1 ORDER BY c.id', ['job' => $jobId])
             : $this->db->fetchAll('SELECT id FROM notification_channels WHERE is_enabled = 1 ORDER BY id');
         if ($monitorIds !== null) {
-            $ids = $this->db->fetchAll('SELECT id FROM notification_channels WHERE is_enabled = 1 AND id IN (SELECT value FROM json_each(:ids)) ORDER BY id', ['ids' => $monitorIds]);
+            $ids = $this->db->fetchAll('SELECT c.id FROM notification_channels c JOIN monitor_channels m ON m.channel_id = c.id WHERE c.is_enabled = 1 AND m.monitor_id = :monitor ORDER BY c.id', ['monitor' => Row::int($job, 'monitor_id')]);
         }
         $now = Timestamp::format($this->clock->now());
         $detail = $note;
