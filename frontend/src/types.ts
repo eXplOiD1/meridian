@@ -158,9 +158,10 @@ export interface JobLimits {
   max_timeout_seconds: number;
   shell_max_timeout_seconds?: number;
   response_storage: 'off' | 'on' | 'never';
+  min_interval_seconds?: number;
 }
 
-export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path' | 'http.display_host' | 'shell.max_timeout_seconds' | 'jobs.reveal_for_edit' | 'app.public_url' | 'runs.retention_days';
+export type SettingKey = 'http.max_timeout_seconds' | 'http.response_storage' | 'http.display_path' | 'http.display_host' | 'shell.max_timeout_seconds' | 'jobs.reveal_for_edit' | 'app.public_url' | 'runs.retention_days' | 'jobs.min_interval_seconds';
 
 /**
  * Antwort von `GET /api/jobs/{id}/source` (nur bei Einstellung `jobs.reveal_for_edit = on` und Bearbeitungsrecht):

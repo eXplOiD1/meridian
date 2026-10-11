@@ -120,7 +120,7 @@ final class SchedulerRunCommand extends Command
                 }
 
                 if (!$once) {
-                    for ($i = 0; $i < self::TICK_SECONDS * 4 && !$this->stop; ++$i) {
+                    for ($i = 0, $quarters = $scheduler->idleSeconds(self::TICK_SECONDS) * 4; $i < $quarters && !$this->stop; ++$i) {
                         usleep(250_000);
                     }
                 }

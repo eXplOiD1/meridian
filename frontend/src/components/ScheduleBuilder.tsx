@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { CRON_PRESETS } from '../lib/jobs';
 
-type Mode = 'minutes' | 'hours' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+type Mode = 'seconds' | 'minutes' | 'hours' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
 
 const MODES: ReadonlyArray<{ id: Mode; label: string }> = [
+  { id: 'seconds', label: 'Alle n Sekunden' },
   { id: 'minutes', label: 'Alle n Minuten' },
   { id: 'hours', label: 'Alle n Stunden' },
   { id: 'daily', label: 'Täglich' },
@@ -33,6 +34,10 @@ const num = (text: string): number => Number.parseInt(text, 10);
 
 /** Erkennt, ob ein Ausdruck vom Baukasten erzeugt werden kann; sonst „Benutzerdefiniert“. */
 function detect(cron: string): { mode: Mode; parts: Parts } {
+  const every = /^@every ([1-9][0-9]{0,4})s$/.exec(cron.trim());
+  if (every !== null && every[1] !== undefined) {
+    return { mode: 'seconds', parts: { ...DEFAULTS, n: num(every[1]) } };
+  }
   const f = cron.trim().split(/\s+/);
   const parts: Parts = { ...DEFAULTS };
   const [m, h, d, mo, w] = f;
@@ -72,6 +77,8 @@ function detect(cron: string): { mode: Mode; parts: Parts } {
 function build(mode: Mode, p: Parts): string {
   const time = String(p.minute) + ' ' + String(p.hour);
   switch (mode) {
+    case 'seconds':
+      return '@every ' + String(p.n) + 's';
     case 'minutes':
       return '*/' + String(p.n) + ' * * * *';
     case 'hours':
@@ -100,13 +107,15 @@ interface Props {
   cron: string;
   onChange: (cron: string) => void;
   error?: string | undefined;
+  /** Kleinster erlaubter Abstand fester Intervalle (Einstellung des Admins). */
+  minSeconds?: number;
 }
 
 /**
  * Baukasten für den Cron-Ausdruck. Der Ausdruck selbst bleibt die einzige Wahrheit (Formularzustand des Elternteils);
  * der Baukasten erzeugt ihn nur. Ausdrücke, die er nicht abbilden kann, stehen unter „Benutzerdefiniert“.
  */
-export function ScheduleBuilder({ cron, onChange, error }: Props) {
+export function ScheduleBuilder({ cron, onChange, error, minSeconds = 10 }: Props) {
   const [initial] = useState(() => detect(cron));
   const [mode, setMode] = useState<Mode>(initial.mode);
   const [parts, setParts] = useState<Parts>(initial.parts);
@@ -120,7 +129,10 @@ export function ScheduleBuilder({ cron, onChange, error }: Props) {
     }
   }, [cron, mode, parts]);
 
-  function update(nextMode: Mode, nextParts: Parts): void {
+  function update(requestedMode: Mode, requestedParts: Parts): void {
+    // Beim Wechsel in „Sekunden“ nie unter dem erlaubten Abstand beginnen.
+    const nextParts = requestedMode === 'seconds' && requestedParts.n < minSeconds ? { ...requestedParts, n: minSeconds } : requestedParts;
+    const nextMode = requestedMode;
     setMode(nextMode);
     setParts(nextParts);
     if (nextMode !== 'custom') {
@@ -185,6 +197,12 @@ export function ScheduleBuilder({ cron, onChange, error }: Props) {
         </div>
 
         <div className="sb__params">
+          {mode === 'seconds' && (
+            <label className="field sb__field">
+              <span className="field__label">{'Alle n Sekunden (' + String(minSeconds) + '–86400)'}</span>
+              <input className="input input--short" inputMode="numeric" value={parts.n} onChange={(e) => patch({ n: clamp(e.target.value, 1, 86400, minSeconds) })} />
+            </label>
+          )}
           {(mode === 'minutes' || mode === 'hours') && (
             <label className="field sb__field">
               <span className="field__label">{mode === 'minutes' ? 'Alle n Minuten (1–59)' : 'Alle n Stunden (1–23)'}</span>
@@ -253,6 +271,11 @@ export function ScheduleBuilder({ cron, onChange, error }: Props) {
             </div>
           )}
         </div>
+        {mode === 'seconds' && (
+          <p className="hint">
+            Feste Abstände, ausgerichtet auf Vielfache von n Sekunden. Der kleinste erlaubte Abstand ist {minSeconds} s (Einstellung des Admins); sehr kurze Abstände erzeugen viele Läufe. Dauert ein Lauf länger als der Abstand, entscheidet „Überlappung“ über das Überspringen.
+          </p>
+        )}
         {mode === 'minutes' && <p className="hint">Läuft zu jeder n-ten Minute einer Stunde, nicht n Minuten nach dem letzten Lauf.</p>}
       </div>
       {error !== undefined && <div className="field__error">{error}</div>}

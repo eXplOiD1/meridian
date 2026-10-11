@@ -77,6 +77,19 @@ final class Scheduler
         }
     }
 
+    /**
+     * Wartezeit bis zum nächsten Takt: 1 s, solange es aktive Jobs mit festem Sekunden-Intervall gibt (ADR 0013), sonst 5 s.
+     * Wer die Sperre nicht hält, plant nichts und wartet immer 5 s.
+     */
+    public function idleSeconds(int $default): int
+    {
+        try {
+            return $this->holdsLease && $this->planner->hasIntervalJobs() ? 1 : $default;
+        } catch (\Throwable) {
+            return $default;
+        }
+    }
+
     public function holdsLease(): bool
     {
         return $this->holdsLease;

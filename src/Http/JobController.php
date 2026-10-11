@@ -540,6 +540,7 @@ final class JobController
             'max_timeout_seconds' => $this->settings->maxTimeoutSeconds(),
             'shell_max_timeout_seconds' => $this->settings->shellMaxTimeoutSeconds(),
             'response_storage' => $this->settings->responseStorage()->value,
+            'min_interval_seconds' => $this->settings->minIntervalSeconds(),
         ]);
     }
 

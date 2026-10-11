@@ -201,11 +201,13 @@ function SchedulePreview({ cron, timezone }: { cron: string; timezone: string })
   const { runs, error } = useSchedulePreview(cron, timezone);
   const format = useMemo(() => {
     try {
-      return new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: timezone });
+      // Feste Sekunden-Intervalle brauchen die Sekunden in der Vorschau.
+      const seconds = cron.trim().startsWith('@every') ? { second: '2-digit' as const } : {};
+      return new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', ...seconds, timeZone: timezone });
     } catch {
       return null;
     }
-  }, [timezone]);
+  }, [timezone, cron]);
   return (
     <div className="preview" aria-live="polite">
       <div className="preview__title">NÄCHSTE LÄUFE · {timezone.toUpperCase()}</div>
@@ -855,9 +857,9 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
 
       <section className="card" aria-label="Zeitplan">
         <h2>Zeitplan</h2>
-        <ScheduleBuilder cron={form.cron} onChange={(value) => set('cron', value)} />
+        <ScheduleBuilder cron={form.cron} onChange={(value) => set('cron', value)} minSeconds={limits?.min_interval_seconds ?? 10} />
         <div className="grid-2">
-          <FormField label="Cron-Ausdruck" hint="Fünf Felder: Minute Stunde Tag Monat Wochentag. Direkt änderbar; der Baukasten oben folgt nur, was er abbilden kann.">
+          <FormField label="Cron-Ausdruck" error={errors.cron} hint="Fünf Felder: Minute Stunde Tag Monat Wochentag, oder „@every 30s“ für feste Sekunden-Abstände. Direkt änderbar; der Baukasten oben folgt, soweit er den Ausdruck abbilden kann.">
             {(aria) => <input {...aria} className="input input--mono" name="cron" spellCheck={false} autoComplete="off" value={form.cron} onChange={(e) => set('cron', e.target.value)} />}
           </FormField>
           <FormField label="Zeitzone" error={errors.timezone}>

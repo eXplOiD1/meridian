@@ -86,6 +86,14 @@ final class Planner
     }
 
     /**
+     * Gibt es aktive Jobs mit festem Sekunden-Intervall? Dann taktet der Planer jede Sekunde statt alle 5 Sekunden (ADR 0013).
+     */
+    public function hasIntervalJobs(): bool
+    {
+        return $this->db->fetchOne("SELECT 1 AS found FROM jobs WHERE is_enabled = 1 AND cron LIKE '@every %' LIMIT 1") !== null;
+    }
+
+    /**
      * Setzt next_run_at eines Jobs auf den nächsten Termin ab jetzt (oder NULL, wenn deaktiviert oder der
      * Zeitplan ungültig ist). Für das Anlegen, Ändern und Aktivieren eines Jobs; der Takt selbst
      * initialisiert keine Jobs ohne next_run_at.

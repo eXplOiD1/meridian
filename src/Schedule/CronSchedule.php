@@ -10,6 +10,10 @@ use Cron\CronExpression;
  * Cron-Ausdruck plus Zeitzone. Ausgewertet wird in der Zeitzone des Jobs, zurückgegeben werden
  * Zeitpunkte (gespeichert wird in UTC).
  *
+ * Neben den fünf Cron-Feldern gibt es das feste Intervall `@every <n>s` (ADR 0013): alle n Sekunden, ausgerichtet auf
+ * Vielfache von n seit der Unix-Zeit (10 s → :00, :10, :20 …), unabhängig von Zeitzone und Sommerzeit. Die Cron-Bibliothek kennt
+ * keine Sekunden. Die Untergrenze setzt die Einstellung `jobs.min_interval_seconds` beim Speichern (nicht hier).
+ *
  * Sommerzeit:
  *  - übersprungene Stunde (März): ein Termin darin läuft genau einmal, zur nächsten gültigen Uhrzeit
  *    (02:30 → 03:30 Sommerzeit);
@@ -22,21 +26,43 @@ final readonly class CronSchedule
     /** Obergrenze für übersprungene Wiederholungen der doppelten Stunde je Aufruf. */
     private const MAX_REPEATED_SKIPS = 120;
 
-    private CronExpression $expression;
+    /** Obergrenze des festen Intervalls (ein Tag; darüber ist Cron die richtige Wahl). */
+    public const MAX_EVERY_SECONDS = 86400;
+
+    private ?CronExpression $expression;
 
     private bool $fixedTime;
+
+    private string $normalized;
+
+    /** Sekunden des festen Intervalls oder null bei einem Cron-Ausdruck. */
+    public ?int $everySeconds;
 
     public function __construct(
         string $expression,
         public \DateTimeZone $timezone,
     ) {
         $normalized = trim((string) preg_replace('/\s+/', ' ', $expression));
+        if (str_starts_with($normalized, '@every ')) {
+            if (preg_match('/^@every ([1-9][0-9]{0,4})s$/D', $normalized, $match) !== 1 || (int) $match[1] > self::MAX_EVERY_SECONDS) {
+                throw new \InvalidArgumentException('Ungültiger Zeitplan: „@every <n>s“ mit n von 1 bis ' . self::MAX_EVERY_SECONDS . '.');
+            }
+            $this->everySeconds = (int) $match[1];
+            $this->expression = null;
+            $this->fixedTime = false;
+            $this->normalized = $normalized;
+
+            return;
+        }
         if (!CronExpression::isValidExpression($normalized)) {
             throw new \InvalidArgumentException('Ungültiger Cron-Ausdruck.');
         }
-        $this->expression = new CronExpression($normalized);
-        $minute = $this->expression->getExpression(CronExpression::MINUTE) ?? '*';
-        $hour = $this->expression->getExpression(CronExpression::HOUR) ?? '*';
+        $this->normalized = $normalized;
+        $this->everySeconds = null;
+        $parsed = new CronExpression($normalized);
+        $this->expression = $parsed;
+        $minute = $parsed->getExpression(CronExpression::MINUTE) ?? '*';
+        $hour = $parsed->getExpression(CronExpression::HOUR) ?? '*';
         $this->fixedTime = !str_contains($minute, '*') && !str_contains($hour, '*');
     }
 
@@ -57,7 +83,7 @@ final readonly class CronSchedule
 
     public function expression(): string
     {
-        return $this->expression->getExpression() ?? '';
+        return $this->normalized;
     }
 
     /**
@@ -67,10 +93,16 @@ final readonly class CronSchedule
      */
     public function nextAfter(\DateTimeImmutable $after): \DateTimeImmutable
     {
+        if ($this->everySeconds !== null) {
+            $next = (intdiv($after->getTimestamp(), $this->everySeconds) + 1) * $this->everySeconds;
+
+            return (new \DateTimeImmutable('@' . $next))->setTimezone($this->timezone);
+        }
+        $expression = $this->expression ?? throw new \LogicException('Cron-Ausdruck fehlt.');
         $current = $after;
         for ($i = 0; $i <= self::MAX_REPEATED_SKIPS; ++$i) {
             $next = \DateTimeImmutable::createFromInterface(
-                $this->expression->getNextRunDate($current->setTimezone($this->timezone), 0, false, $this->timezone->getName()),
+                $expression->getNextRunDate($current->setTimezone($this->timezone), 0, false, $this->timezone->getName()),
             )->setTimezone($this->timezone);
             // Die Bibliothek arbeitet minutengenau; ein Termin muss echt nach $after liegen.
             if ($next->getTimestamp() <= $after->getTimestamp()) {
@@ -111,7 +143,11 @@ final readonly class CronSchedule
 
     public function isDue(\DateTimeImmutable $now): bool
     {
-        return $this->expression->isDue($now->setTimezone($this->timezone), $this->timezone->getName());
+        if ($this->everySeconds !== null) {
+            return $now->getTimestamp() % $this->everySeconds === 0;
+        }
+
+        return ($this->expression ?? throw new \LogicException('Cron-Ausdruck fehlt.'))->isDue($now->setTimezone($this->timezone), $this->timezone->getName());
     }
 
     /**
@@ -121,7 +157,8 @@ final readonly class CronSchedule
      */
     private function matchesWallTime(\DateTimeImmutable $local): bool
     {
-        if ($this->expression->isDue(self::wallClock($local), 'UTC')) {
+        $expression = $this->expression ?? throw new \LogicException('Cron-Ausdruck fehlt.');
+        if ($expression->isDue(self::wallClock($local), 'UTC')) {
             return true;
         }
 
@@ -136,7 +173,7 @@ final readonly class CronSchedule
             if ($previousOffset !== null && $offset > $previousOffset) {
                 $original = self::wallClock($local)->modify('-' . ($offset - $previousOffset) . ' seconds');
                 $inGap = (new \DateTimeImmutable($original->format('Y-m-d H:i'), $this->timezone))->format('Y-m-d H:i') !== $original->format('Y-m-d H:i');
-                if ($inGap && $this->expression->isDue($original, 'UTC')) {
+                if ($inGap && $expression->isDue($original, 'UTC')) {
                     return true;
                 }
             }
