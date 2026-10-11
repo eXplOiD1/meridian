@@ -112,9 +112,38 @@ final class InternalTargetStore
     }
 
     /**
-     * Löscht eine Freigabe und schreibt `network.internal_target_removed` in derselben Transaktion; gibt sie zurück,
-     * null, wenn es sie nicht gibt (dann kein Audit-Eintrag).
+     * Ändert eine Freigabe atomar mit Audit, behält ID und Erstellungsdaten bei.
+     * Doppelte Freigaben werden abgelehnt; unbekannte IDs liefern null.
      */
+    public function update(int $id, InternalTarget $target, string $note, ?int $userId, AuditLog $audit): ?InternalTargetRecord
+    {
+        return $this->db->immediate(function () use ($id, $target, $note, $userId, $audit): ?InternalTargetRecord {
+            $old = $this->find($id);
+            if ($old === null) {
+                return null;
+            }
+            $duplicate = $this->db->fetchOne(
+                'SELECT id FROM http_internal_targets WHERE id != :id AND kind = :kind AND value = :value AND port = :port AND COALESCE(category_id, 0) = COALESCE(:category, 0)',
+                ['id' => $id, 'kind' => $target->kind, 'value' => $target->value, 'port' => $target->port, 'category' => $target->categoryId],
+            );
+            if ($duplicate !== null) {
+                throw new InvalidTargetInput('value', 'Diese Freigabe gibt es schon (gleiche Art, gleicher Wert, gleicher Port, gleicher Geltungsbereich).');
+            }
+            $this->db->execute(
+                'UPDATE http_internal_targets SET kind = :kind, value = :value, port = :port, category_id = :category, note = :note WHERE id = :id',
+                ['id' => $id, 'kind' => $target->kind, 'value' => $target->value, 'port' => $target->port, 'category' => $target->categoryId, 'note' => $note],
+            );
+            $record = $this->find($id);
+            if ($record === null) {
+                throw new \RuntimeException('Die Freigabe wurde gespeichert, ist aber nicht lesbar.');
+            }
+            $audit->record($userId, 'network.internal_target_updated', $old->describe() . ' → ' . $record->describe());
+
+            return $record;
+        });
+    }
+
+    /** Löscht die Freigabe atomar mit Audit; unbekannte IDs liefern null. */
     public function remove(int $id, ?int $userId, AuditLog $audit): ?InternalTargetRecord
     {
         return $this->db->immediate(function () use ($id, $userId, $audit): ?InternalTargetRecord {

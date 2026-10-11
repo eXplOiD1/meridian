@@ -566,7 +566,16 @@ details.fold[open] { padding-bottom: 14px; }
 
 /* Einstellungen: Gruppen-Menü links (Desktop), waagerecht scrollbar (Handy) */
 .settings-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 22px; align-items: start; }
-.settings-layout .settings { max-width: 940px; }
+.settings-layout .settings { max-width: none; }
+.targets__actions { display: flex; flex-wrap: nowrap; gap: 10px; align-items: center; width: max-content; }
+.targets__actions > .btn, .targets__actions .confirm > .btn { flex-shrink: 0; white-space: nowrap; }
+.targets__actions .confirm { flex-wrap: nowrap; }
+@media (max-width: 767.98px) {
+  .table--stack .targets__action-cell { grid-template-columns: minmax(0, 1fr); }
+  .targets__action-cell::before { display: none; }
+  .targets__actions { width: auto; }
+  .targets__actions .confirm { flex-wrap: wrap; }
+}
 .settings-menu { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; }
 .settings-menu__item { min-height: 44px; padding: 0 16px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--dim); text-align: left; font-weight: 500; font-size: 14px; }
 .settings-menu__item:hover { background: var(--soft); color: var(--text); }

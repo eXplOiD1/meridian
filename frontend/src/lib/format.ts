@@ -15,6 +15,7 @@ const ACTIONS: Record<string, { label: string; tone: 'ok' | 'warn' | 'err' | 'in
   'auth.recovery_code_used': { label: 'Wiederherstellungscode benutzt', tone: 'warn' },
   'settings.changed': { label: 'Einstellung geändert', tone: 'warn' },
   'network.internal_target_added': { label: 'Interne Freigabe angelegt', tone: 'warn' },
+  'network.internal_target_updated': { label: 'Interne Freigabe geändert', tone: 'warn' },
   'network.internal_target_removed': { label: 'Interne Freigabe entfernt', tone: 'info' },
   'user.created': { label: 'Benutzer angelegt', tone: 'info' },
 };
