@@ -70,7 +70,13 @@ final class NotificationChannelController
         }
         $this->access->require($this->users->grantsFor($session->userId), Permission::ManageSettings);
 
-        return JsonReply::json(['channels' => array_map($this->present(...), $this->store->all()), 'max_channels' => ChannelStore::MAX_CHANNELS]);
+        $last = $this->store->lastDeliveries();
+        $channels = [];
+        foreach ($this->store->all() as $channel) {
+            $channels[] = $this->present($channel) + ['last_delivery' => $last[$channel->id] ?? null];
+        }
+
+        return JsonReply::json(['channels' => $channels, 'max_channels' => ChannelStore::MAX_CHANNELS]);
     }
 
     public function names(#[\SensitiveParameter] Request $request): Response
@@ -160,7 +166,7 @@ final class NotificationChannelController
             $this->audit->record($session, 'notification.channel_tested', 'channel:' . $channel->id . ' ' . $channel->name);
         });
 
-        return JsonReply::json(['queued' => true, 'message' => 'Testnachricht eingereiht. Sie wird in wenigen Sekunden vom Dienst worker-http zugestellt; das Ergebnis steht im Audit-Log und bei „Zuletzt“ am Kanal.'], 202);
+        return JsonReply::json(['queued' => true, 'message' => 'Testnachricht eingereiht. Der Dienst worker-http stellt sie innerhalb einer Minute zu; das Ergebnis steht danach bei „Letzte Zustellung“ am Kanal.'], 202);
     }
 
     /**

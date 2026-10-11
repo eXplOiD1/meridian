@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
+import { NotificationChannels } from '../components/NotificationChannels';
 import { FormField } from '../components/FormField';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
@@ -823,6 +824,7 @@ export function Settings({ profile }: { profile: Profile }) {
       {settings && <HttpSettings csrf={profile.csrf_token} />}
       {settings && <ShellSettings csrf={profile.csrf_token} />}
       {settings && <EditorSettings csrf={profile.csrf_token} />}
+      {settings && <NotificationChannels csrf={profile.csrf_token} />}
       {targets && <InternalTargets csrf={profile.csrf_token} />}
       {shellTargets && <ShellTargets csrf={profile.csrf_token} />}
     </div>

@@ -65,6 +65,7 @@ export interface JobSummary {
   catch_up: boolean;
   /** Ende des Zeitplans (UTC) oder null. */
   expires_at: string | null;
+  notify: JobNotify;
   last_run: LastRun | null;
   running: boolean;
   can: { edit: boolean; run: boolean };
@@ -341,4 +342,44 @@ export interface Overview {
   jobs: OverviewJob[];
   totals: { runs: number; failed: number; avg_duration_ms: number | null };
   attention: Array<{ job: { id: number; name: string }; status: 'failed' | 'timeout'; finished_at: string | null }>;
+}
+
+/** Kanal der Benachrichtigungen (`/api/notifications/channels`). Das Geheimnis kommt nie zurück, nur `has_secret`. */
+export interface NotificationChannel {
+  id: number;
+  name: string;
+  type: 'email' | 'ntfy';
+  enabled: boolean;
+  config: {
+    host?: string;
+    port?: number;
+    encryption?: 'none' | 'starttls' | 'ssl';
+    username?: string | null;
+    from?: string;
+    from_name?: string | null;
+    to?: string[];
+    server?: string;
+    topic?: string;
+    priority?: number;
+  };
+  has_secret: boolean;
+  created_at: string;
+  updated_at: string;
+  last_delivery?: { kind: string; status: string; at: string; error: string | null } | null;
+}
+
+/** Eintrag der Auswahl im Job-Editor (`/api/notifications/channel-names`). */
+export interface NotificationChannelName {
+  id: number;
+  name: string;
+  type: 'email' | 'ntfy';
+  enabled: boolean;
+}
+
+export interface JobNotify {
+  on_failure: boolean;
+  failure_after: number;
+  on_recovery: boolean;
+  channels: 'all' | 'selected' | 'none';
+  channel_ids: number[];
 }

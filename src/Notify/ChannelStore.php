@@ -42,6 +42,25 @@ final class ChannelStore
         return $out;
     }
 
+    /**
+     * Letzte Zustellung je Kanal (Art, Zustand, Zeit, feste Fehlermeldung): nur für die Anzeige in der Verwaltung.
+     *
+     * @return array<int, array{kind: string, status: string, at: string, error: string|null}>
+     */
+    public function lastDeliveries(): array
+    {
+        $out = [];
+        foreach ($this->db->fetchAll(
+            "SELECT o.channel_id, o.kind, o.status, COALESCE(o.sent_at, o.created_at) AS at, o.last_error
+               FROM notification_outbox o
+              WHERE o.id = (SELECT MAX(i.id) FROM notification_outbox i WHERE i.channel_id = o.channel_id)",
+        ) as $row) {
+            $out[Row::int($row, 'channel_id')] = ['kind' => Row::string($row, 'kind'), 'status' => Row::string($row, 'status'), 'at' => Row::string($row, 'at'), 'error' => Row::stringOrNull($row, 'last_error')];
+        }
+
+        return $out;
+    }
+
     public function find(int $id): ?ChannelRecord
     {
         $row = $this->db->fetchOne(self::SELECT . ' WHERE id = :id', ['id' => $id]);
