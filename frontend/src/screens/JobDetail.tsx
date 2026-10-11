@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { RunBadge } from '../components/RunBadge';
@@ -293,7 +293,8 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
               </thead>
               <tbody>
                 {runs.map((run) => (
-                  <tr key={run.id} data-run-id={run.id} className={selected?.id === run.id ? 'is-selected' : undefined}>
+                  <Fragment key={run.id}>
+                  <tr data-run-id={run.id} className={selected?.id === run.id ? 'is-selected' : undefined}>
                     <td>
                       <button type="button" className="linkbtn" aria-expanded={selected?.id === run.id} onClick={() => void select(run)}>
                         {formatTime(run.started_at ?? run.scheduled_for ?? '')}
@@ -306,6 +307,18 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
                     <td>{job.type === 'shell' ? (run.exit_code ?? '–') : (run.http_status ?? '–')}</td>
                     <td>{formatDuration(run.duration_ms)}</td>
                   </tr>
+                  {selected?.id === run.id && (
+                    <tr className="rundetail-row">
+                      <td colSpan={5}>
+                        {!isFinished(selected.status) ? (
+                          <RunLog key={selected.id} runId={selected.id} csrf={profile.csrf_token} canCancel={job.can.run} onFinished={onSelectedFinished} />
+                        ) : (
+                          <RunDetail run={selected} heading={t('Lauf-Details')} />
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -317,10 +330,6 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
               {t('Mehr laden')}</button>
           </div>
         )}
-        {selected !== null && !isFinished(selected.status) && (
-          <RunLog key={selected.id} runId={selected.id} csrf={profile.csrf_token} canCancel={job.can.run} onFinished={onSelectedFinished} />
-        )}
-        {selected !== null && isFinished(selected.status) && <RunDetail run={selected} heading={t('Lauf-Details')} />}
       </section>
     </>
   );

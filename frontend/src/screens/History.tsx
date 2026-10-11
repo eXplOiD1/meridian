@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Alert } from '../components/Alert';
 import { RunBadge } from '../components/RunBadge';
 import { RunDetail } from '../components/RunDetail';
@@ -118,7 +118,8 @@ export function History({ profile }: { profile: Profile }) {
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr key={run.id} className={selected?.id === run.id ? 'is-selected' : undefined}>
+                <Fragment key={run.id}>
+                <tr className={selected?.id === run.id ? 'is-selected' : undefined}>
                   <td>
                     <button type="button" className="linkbtn" aria-expanded={selected?.id === run.id} onClick={() => void select(run)}>
                       {formatTime(run.started_at ?? run.scheduled_for ?? '')}
@@ -135,15 +136,23 @@ export function History({ profile }: { profile: Profile }) {
                   <td>{run.job.type === 'shell' ? (run.exit_code != null ? 'Exit-Code ' + String(run.exit_code) : '–') : run.http_status != null ? 'HTTP ' + String(run.http_status) : '–'}</td>
                   <td>{formatDuration(run.duration_ms)}</td>
                 </tr>
+                {selected?.id === run.id && (
+                  <tr className="rundetail-row">
+                    <td colSpan={7}>
+                      {!isFinished(selected.status) ? (
+                        <RunLog key={selected.id} runId={selected.id} csrf={profile.csrf_token} canCancel={canRun(profile, selected.category?.name ?? null)} onFinished={onSelectedFinished} />
+                      ) : (
+                        <RunDetail run={selected} heading={t('Lauf-Details: {name}', { name: selected.job.name })} />
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      {selected !== null && !isFinished(selected.status) && (
-        <RunLog key={selected.id} runId={selected.id} csrf={profile.csrf_token} canCancel={canRun(profile, selected.category?.name ?? null)} onFinished={onSelectedFinished} />
-      )}
-      {selected !== null && isFinished(selected.status) && <RunDetail run={selected} heading={t('Lauf-Details: {name}', { name: selected.job.name })} />}
       {nextBefore !== null && (
         <div className="row">
           <button type="button" className="btn btn--ghost" onClick={() => void load(nextBefore, true)}>
