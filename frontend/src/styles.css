@@ -409,3 +409,6 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .stats-bar--bad { fill: var(--fehler); }
 .stats-axis { fill: var(--linie-stark); }
 .stats-chart__labels { display: flex; justify-content: space-between; font-family: var(--schrift-mono); font-size: 0.7rem; color: var(--schiefer); margin-top: 4px; }
+
+.curlimport { border: 1px dashed var(--line, #c9d1d9); border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; }
+.curlimport summary { cursor: pointer; font-weight: 600; }
