@@ -1,5 +1,18 @@
 /** Englische Fassungen; Schlüssel ist der deutsche Quelltext. Fehlt ein Eintrag, bleibt die Oberfläche deutsch. */
 export const EN: Record<string, string> = {
+  'Jeder Job': 'Every job',
+  'pünktlich': 'on time',
+  'zur richtigen Zeit.': 'at the right time.',
+  'Selbst gehosteter Zeitplaner für HTTP- und Shell-Jobs.': 'Self-hosted scheduler for HTTP and shell jobs.',
+  'Zweiter Faktor': 'Second factor',
+  'Anmeldung nicht möglich: Reverse-Proxy nicht eingerichtet.': 'Sign-in not possible: reverse proxy not set up.',
+  'Gib den 6-stelligen Code deiner Authenticator-App ein oder einen Wiederherstellungscode.': 'Enter the 6-digit code from your authenticator app or a recovery code.',
+  'Code': 'Code',
+  'Beispiel: 123456 oder ABCD-EFGH-JKLM': 'Example: 123456 or ABCD-EFGH-JKLM',
+  'Einen Moment …': 'One moment …',
+  'Bestätigen': 'Confirm',
+  'Zurück': 'Back',
+  'Die Anmeldung funktioniert nur über HTTPS (oder im Entwicklungsmodus).': 'Sign-in only works over HTTPS (or in development mode).',
   'Einfach: die wichtigsten Angaben. Weitere Optionen findest du im Experten-Modus.': 'Simple: the essentials. More options are in expert mode.',
   'Experte: alle Optionen in Reitern. Nichts geht beim Umschalten verloren.': 'Expert: all options in tabs. Nothing is lost when you switch.',
   'Ansicht des Editors': 'Editor view',
