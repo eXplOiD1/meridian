@@ -55,6 +55,11 @@ final class CategoryDeleteCommand extends Command
 
             return self::FAILURE;
         }
+        if ($impact->watchers > 0) {
+            $output->writeln('<error>' . CategoryException::hasWatchers($impact->watchers)->getMessage() . '</error>');
+
+            return self::FAILURE;
+        }
 
         $output->writeln('Folgen: ' . $impact->assignments . ' Zuweisung(en) verlieren diese Kategorie, davon ' . $impact->assignmentsIneffective
             . ' werden wirkungslos (gewähren nichts); ' . $impact->internalTargets . ' Freigabe(n) interner Ziele werden gelöscht.');

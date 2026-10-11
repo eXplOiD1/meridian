@@ -86,6 +86,7 @@ function Row({ category, csrf, onChanged }: RowProps) {
     }
   }
 
+  const blocked = category.jobs > 0 || category.watchers > 0;
   const cols = (
     <>
       <td>{category.jobs}</td>
@@ -134,15 +135,15 @@ function Row({ category, csrf, onChanged }: RowProps) {
             <button
               type="button"
               className="btn btn--ghost btn--small btn--danger-text"
-              disabled={busy || mode !== 'view' || category.jobs > 0}
+              disabled={busy || mode !== 'view' || blocked}
               aria-label={category.name + ' löschen'}
-              title={category.jobs > 0 ? 'Die Kategorie enthält Jobs. Jobs zuerst verschieben oder löschen.' : undefined}
+              title={blocked ? 'Die Kategorie enthält Jobs, Überwachungen oder Statusseiten. Zuerst verschieben oder löschen.' : undefined}
               onClick={() => void startDelete()}
             >
               Löschen
             </button>
           </div>
-          {category.jobs > 0 && <div className="hint">Enthält Jobs: Löschen erst nach dem Verschieben oder Löschen der Jobs.</div>}
+          {blocked && <div className="hint">Enthält Jobs, Überwachungen oder Statusseiten: Löschen erst nach dem Verschieben oder Löschen.</div>}
           {error !== null && (
             <p className="field__error" role="alert">
               {error}
@@ -155,15 +156,15 @@ function Row({ category, csrf, onChanged }: RowProps) {
           <td colSpan={5}>
             <div className="confirm confirm--form" role="group" aria-label={category.name + ' löschen bestätigen'}>
               <span className="confirm__q">Kategorie „{preview.name}“ löschen?</span>
-              {preview.jobs > 0 ? (
+              {preview.jobs > 0 || preview.watchers > 0 ? (
                 <p className="confirm__err" role="alert">
-                  Die Kategorie enthält jetzt {plural(preview.jobs, 'Job', 'Jobs')}. Jobs zuerst verschieben oder löschen.
+                  Die Kategorie enthält jetzt {preview.jobs > 0 ? plural(preview.jobs, 'Job', 'Jobs') : plural(preview.watchers, 'Überwachung oder Statusseite', 'Überwachungen oder Statusseiten')}. Zuerst verschieben oder löschen.
                 </p>
               ) : (
                 <p className="hint">{consequences(preview)}</p>
               )}
               <div className="row">
-                <button type="button" className="btn btn--danger btn--small" disabled={busy || preview.jobs > 0} onClick={() => void remove()}>
+                <button type="button" className="btn btn--danger btn--small" disabled={busy || preview.jobs > 0 || preview.watchers > 0} onClick={() => void remove()}>
                   Endgültig löschen
                 </button>
                 <button type="button" className="btn btn--ghost btn--small" autoFocus onClick={() => setMode('view')}>

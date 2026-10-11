@@ -128,7 +128,7 @@ final class AppFactory
             new RunCancelService($db, $runs, $access, $audit, $clock),
         ))->register($kernel);
         // Übersicht „Heute im Takt“: Läufe je Job in Abschnitten, geplante Läufe, Summen.
-        (new OverviewController($sessionAuth, $users, $access, $jobs, new \Meridian\Job\OverviewRepository($db), $clock, $masker))->register($kernel);
+        (new OverviewController($sessionAuth, $users, $access, $jobs, new \Meridian\Job\OverviewRepository($db), $clock, $masker, new \Meridian\Monitor\MonitorRepository($db)))->register($kernel);
         // Zugriffstoken für die REST-API (ADR 0009): Verwaltung nur mit der Sitzung, Anlegen mit Passwort.
         (new ApiTokenController($config, $sessionAuth, $csrf, $users, $auth, $apiTokens, $audit))->register($kernel);
         // Statistik über Tage und Jobs (ADR 0008): frische Läufe plus Tageswerte der aufbewahrten Zeit.
@@ -143,6 +143,14 @@ final class AppFactory
         (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock, $infrastructure), $masker))->register($kernel);
         // Ausführungsorte für Shell-Jobs (shell.targets, nur Admin) und die Auswahl im Job-Editor (jobs.edit_shell).
         (new ShellTargetController($sessionAuth, $csrf, $users, $access, $audit, new ShellTargetStore($db, $clock), $masker))->register($kernel);
+        // Herzschlag-Überwachung (ADR 0011): Verwaltung mit Sitzung, Ping ohne Sitzung (Token ist die Berechtigung).
+        $monitors = new \Meridian\Monitor\MonitorRepository($db);
+        (new MonitorController($sessionAuth, $csrf, $users, $access, $monitors, new \Meridian\Monitor\MonitorService($db, $monitors, new \Meridian\Monitor\MonitorValidator($categories), $access, $audit, $clock), $masker))->register($kernel);
+        (new PingController($monitors, $clock))->register($kernel);
+        // Statusseiten (ADR 0012): Verwaltung mit status_pages.edit, die Seite selbst ist öffentlich (geheimer Link).
+        $statusPages = new \Meridian\Status\StatusPageRepository($db);
+        (new StatusPageController($sessionAuth, $csrf, $users, $access, $statusPages, new \Meridian\Status\StatusPageService($db, $statusPages, new \Meridian\Status\StatusPageValidator($categories, $jobs, $monitors), $access, $audit, $clock), $masker))->register($kernel);
+        (new PublicStatusController($statusPages, new \Meridian\Status\StatusPageRenderer(), $config, $clock, $masker))->register($kernel);
         // Kategorien-Verwaltung (categories.manage, nur Admin).
         (new CategoryController($sessionAuth, $csrf, $users, $access, new CategoryService($db, $audit, $clock), $masker))->register($kernel);
         // Globale Einstellungen (settings.manage, nur Admin).

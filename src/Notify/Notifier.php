@@ -60,7 +60,7 @@ final class Notifier
     public function tick(): array
     {
         $lines = [];
-        $queued = $this->evaluate() + $this->evaluateTls();
+        $queued = $this->evaluate() + $this->evaluateTls() + $this->evaluateMonitors();
         if ($queued > 0) {
             $lines[] = 'Benachrichtigungen eingereiht: ' . $queued . '.';
         }
@@ -182,6 +182,64 @@ final class Notifier
     }
 
     /**
+     * Herzschlag-Überwachungen (ADR 0011): ohne Lebenszeichen bis `Frist = (letzter Ping oder Beginn) + Intervall + Toleranz`
+     * wechselt der Zustand auf „down“ (einmal gemeldet); ein Ping danach setzt „up“ und merkt die Wiederherstellung vor,
+     * die hier einmal gemeldet wird. Die Zustandsänderung und der Ausgang stehen in einer Transaktion.
+     *
+     * @return int Anzahl neu eingereihter Nachrichten
+     */
+    public function evaluateMonitors(): int
+    {
+        $now = $this->clock->now();
+        $nowText = Timestamp::format($now);
+        $queued = 0;
+        $rows = $this->db->fetchAll(
+            'SELECT id, name, state, armed_at, last_ping_at, interval_seconds, grace_seconds, notify_on_down, notify_on_up, notify_channels, recovery_pending
+               FROM monitors WHERE is_enabled = 1 ORDER BY id',
+        );
+        foreach ($rows as $row) {
+            $id = Row::int($row, 'id');
+            $state = Row::string($row, 'state');
+            $job = ['id' => null, 'name' => Row::string($row, 'name'), 'notify_channels' => Row::string($row, 'notify_channels')];
+            if (Row::bool($row, 'recovery_pending')) {
+                $queued += $this->db->immediate(function () use ($id, $row, $job, $nowText): int {
+                    if ($this->db->execute('UPDATE monitors SET recovery_pending = 0 WHERE id = :id AND recovery_pending = 1', ['id' => $id]) !== 1) {
+                        return 0;
+                    }
+
+                    return Row::bool($row, 'notify_on_up') ? $this->enqueueRaw($job, 'monitor_up', null, null, $nowText, 'Das Lebenszeichen ist wieder da.', 0) : 0;
+                });
+                continue;
+            }
+            if ($state === 'down') {
+                continue;
+            }
+            $base = Row::stringOrNull($row, 'last_ping_at') ?? Row::string($row, 'armed_at');
+            try {
+                $deadline = Timestamp::parse($base)->getTimestamp() + Row::int($row, 'interval_seconds') + Row::int($row, 'grace_seconds');
+            } catch (\InvalidArgumentException) {
+                continue;
+            }
+            if ($now->getTimestamp() <= $deadline) {
+                continue;
+            }
+            $queued += $this->db->immediate(function () use ($id, $row, $job, $nowText, $state): int {
+                if ($this->db->execute("UPDATE monitors SET state = 'down', state_since = :now WHERE id = :id AND state = :state AND is_enabled = 1", ['now' => $nowText, 'id' => $id, 'state' => $state]) !== 1) {
+                    return 0;
+                }
+                $minutes = intdiv(Row::int($row, 'interval_seconds'), 60);
+                $detail = Row::stringOrNull($row, 'last_ping_at') === null
+                    ? 'Es kam noch kein Lebenszeichen (erwartet etwa alle ' . $minutes . ' Min).'
+                    : 'Das letzte Lebenszeichen war um ' . Row::string($row, 'last_ping_at') . ' (UTC); erwartet etwa alle ' . $minutes . ' Min.';
+
+                return Row::bool($row, 'notify_on_down') ? $this->enqueueRaw($job, 'monitor_down', null, null, $nowText, $detail, 0) : 0;
+            });
+        }
+
+        return $queued;
+    }
+
+    /**
      * Warnt einmal je Ablaufdatum, wenn das beim Lauf gesehene Zertifikat in höchstens `tls_warn_days` Tagen abläuft.
      *
      * @return int Anzahl neu eingereihter Nachrichten
@@ -237,12 +295,12 @@ final class Notifier
      */
     private function enqueueRaw(array $job, string $kind, ?int $runId, ?string $runStatus, ?string $occurredAt, ?string $note, int $failures): int
     {
-        $jobId = Row::int($job, 'id');
+        $jobId = Row::intOrNull($job, 'id');
         $mode = Row::string($job, 'notify_channels');
         if ($mode === NotifySettings::NONE) {
             return 0;
         }
-        $ids = $mode === NotifySettings::SELECTED
+        $ids = $mode === NotifySettings::SELECTED && $jobId !== null
             ? $this->db->fetchAll('SELECT c.id FROM notification_channels c JOIN job_channels j ON j.channel_id = c.id WHERE j.job_id = :job AND c.is_enabled = 1 ORDER BY c.id', ['job' => $jobId])
             : $this->db->fetchAll('SELECT id FROM notification_channels WHERE is_enabled = 1 ORDER BY id');
         $now = Timestamp::format($this->clock->now());

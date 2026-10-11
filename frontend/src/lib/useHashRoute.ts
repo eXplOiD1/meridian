@@ -13,6 +13,8 @@ export type Route =
   | { name: 'jobs' }
   | { name: 'history' }
   | { name: 'stats' }
+  | { name: 'monitors' }
+  | { name: 'status-pages' }
   | { name: 'job-new' }
   | { name: 'job'; id: string }
   | { name: 'job-edit'; id: string }
@@ -45,6 +47,12 @@ export function parseRoute(hash: string): Route {
   }
   if (parts.length === 1 && first === 'statistik') {
     return { name: 'stats' };
+  }
+  if (parts.length === 1 && first === 'ueberwachung') {
+    return { name: 'monitors' };
+  }
+  if (parts.length === 1 && first === 'statusseiten') {
+    return { name: 'status-pages' };
   }
   if (parts.length === 1 && first === 'verlauf') {
     return { name: 'history' };

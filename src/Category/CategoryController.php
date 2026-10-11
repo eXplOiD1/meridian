@@ -196,6 +196,7 @@ final class CategoryController
             'assignments' => $impact->assignments,
             'assignments_ineffective' => $impact->assignmentsIneffective,
             'internal_targets' => $impact->internalTargets,
+            'watchers' => $impact->watchers,
             'deletable' => $impact->deletable(),
         ];
     }

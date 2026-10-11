@@ -35,6 +35,15 @@ final class CategoryException extends \RuntimeException
         return new self('Ungültiger Name. Erlaubt sind 1 bis 64 Zeichen: Buchstaben (A–Z), Ziffern, Leerzeichen, _ . und -. Der Name beginnt mit einem Buchstaben oder einer Ziffer und endet nicht mit einem Leerzeichen.', self::INVALID);
     }
 
+    public static function hasWatchers(int $count): self
+    {
+        return new self(
+            'Kategorie enthält ' . $count . ($count === 1 ? ' Überwachung oder Statusseite' : ' Überwachungen oder Statusseiten') . '. Zuerst in eine andere Kategorie verschieben oder löschen.',
+            self::CONFLICT,
+            $count,
+        );
+    }
+
     public static function hasJobs(int $jobs): self
     {
         return new self(

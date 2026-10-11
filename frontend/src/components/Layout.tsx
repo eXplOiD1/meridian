@@ -1,6 +1,6 @@
 import { InsecureWarning } from './InsecureWarning';
 import type { ReactNode } from 'react';
-import { canManageCategories, canManageInternalTargets, canManageSettings, canManageShellTargets, canManageUsers, canSeeUsersArea, canViewJobs, roleNames } from '../lib/permissions';
+import { canManageCategories, canManageInternalTargets, canManageSettings, canManageShellTargets, canEditStatusPages, canManageUsers, canSeeUsersArea, canViewJobs, roleNames } from '../lib/permissions';
 import type { Route } from '../lib/useHashRoute';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { Profile } from '../types';
@@ -35,7 +35,8 @@ function entries(profile: Profile): NavEntry[] {
   }
   list.push(canViewJobs(profile) ? { path: 'verlauf', label: 'Verlauf', current: (r) => r.name === 'history' } : { path: null, label: 'Verlauf', hint: 'bald' });
   list.push(canViewJobs(profile) ? { path: 'statistik', label: 'Statistik', current: (r) => r.name === 'stats' } : { path: null, label: 'Statistik', hint: 'bald' });
-  list.push({ path: null, label: 'Statusseiten', hint: 'bald' });
+  list.push(canViewJobs(profile) ? { path: 'ueberwachung', label: 'Überwachung', current: (r) => r.name === 'monitors' } : { path: null, label: 'Überwachung', hint: 'bald' });
+  list.push(canEditStatusPages(profile) ? { path: 'statusseiten', label: 'Statusseiten', current: (r) => r.name === 'status-pages' } : { path: null, label: 'Statusseiten', hint: 'bald' });
   if (canSeeUsersArea(profile)) {
     list.push({
       path: canManageUsers(profile) ? 'benutzer' : 'benutzer/rollen',

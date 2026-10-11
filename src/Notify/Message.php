@@ -26,6 +26,8 @@ final readonly class Message
         return match ($this->kind) {
             'failure' => 'Meridian: ' . $this->jobName . ' ist fehlgeschlagen',
             'recovery' => 'Meridian: ' . $this->jobName . ' läuft wieder',
+            'monitor_down' => 'Meridian: Kein Lebenszeichen von ' . $this->jobName,
+            'monitor_up' => 'Meridian: ' . $this->jobName . ' meldet sich wieder',
             'disabled' => 'Meridian: ' . $this->jobName . ' wurde deaktiviert',
             'tls_expiry' => 'Meridian: Zertifikat von ' . $this->jobName . ' läuft bald ab',
             default => 'Meridian: Testnachricht',
@@ -38,7 +40,11 @@ final readonly class Message
             return "Das ist eine Testnachricht von Meridian.\nWenn du sie liest, funktioniert dieser Kanal.\n";
         }
         $lines = [];
-        if ($this->kind === 'disabled') {
+        if ($this->kind === 'monitor_down') {
+            $lines[] = 'Die Überwachung „' . $this->jobName . '“ hat kein Lebenszeichen mehr erhalten.';
+        } elseif ($this->kind === 'monitor_up') {
+            $lines[] = 'Die Überwachung „' . $this->jobName . '“ hat wieder ein Lebenszeichen erhalten.';
+        } elseif ($this->kind === 'disabled') {
             $lines[] = 'Der Job „' . $this->jobName . '“ wurde automatisch deaktiviert, nachdem er ' . $this->failures . ' Mal in Folge fehlgeschlagen ist. Er läuft erst wieder, wenn du ihn in Meridian aktivierst.';
         } elseif ($this->kind === 'tls_expiry') {
             $lines[] = 'Das TLS-Zertifikat des Ziels von „' . $this->jobName . '“ läuft bald ab.';
@@ -53,7 +59,7 @@ final readonly class Message
             $lines[] = 'Hinweis: ' . $this->detail;
         }
         $lines[] = '';
-        $lines[] = $this->link === null ? 'Details stehen in Meridian unter „Verlauf“.' : 'Öffnen: ' . $this->link;
+        $lines[] = $this->link === null ? (str_starts_with($this->kind, 'monitor_') ? 'Details stehen in Meridian unter „Überwachung“.' : 'Details stehen in Meridian unter „Verlauf“.') : 'Öffnen: ' . $this->link;
 
         return implode("\n", $lines) . "\n";
     }

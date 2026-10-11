@@ -414,3 +414,8 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .curlimport summary { cursor: pointer; font-weight: 600; }
 
 .authbox { border: 1px dashed var(--line, #c9d1d9); border-radius: 6px; padding: 8px 12px; margin: 0 0 12px; }
+
+.statusitems { border: 1px dashed var(--linie-stark); border-radius: 6px; padding: 8px 12px; margin: 0 0 12px; }
+.statusitems__row { align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.statusitems__row .input { flex: 1 1 200px; }
+.statusitems__name { font-size: 12px; }

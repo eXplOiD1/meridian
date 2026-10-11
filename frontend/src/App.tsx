@@ -11,6 +11,8 @@ import { JobDetail } from './screens/JobDetail';
 import { JobEdit } from './screens/JobEdit';
 import { History } from './screens/History';
 import { Statistics } from './screens/Statistics';
+import { Monitors } from './screens/Monitors';
+import { StatusPages } from './screens/StatusPages';
 import { Jobs } from './screens/Jobs';
 import { Login } from './screens/Login';
 import { Overview } from './screens/Overview';
@@ -31,6 +33,8 @@ const HEADINGS: Record<Route['name'], { kicker: string; title: string }> = {
   jobs: { kicker: 'Zeitgesteuerte Aufgaben', title: 'Jobs' },
   history: { kicker: 'Was lief wann', title: 'Verlauf' },
   stats: { kicker: 'Wie läuft es über die Zeit', title: 'Statistik' },
+  monitors: { kicker: 'Lebenszeichen von außen', title: 'Überwachung' },
+  'status-pages': { kicker: 'Öffentlich teilen', title: 'Statusseiten' },
   'job-new': { kicker: 'Jobs', title: 'Neuer Job' },
   job: { kicker: 'Jobs', title: 'Job' },
   'job-edit': { kicker: 'Jobs', title: 'Job bearbeiten' },
@@ -179,6 +183,8 @@ export function App() {
       {effective.name === 'jobs' && <Jobs profile={profile} />}
       {effective.name === 'history' && <History profile={profile} />}
       {effective.name === 'stats' && <Statistics profile={profile} />}
+      {effective.name === 'monitors' && <Monitors profile={profile} />}
+      {effective.name === 'status-pages' && <StatusPages profile={profile} />}
       {effective.name === 'job' && <JobDetail key={effective.id} profile={profile} id={effective.id} />}
       {effective.name === 'job-new' && <JobEdit profile={profile} id={null} />}
       {effective.name === 'users' && <Users profile={profile} roleId={effective.roleId ?? null} />}
