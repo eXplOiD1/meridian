@@ -2,7 +2,7 @@
 
 Arbeitsverzeichnis ist ausschließlich das Produktverzeichnis `Meridian/`. GitHub-Arbeitsbranch: `claude/great-clarke-ubr0vc`.
 
-Die offenen Aufgaben stehen in [TODO.md](../TODO.md). Docker/systemd und SMTP sind auf Alex' Wunsch zurückgestellt.
+Die offenen Aufgaben stehen in [TODO.md](../TODO.md). Docker/systemd, SMTP sowie GHCR-Freigabe und Update-Abruf sind auf Alex' Wunsch zurückgestellt. Alex übernimmt die Veröffentlichung auf `main` selbst. Der gewünschte Laufzeitvergleich ist noch offen.
 
 ## Veröffentlichung
 
@@ -10,7 +10,7 @@ Die offenen Aufgaben stehen in [TODO.md](../TODO.md). Docker/systemd und SMTP si
 
 ## Prüfungen
 
-PHPStan max unter PHP 8.4 und Psalm-Taint-Analyse waren lokal erfolgreich. Frontend-Build sowie gezielte API-Tests für interne Ziele und Benachrichtigungssprache waren erfolgreich. Die ältere Gesamtsuite enthält veraltete Testhilfen und ist noch nicht vollständig erfolgreich. Echte Docker-, systemd- und SMTP-Abnahme stehen weiterhin aus.
+PHPStan max unter PHP 8.4 und Psalm-Taint-Analyse waren lokal erfolgreich. Frontend-Build sowie gezielte API-Tests für interne Ziele und Benachrichtigungssprache waren erfolgreich. Die vollständige Suite unter Linux/PHP 8.4 ist erfolgreich: 1.136 Tests, 179.599 Assertions, ohne Fehler oder Warnungen. Auch der Container-Workflow besteht die gesamte Suite und PHPStan. Testbericht: https://github.com/eXplOiD1/meridian/actions/runs/38148332392. Echte Docker-, systemd- und SMTP-Abnahme stehen weiterhin aus.
 
 ## Sprache
 
