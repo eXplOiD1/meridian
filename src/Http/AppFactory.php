@@ -60,7 +60,7 @@ final class AppFactory
     /**
      * @param SseChannel|null $sse Ausgabekanal des Live-Logs (Tests: aufzeichnend); null = {@see PhpSseChannel}
      */
-    public static function create(Config $config, Connection $db, SecretBox $box, ?Clock $clock = null, ?SseChannel $sse = null): Kernel
+    public static function create(Config $config, Connection $db, SecretBox $box, ?Clock $clock = null, ?SseChannel $sse = null, ?\Meridian\Monitor\Probe\Prober $prober = null): Kernel
     {
         $clock ??= new SystemClock();
         $masker = new SecretMasker();
@@ -146,6 +146,10 @@ final class AppFactory
         // Herzschlag-Überwachung (ADR 0011): Verwaltung mit Sitzung, Ping ohne Sitzung (Token ist die Berechtigung).
         $monitors = new \Meridian\Monitor\MonitorRepository($db);
         (new MonitorController($sessionAuth, $csrf, $users, $access, $monitors, new \Meridian\Monitor\MonitorService($db, $monitors, new \Meridian\Monitor\MonitorValidator($categories), $access, $audit, $clock, $box), $masker, new \Meridian\Settings\Settings($db, $clock)))->register($kernel);
+        // Testprüfung (ADR 0018): dieselbe Prüfung wie im Betrieb, synchron im Web-Prozess.
+        $prober ??= new \Meridian\Monitor\Probe\NetworkProbe(new \Meridian\Runner\Http\TargetGuard(new \Meridian\Runner\Http\SystemHostResolver(), new \Meridian\Runner\Http\AddressPolicy(new \Meridian\Runner\Http\DbInternalTargetSource($db), $infrastructure)), new \Meridian\Runner\Http\CurlTransport('Meridian/' . $config->version));
+        (new MonitorTestController($sessionAuth, $csrf, $users, $access, $monitors, new \Meridian\Monitor\MonitorValidator($categories), $prober, $box, $audit, $db, $clock, $masker))->register($kernel);
+        (new MonitorSourceController($sessionAuth, $csrf, $users, $access, $monitors, $settings, $box, $audit, $db, $clock))->register($kernel);
         (new PingController($monitors, $clock))->register($kernel);
         // Statusseiten (ADR 0012): Verwaltung mit status_pages.edit, die Seite selbst ist öffentlich (geheimer Link).
         $statusPages = new \Meridian\Status\StatusPageRepository($db);

@@ -87,6 +87,21 @@ function IssuedToken({ issued, onClose }: { issued: Issued; onClose: () => void 
   );
 }
 
+interface TestResult {
+  label: string;
+  ok: boolean;
+  latency: number | null;
+  note: string | null;
+}
+
+function TestResultAlert({ result }: { result: TestResult }) {
+  return (
+    <Alert tone={result.ok ? 'ok' : 'err'}>
+      <strong>{result.label}:</strong> {result.ok ? t('erreichbar') + (result.latency !== null ? ' (' + String(result.latency) + ' ms)' : '') : result.note}
+    </Alert>
+  );
+}
+
 interface Draft {
   kind: MonitorKind;
   target: string;
@@ -113,7 +128,7 @@ function draftOf(m: Monitor): Draft {
   return { kind: m.kind, target: '', expectedStatus: m.expected_status ?? '200-399', failAfter: String(m.fail_after ?? 3), name: m.name, value: interval.value, unit: interval.unit, graceValue: m.grace_seconds === 0 ? '0' : grace.value, graceUnit: grace.unit, categoryId: m.category_id === null ? '' : String(m.category_id), notifyDown: m.notify_on_down, notifyUp: m.notify_on_up, notifyChannels: m.notify_channels };
 }
 
-function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, editing, onSubmit, onCancel }: {
+function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, editing, onSubmit, onCancel, onTest, testing, testResult }: {
   draft: Draft;
   setDraft: (d: Draft) => void;
   categories: CategoryRef[];
@@ -123,6 +138,9 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
   editing: boolean;
   onSubmit: () => void;
   onCancel?: () => void;
+  onTest?: () => void;
+  testing?: boolean;
+  testResult?: TestResult | null;
 }) {
   const isActive = draft.kind !== 'heartbeat';
   const unitSelect = (value: Unit, onChange: (u: Unit) => void, label: string) => (
@@ -189,7 +207,7 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
               autoComplete="off"
               spellCheck={false}
               inputMode={draft.kind === 'http' ? 'url' : 'text'}
-              placeholder={editing ? t('Leer lassen, um das gespeicherte Ziel zu behalten') : TARGET_PLACEHOLDER[draft.kind as 'http' | 'tcp' | 'ping']}
+              placeholder={editing ? t('Leer lassen, um das gespeicherte Ziel zu behalten (Anzeige gespeicherter Ziele ist in den Einstellungen aus)') : TARGET_PLACEHOLDER[draft.kind as 'http' | 'tcp' | 'ping']}
               value={draft.target}
               onChange={(e) => setDraft({ ...draft, target: e.target.value })}
             />
@@ -242,10 +260,16 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
         <input type="checkbox" checked={draft.notifyChannels === 'none'} onChange={(e) => setDraft({ ...draft, notifyChannels: e.target.checked ? 'none' : 'all' })} />
         <span>{t('Keine Kanäle benutzen (nur Anzeige hier und in der Übersicht)')}</span>
       </label>
+      {testResult !== null && testResult !== undefined && <TestResultAlert result={testResult} />}
       <div className="row">
         <button type="submit" className="btn btn--solid" disabled={busy || draft.name.trim() === ''}>
           {submitLabel}
         </button>
+        {isActive && onTest !== undefined && (
+          <button type="button" className="btn btn--ghost" disabled={busy || testing === true} onClick={onTest}>
+            {testing === true ? t('Prüft …') : t('Jetzt testen')}
+          </button>
+        )}
         {onCancel !== undefined && (
           <button type="button" className="btn btn--ghost" onClick={onCancel}>
             {t('Abbrechen')}</button>
@@ -294,9 +318,11 @@ export function Monitors({ profile }: { profile: Profile }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Draft>(emptyDraft(''));
-  const [editing, setEditing] = useState<{ id: number; draft: Draft } | null>(null);
+  const [editing, setEditing] = useState<{ id: number; draft: Draft; revealed?: boolean } | null>(null);
   const [issued, setIssued] = useState<Issued | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ source: 'form' | 'row'; label: string; ok: boolean; latency: number | null; note: string | null } | null>(null);
   const mayCreate = canEditHttp(profile);
 
   const load = useCallback(async (): Promise<void> => {
@@ -345,6 +371,52 @@ export function Monitors({ profile }: { profile: Profile }) {
     }
   }
 
+  /** Bearbeiten öffnen; bei aktiver Prüfung das gespeicherte Ziel laden, wenn der Admin „Gespeicherte Skripte und Links anzeigen“ eingeschaltet hat (nur im Zustand dieser Seite, nie im Browser-Speicher). */
+  function startEdit(m: Monitor): void {
+    setErrors({});
+    setEditing({ id: m.id, draft: draftOf(m) });
+    if (m.kind === 'heartbeat') {
+      return;
+    }
+    request<{ target: string }>('GET', '/api/monitors/' + String(m.id) + '/source', { csrf })
+      .then((source) => {
+        setEditing((current) => (current !== null && current.id === m.id ? { ...current, draft: { ...current.draft, target: source.target }, revealed: true } : current));
+      })
+      .catch((caught: unknown) => {
+        // „Aus“ ist der Normalfall (403 reveal_disabled): dann bleibt es beim leeren Feld; jeder andere Fehler wird gezeigt.
+        if (!(caught instanceof ApiError && caught.revealDisabled)) {
+          setFormError(errorMessage(caught));
+        }
+      });
+  }
+
+  /** Eine einzelne Prüfung jetzt (ohne Speichern, ohne Meldung); das Ergebnis erscheint über der Liste. */
+  async function runTest(key: string, label: string, path: string, body: Record<string, unknown>): Promise<void> {
+    setTesting(key);
+    setTestResult(null);
+    setFormError(null);
+    try {
+      const reply = await request<{ ok: boolean; latency_ms: number | null; note: string | null }>('POST', path, { csrf, body });
+      setTestResult({ source: key === 'form' ? 'form' : 'row', label, ok: reply.ok, latency: reply.latency_ms, note: reply.note });
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 422) {
+        setErrors(caught.fields);
+        setFormError(t('Bitte die markierten Felder korrigieren.'));
+      } else {
+        setFormError(errorMessage(caught));
+      }
+    } finally {
+      setTesting(null);
+    }
+  }
+
+  function testBody(d: Draft): Record<string, unknown> {
+    const body: Record<string, unknown> = {};
+    if (d.target.trim() !== '') body.target = d.target.trim();
+    if (d.kind === 'http') body.expected_status = d.expectedStatus.trim();
+    return body;
+  }
+
   async function act(run: () => Promise<void>): Promise<void> {
     setBusy(true);
     setFormError(null);
@@ -367,6 +439,7 @@ export function Monitors({ profile }: { profile: Profile }) {
         {loadError !== null && <Alert tone="err">{loadError}</Alert>}
         {formError !== null && <Alert tone="err">{formError}</Alert>}
         {issued !== null && <IssuedToken issued={issued} onClose={() => setIssued(null)} />}
+        {testResult !== null && testResult.source === 'row' && <TestResultAlert result={testResult} />}
         {monitors !== null && monitors.length === 0 && <p className="card__lead">{t('Noch keine Überwachung angelegt.')}</p>}
         {monitors !== null && monitors.length > 0 && (
           <div className="table-wrap">
@@ -421,8 +494,12 @@ export function Monitors({ profile }: { profile: Profile }) {
                       <td data-label={t('Aktion')}>
                         {m.can_edit ? (
                           <div className="row">
-                            <button type="button" className="btn btn--ghost btn--small" aria-label={t('{name} bearbeiten', { name: m.name })} onClick={() => { setErrors({}); setEditing({ id: m.id, draft: draftOf(m) }); }}>
+                            <button type="button" className="btn btn--ghost btn--small" aria-label={t('{name} bearbeiten', { name: m.name })} onClick={() => startEdit(m)}>
                               {t('Bearbeiten')}</button>
+                            {active && (
+                              <button type="button" className="btn btn--ghost btn--small" disabled={busy || testing !== null} aria-label={t('{name} testen', { name: m.name })} onClick={() => void runTest('row' + String(m.id), m.name, '/api/monitors/' + String(m.id) + '/test', {})}>
+                                {testing === 'row' + String(m.id) ? t('Prüft …') : t('Testen')}</button>
+                            )}
                             {!active && (
                               <Confirm label={t('Neue Adresse')} question={t('Neue Ping-Adresse erzeugen? Die alte gilt sofort nicht mehr.')} confirmLabel={t('Ja, erneuern')} busy={busy} accessibleName={t('Ping-Adresse von {name} erneuern', { name: m.name })} onConfirm={() => void act(async () => {
                                 const reply = await request<{ ping_token: string }>('POST', '/api/monitors/' + String(m.id) + '/token', { csrf });
@@ -447,14 +524,18 @@ export function Monitors({ profile }: { profile: Profile }) {
         {editing !== null && (
           <div className="replace">
             <h3>{t('Überwachung bearbeiten')}</h3>
+            {editing.revealed === true && <Alert tone="warn">{t('Das gespeicherte Ziel wird angezeigt (Einstellung des Admins). Der Abruf wurde protokolliert. Beim Speichern wird es so übernommen, wie es hier steht.')}</Alert>}
             <MonitorForm
               draft={editing.draft}
-              setDraft={(d) => setEditing({ id: editing.id, draft: d })}
+              setDraft={(d) => setEditing({ ...editing, draft: d })}
               categories={categories}
               errors={errors}
               busy={busy}
               submitLabel={t('Speichern')}
               editing
+              testing={testing === 'form'}
+            testResult={testResult !== null && testResult.source === 'form' ? testResult : null}
+              onTest={() => void runTest('form', editing.draft.name, '/api/monitors/' + String(editing.id) + '/test', testBody(editing.draft))}
               onSubmit={() => void submit('PUT', '/api/monitors/' + String(editing.id), editing.draft).then((ok) => ok && setEditing(null))}
               onCancel={() => {
                 setEditing(null);
@@ -475,6 +556,9 @@ export function Monitors({ profile }: { profile: Profile }) {
             busy={busy}
             submitLabel={t('Anlegen')}
             editing={false}
+            testing={testing === 'form'}
+            testResult={testResult !== null && testResult.source === 'form' ? testResult : null}
+            onTest={() => void runTest('form', draft.name === '' ? t('Testprüfung') : draft.name, '/api/monitors/test', { kind: draft.kind, category_id: draft.categoryId === '' ? null : Number.parseInt(draft.categoryId, 10), ...testBody(draft) })}
             onSubmit={() => void submit('POST', '/api/monitors', draft).then((ok) => ok && setDraft(emptyDraft(draft.categoryId)))}
           />
         </section>
