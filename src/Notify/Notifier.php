@@ -60,7 +60,7 @@ final class Notifier
     public function tick(): array
     {
         $lines = [];
-        $queued = $this->evaluate() + $this->evaluateTls() + $this->evaluateMonitors();
+        $queued = $this->evaluate() + $this->evaluateTls() + $this->evaluateMonitors() + $this->evaluateRuntime();
         if ($queued > 0) {
             $lines[] = 'Benachrichtigungen eingereiht: ' . $queued . '.';
         }
@@ -249,6 +249,56 @@ final class Notifier
             });
         }
 
+        return $queued;
+    }
+
+    /** Warns once per completed successful run, using a robust baseline without test runs. */
+    public function evaluateRuntime(): int
+    {
+        $queued = 0;
+        $jobs = $this->db->fetchAll('SELECT id FROM jobs WHERE runtime_warn_percent IS NOT NULL ORDER BY id');
+        foreach ($jobs as $row) {
+            $jobId = Row::int($row, 'id');
+            $queued += $this->db->immediate(function () use ($jobId): int {
+                $job = $this->db->fetchOne('SELECT id, name, notify_channels, runtime_warn_percent FROM jobs WHERE id = :id AND runtime_warn_percent IS NOT NULL', ['id' => $jobId]);
+                if ($job === null) {
+                    return 0;
+                }
+                $runs = $this->db->fetchAll("SELECT id, status, finished_at, duration_ms FROM runs WHERE job_id = :job AND runtime_checked = 0 AND status = 'ok' AND trigger <> 'test' ORDER BY id LIMIT :limit", ['job' => $jobId, 'limit' => self::RUNS_PER_JOB]);
+                $count = 0;
+                foreach ($runs as $run) {
+                    $last = Row::int($run, 'id');
+                    $this->db->execute('UPDATE runs SET runtime_checked = 1 WHERE id = :id', ['id' => $last]);
+                    $finished = Row::stringOrNull($run, 'finished_at');
+                    $duration = Row::intOrNull($run, 'duration_ms');
+                    if ($finished === null || $duration === null || $duration <= 0) {
+                        continue;
+                    }
+                    try {
+                        $age = $this->clock->now()->getTimestamp() - Timestamp::parse($finished)->getTimestamp();
+                    } catch (\InvalidArgumentException) {
+                        continue;
+                    }
+                    if ($age < 0 || $age > self::FRESH_SECONDS) {
+                        continue;
+                    }
+                    $history = $this->db->fetchAll("SELECT duration_ms FROM runs WHERE job_id = :job AND id <> :run AND status = 'ok' AND trigger <> 'test' AND duration_ms > 0 AND finished_at <= :finished ORDER BY finished_at DESC, id DESC LIMIT 20", ['job' => $jobId, 'run' => $last, 'finished' => $finished]);
+                    $values = array_map(static fn (array $sample): int => Row::int($sample, 'duration_ms'), $history);
+                    if (count($values) < 5) {
+                        continue;
+                    }
+                    sort($values, SORT_NUMERIC);
+                    $middle = intdiv(count($values), 2);
+                    $median = count($values) % 2 === 0 ? ($values[$middle - 1] + $values[$middle]) / 2 : $values[$middle];
+                    if ($duration / $median * 100 < Row::int($job, 'runtime_warn_percent')) {
+                        continue;
+                    }
+                    $detail = 'Laufzeit: ' . $duration . ' ms; üblich: ' . (int) round($median) . ' ms (Median aus ' . count($values) . ' erfolgreichen Läufen).';
+                    $count += $this->enqueueRaw($job, 'slow', $last, 'ok', $finished, $detail, 0);
+                }
+                return $count;
+            });
+        }
         return $queued;
     }
 

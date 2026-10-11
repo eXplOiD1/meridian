@@ -69,6 +69,7 @@ final class MessageDetail
         // Übersetzt auch kombinierte Runner-Notizen, ohne gespeicherte Daten zu ändern.
         $translated = strtr($detail, self::ENGLISH);
         $patterns = [
+            '/Laufzeit: ([0-9]+) ms; üblich: ([0-9]+) ms \(Median aus ([0-9]+) erfolgreichen Läufen\)\./' => 'Duration: $1 ms; usual: $2 ms (median of $3 successful runs).',
             '/Unerwarteter Statuscode ([0-9]+) \(erwartet: ([^)]+)\)\./' => 'Unexpected status code $1 (expected: $2).',
             '/ Weiterleitungen: ([0-9]+) erlaubt\./' => ' Redirects: $1 allowed.',
             '/Zeitlimit von ([0-9]+) s überschritten, Prozess beendet\./' => 'Time limit of $1 s exceeded: process stopped.',

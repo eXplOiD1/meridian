@@ -396,6 +396,7 @@ export interface JobNotify {
   disable_after: number | null;
   on_disable: boolean;
   tls_warn_days: number | null;
+  runtime_warn_percent: number | null;
 }
 
 /** Antwort von `GET /api/stats` (Läufe je Tag und je Job). */

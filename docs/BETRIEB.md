@@ -87,6 +87,8 @@ sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/m
 
 ## Shell-Jobs auf dem Host (systemd)
 
+Für einen isolierten Entwicklungscontainer kann der Agent mit `MERIDIAN_ENV=dev php bin/meridian-shell-agent --development-container` gestartet werden. Nur diese Kombination hebt die Container-Prüfung auf. Der Agent muss weiterhin als eigener Benutzer ohne root-Rechte und ohne Zugriff auf Meridians Schlüssel oder Datenbank laufen. Die normalen systemd-Units und die Release-Compose-Datei verwenden diesen Schalter nicht. Agent-Tests im Container ersetzen keine Abnahme der systemd-Socket-Units.
+
 Der Installer richtet Web, Planer und `meridian-worker-http` ein (ohne Worker läuft kein Job). Shell-Jobs **auf dem Host** sind aus. Einschalten:
 
 ```bash
