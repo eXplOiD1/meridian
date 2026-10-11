@@ -2,7 +2,7 @@
 
 Arbeitsverzeichnis ist ausschließlich das Produktverzeichnis `Meridian/`. GitHub-Arbeitsbranch: `claude/great-clarke-ubr0vc`.
 
-Die offenen Aufgaben stehen in [TODO.md](../TODO.md). Docker- und Host-Agent-Abnahme auf einem echten Ubuntu-Server mit systemd sind erfolgreich, einschließlich Prozessgruppen-Abbruch, Zeitlimit, Isolation und Geheimnismaskierung über API und Worker. Alex hat den SMTP-Versand erfolgreich getestet. GHCR-Freigabe und Update-Abruf bleiben offen. Alex übernimmt die Veröffentlichung auf `main` selbst. Der Laufzeitvergleich ist implementiert: optionale Warnung nach erfolgreichem Lauf, Median der letzten 20 erfolgreichen Läufe, mindestens fünf Vergleichswerte, Schwelle 110–1000 Prozent (UI-Vorgabe 200). Testläufe werden ausgeschlossen. Migration 0027 erhält bestehende Outbox-Nachrichten atomar; Datenerhalt und Rollback sind getestet.
+Die offenen Aufgaben stehen in [TODO.md](../TODO.md). Docker- und Host-Agent-Abnahme auf einem echten Ubuntu-Server mit systemd sind erfolgreich, einschließlich Prozessgruppen-Abbruch, Zeitlimit, Isolation und Geheimnismaskierung über API und Worker. Alex hat den SMTP-Versand erfolgreich getestet. GHCR-Freigabe und tatsächlicher Update-Abruf werden auf Wunsch von Alex für diesen Release ausgelassen; sie sind nicht als geprüft bestätigt. Alex übernimmt die Veröffentlichung auf `main` selbst. Der Laufzeitvergleich ist implementiert: optionale Warnung nach erfolgreichem Lauf, Median der letzten 20 erfolgreichen Läufe, mindestens fünf Vergleichswerte, Schwelle 110–1000 Prozent (UI-Vorgabe 200). Testläufe werden ausgeschlossen. Migration 0027 erhält bestehende Outbox-Nachrichten atomar; Datenerhalt und Rollback sind getestet.
 
 ## Veröffentlichung
 
