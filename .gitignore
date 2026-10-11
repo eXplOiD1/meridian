@@ -16,9 +16,11 @@
 /tests/*
 !/tests/Release/
 !/tests/Support/
+!/tests/Unit/
+!/tests/Integration/
 
 /psalm.xml
-/phpunit.xml
+
 /.gitleaks.toml
 /.pre-commit-config.yaml
 /.github/*
