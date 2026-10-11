@@ -1,6 +1,5 @@
 # Offene Aufgaben
 
-- [ ] SMTP-Zustellung gegen einen Testserver ohne echte Empfänger abnehmen. Vorerst zurückgestellt.
 - [ ] GHCR-Pakete öffentlich freigeben und tatsächlichen Update-Abruf prüfen. Auf Wunsch vorerst zurückgestellt. `latest` wird ausschließlich aus `main` veröffentlicht; der Arbeitsbranch veröffentlicht `candidate`.
 - [ ] Veröffentlichung auf `main` übernimmt Alex selbst nach der Abnahme.
 - [ ] Abschließendes Release-Review nach den verbleibenden Prüfungen.
