@@ -552,3 +552,6 @@ details.fold[open] { padding-bottom: 14px; }
 @media (max-width: 767.98px) { .mobilebar__tools .langswitch { display: inline-flex; } }
 @media (min-width: 768px) { .nav__item { min-height: 40px; } .nav__label { margin: 10px 14px 4px; } .sidebar { gap: 12px; padding-top: 20px; } }
 @media (max-width: 767.98px) { .takt__grid { grid-template-columns: minmax(0, 1fr); row-gap: 2px; } .takt__row { margin-bottom: 8px; } .takt__grid > :empty { display: none; } }
+.lead { display: grid; gap: 4px; }
+.lead__more > summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13px; min-height: 32px; display: flex; align-items: center; }
+.lead__more[open] > summary { margin-bottom: 4px; }
