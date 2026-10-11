@@ -164,6 +164,16 @@ final class MonitorRepository
     }
 
     /**
+     * Das verschlüsselte Ziel (nur für den Bearbeiten-Endpunkt und die Prüfung); null bei Herzschlag.
+     */
+    public function targetEnc(int $id): ?string
+    {
+        $row = $this->db->fetchOne('SELECT target_enc FROM monitors WHERE id = :id', ['id' => $id]);
+
+        return $row === null ? null : Row::stringOrNull($row, 'target_enc');
+    }
+
+    /**
      * Aktive Prüfungen, die laufen: aktiv, mit Ziel. Wer fällig ist, entscheidet der Aufrufer (letzte Prüfung + Intervall).
      *
      * @return list<array{id: int, kind: MonitorKind, category_id: int|null, target_enc: string, expected_status: string, interval_seconds: int, last_check_at: string|null}>

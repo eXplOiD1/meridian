@@ -144,6 +144,9 @@ services:
       # IP des Reverse-Proxys, damit Sperre und Audit die echte Client-IP sehen, z. B. 172.19.0.0/16.
       # Pflicht hinter einem Proxy: Anmeldungen mit X-Forwarded-For/Forwarded ohne diese Angabe werden abgelehnt.
       MERIDIAN_TRUSTED_PROXIES: ${MERIDIAN_TRUSTED_PROXIES:-}
+    # Die Testprüfung „Ping“ (ADR 0018) läuft im Web-Prozess; ICMP ohne Capability (nur in diesem Container).
+    sysctls:
+      net.ipv4.ping_group_range: "0 2147483647"
     ports:
       - "${MERIDIAN_PORT:-8090}:8080"
 

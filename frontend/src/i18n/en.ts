@@ -1,5 +1,13 @@
 /** Englische Fassungen; Schlüssel ist der deutsche Quelltext. Fehlt ein Eintrag, bleibt die Oberfläche deutsch. */
 export const EN: Record<string, string> = {
+  "erreichbar": "reachable",
+  "{name} testen": "Test {name}",
+  "Prüft …": "Checking …",
+  "Testen": "Test",
+  "Jetzt testen": "Test now",
+  "Testprüfung": "Test check",
+  "Das gespeicherte Ziel wird angezeigt (Einstellung des Admins). Der Abruf wurde protokolliert. Beim Speichern wird es so übernommen, wie es hier steht.": "The stored target is shown (admin setting). The retrieval was logged. When saving it is taken over as it appears here.",
+  "Leer lassen, um das gespeicherte Ziel zu behalten (Anzeige gespeicherter Ziele ist in den Einstellungen aus)": "Leave empty to keep the stored target (showing stored targets is off in the settings)",
   "Erreichbar": "Reachable",
   "Ausgefallen": "Down",
   "Wartet auf die erste Prüfung": "Waiting for the first check",
