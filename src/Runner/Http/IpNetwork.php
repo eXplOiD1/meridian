@@ -27,11 +27,11 @@ final readonly class IpNetwork
     public static function fromCidr(string $cidr): self
     {
         if (preg_match('~^([0-9A-Fa-f:.]+)/(0|[1-9][0-9]{0,2})$~D', $cidr, $m) !== 1) {
-            throw new \InvalidArgumentException('Ungültiges Netz. Form: 192.168.1.0/24 oder fd12:3456::/48.');
+            throw new \InvalidArgumentException('Ungültiges Netz. Form: 192.168.1.0/24 oder fd12:3456::/48. Erlaubt sind nur Ziffern, Punkte, Doppelpunkte und ein „/“; Leerzeichen und unsichtbare Zeichen (oft beim Einfügen) bitte entfernen.');
         }
         $packed = self::pack($m[1]);
         if ($packed === null) {
-            throw new \InvalidArgumentException('Ungültiges Netz. Form: 192.168.1.0/24 oder fd12:3456::/48.');
+            throw new \InvalidArgumentException('Ungültiges Netz. Form: 192.168.1.0/24 oder fd12:3456::/48. Erlaubt sind nur Ziffern, Punkte, Doppelpunkte und ein „/“; Leerzeichen und unsichtbare Zeichen (oft beim Einfügen) bitte entfernen.');
         }
         $prefix = (int) $m[2];
         if ($prefix > strlen($packed) * 8) {
