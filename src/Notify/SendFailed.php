@@ -13,5 +13,6 @@ final class SendFailed extends \RuntimeException
     public const AUTH = 'Anmeldung am Server abgelehnt. Benutzer und Passwort bzw. Token prüfen.';
     public const REJECTED = 'Der Server hat die Nachricht nicht angenommen. Absender, Empfänger und Thema prüfen.';
     public const SECRET = 'Das gespeicherte Passwort bzw. Token ist nicht lesbar. Im Kanal neu eingeben.';
+    public const UNEXPECTED = 'Unerwarteter Fehler bei der Zustellung. Einstellungen des Kanals prüfen und erneut testen.';
     public const DISABLED = 'Der Kanal ist deaktiviert oder wurde gelöscht.';
 }
