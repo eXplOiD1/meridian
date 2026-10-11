@@ -128,12 +128,22 @@ final class NotificationRecipientsTest extends TestCase
         self::assertSame(200, $updated->getStatusCode());
         self::assertSame([2], $this->json($updated)['monitor']['channel_ids']);
         self::assertSame([2], $this->json($this->call('GET', '/api/monitors', [], [], $cookies))['monitors'][0]['channel_ids']);
+        $this->db()->executeMigrationScript('DROP TABLE monitor_channels');
+        $this->db()->executeMigrationScript(file_get_contents(dirname(__DIR__, 2) . '/migrations/0030_monitor_channels.sql'));
+        self::assertSame([2], $this->json($this->call('GET', '/api/monitors', [], [], $cookies))['monitors'][0]['channel_ids'], 'The migration preserves existing selections');
         $this->clock()->advance(61);
         $notifier = new Notifier($this->db(), $this->clock(), new ChannelStore($this->db(), $this->box(), $this->clock()), [], new SecretMasker());
         self::assertSame(1, $notifier->evaluateMonitors());
         $queued = $this->db()->fetchOne('SELECT channel_id, recipients FROM notification_outbox');
         self::assertSame(2, $queued['channel_id']);
         self::assertSame('["category@example.org"]', $queued['recipients']);
+        $this->db()->execute('DELETE FROM notification_channels WHERE id = 2');
+        $this->db()->execute("INSERT INTO notification_channels (id, name, type, config_json, created_at, updated_at) VALUES (2, 'Replacement', 'email', '{}', :at, :at)", ['at' => $at]);
+        $saved = $this->json($this->call('GET', '/api/monitors', [], [], $cookies))['monitors'][0];
+        self::assertSame('selected', $saved['notify_channels']);
+        self::assertSame([], $saved['channel_ids'], 'A replacement channel must not inherit the old selection');
+        $this->db()->execute('UPDATE monitors SET recovery_pending = 1 WHERE id = :id', ['id' => $monitor['id']]);
+        self::assertSame(0, $notifier->evaluateMonitors());
         foreach (['all', 'none'] as $mode) {
             $updated = $this->call('PUT', $url, ['notify_channels' => $mode], $headers, $cookies);
             self::assertSame(200, $updated->getStatusCode());
