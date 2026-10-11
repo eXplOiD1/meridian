@@ -17,6 +17,9 @@ final readonly class Config
     /** Gleichzeitige Live-Log-Verbindungen (SSE) insgesamt, ADR 0004 E9. Jede hält einen PHP-Thread bis zu 60 s. */
     public const DEFAULT_LIVE_STREAMS = 4;
     public const MAX_LIVE_STREAMS = 64;
+    /** Tägliche automatische Sicherung: so viele werden behalten (`MERIDIAN_BACKUP_KEEP`, 0 = aus). */
+    public const DEFAULT_BACKUP_KEEP = 7;
+    public const MAX_BACKUP_KEEP = 365;
 
     public function __construct(
         public string $dataDir,
@@ -33,6 +36,8 @@ final readonly class Config
         public array $dockerProxyHosts = self::DEFAULT_DOCKER_PROXY_HOSTS,
         /** Höchstens so viele Live-Log-Verbindungen gleichzeitig (`MERIDIAN_LIVE_STREAMS`); weniger als FrankenPHP-Threads. */
         public int $liveStreams = self::DEFAULT_LIVE_STREAMS,
+        /** So viele automatische Sicherungen bleiben erhalten; 0 schaltet die tägliche Sicherung im Planer aus. */
+        public int $backupKeep = self::DEFAULT_BACKUP_KEEP,
     ) {
     }
 
@@ -105,6 +110,15 @@ final readonly class Config
             $liveStreams = (int) $liveText;
         }
 
+        $backupKeep = self::DEFAULT_BACKUP_KEEP;
+        $backupText = trim($env['MERIDIAN_BACKUP_KEEP'] ?? '');
+        if ($backupText !== '') {
+            if (preg_match('/^(0|[1-9][0-9]{0,2})$/D', $backupText) !== 1 || (int) $backupText > self::MAX_BACKUP_KEEP) {
+                throw new \InvalidArgumentException('MERIDIAN_BACKUP_KEEP: Anzahl der behaltenen automatischen Sicherungen von 1 bis ' . self::MAX_BACKUP_KEEP . ', 0 schaltet sie aus (Standard ' . self::DEFAULT_BACKUP_KEEP . ').');
+            }
+            $backupKeep = (int) $backupText;
+        }
+
         return new self(
             dataDir: rtrim($env['MERIDIAN_DATA_DIR'] ?? '/var/lib/meridian', '/'),
             environment: $environment,
@@ -116,6 +130,7 @@ final readonly class Config
             listenPort: $listenPort,
             dockerProxyHosts: $proxyHosts,
             liveStreams: $liveStreams,
+            backupKeep: $backupKeep,
         );
     }
 

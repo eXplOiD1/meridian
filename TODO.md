@@ -146,5 +146,5 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 | [ ] | Öffentliche Statusseiten | frontend |
 | [x] | REST-API mit Tokens (ADR 0009) | backend |
 | [x] | curl-Import für Jobs (Browser-seitig, `frontend/src/lib/curl.ts`) | frontend |
-| [ ] | Backup und Wiederherstellung, Update-Ablauf, Doku | infra |
+| [x] | Backup und Wiederherstellung (`backup:create/list/restore`, tägliche Sicherung im Planer, `docs/BETRIEB.md` mit Update-Ablauf) | infra |
 | [ ] | Abschluss-Review vor Version 1.0 | sicherheit |

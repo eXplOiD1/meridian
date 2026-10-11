@@ -64,6 +64,8 @@ eingetragenen Containern, kann aber den Inhalt einer Anfrage nicht prüfen. Nur 
 dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle ausführen dürfen. Beim Update von einer älteren Version die
 `compose.yaml` komplett neu einfügen; die Volumes `meridian-data` und `meridian-secrets` bleiben bestehen.
 
+Sicherung, Wiederherstellung und Aktualisieren: [`docs/BETRIEB.md`](docs/BETRIEB.md).
+
 ## Befehle
 
 Meridian bringt Befehle für die Verwaltung mit. Sie laufen im Container bzw. auf dem Server, nicht im Browser.
@@ -90,6 +92,9 @@ sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/m
 | `category:create <name>` | Legt eine Kategorie für Jobs an (1–64 Zeichen: Buchstaben, Ziffern, Leerzeichen, `_` `.` `-`; beginnt mit Buchstabe oder Ziffer). Doppelte Namen (auch in anderer Groß-/Kleinschreibung) werden abgelehnt. Wer auf Kategorien beschränkt ist, sieht die neue Kategorie nicht, bis sie ihm zugewiesen wird. |
 | `category:rename <name> <neuer-name>` | Benennt eine Kategorie um (gefunden über den Namen, Groß-/Kleinschreibung zählt nicht; der neue Name folgt denselben Regeln wie bei `category:create`). Jobs, Zuweisungen und Freigaben bleiben. |
 | `category:delete <name> [--yes]` | Löscht eine Kategorie, aber nur wenn kein Job (auch kein deaktivierter) darin liegt. Zeigt vorher die Folgen: Zuweisungen verlieren die Kategorie (war sie die einzige, gewähren sie nichts mehr, nie „alle Kategorien“), Freigaben interner Ziele dieser Kategorie werden gelöscht. Ohne `--yes` wird nachgefragt. |
+| `backup:create [--keep=14]` | Sichert die Datenbank (geprüft, ohne Hauptschlüssel) nach `backups/` und behält die neuesten. Läuft im Betrieb; der Planer sichert zusätzlich täglich (`MERIDIAN_BACKUP_KEEP`). |
+| `backup:list` | Listet die Sicherungen. |
+| `backup:restore <datei> --yes` | Spielt eine Sicherung ein (Dateiname, kein Pfad; Meridian vorher anhalten; der Hauptschlüssel muss passen). Details: [`docs/BETRIEB.md`](docs/BETRIEB.md). |
 | `auth:unlock <benutzername-oder-ip>` | Hebt die Sperre nach zu vielen Fehlversuchen auf, auch wenn sich niemand mehr anmelden kann. |
 | `admin:bootstrap` | Legt den ersten Admin aus `MERIDIAN_ADMIN_USER` / `MERIDIAN_ADMIN_PASSWORD` an. Nur wenn es noch keinen Benutzer gibt; der Docker-Start ruft das selbst auf. |
 | `migrate` | Spielt ausstehende Datenbank-Änderungen ein. Docker-Start und Installer machen das selbst. |

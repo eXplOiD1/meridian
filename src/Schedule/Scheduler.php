@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Meridian\Schedule;
 
+use Meridian\Backup\ScheduledBackup;
 use Meridian\Job\RunRetention;
 
 /**
@@ -22,6 +23,7 @@ final class Scheduler
         private readonly StaleRuns $staleRuns,
         private readonly ?Worker $inlineWorker = null,
         private readonly ?RunRetention $retention = null,
+        private readonly ?ScheduledBackup $backup = null,
     ) {
     }
 
@@ -66,6 +68,12 @@ final class Scheduler
             $this->retention?->maybeRun();
         } catch (\Throwable) {
             // bewusst still
+        }
+        // Tägliche Sicherung: Fehler landen als `backup.failed` im Audit-Log (ScheduledBackup fängt selbst), nie im Takt.
+        try {
+            $this->backup?->maybeRun();
+        } catch (\Throwable) {
+            // auch der Audit-Eintrag kann scheitern; der nächste Durchgang versucht es erneut
         }
     }
 
