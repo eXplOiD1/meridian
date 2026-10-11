@@ -23,11 +23,12 @@ use Symfony\Component\HttpFoundation\Response;
  *
  *   GET    /api/settings/internal-targets
  *   POST   /api/settings/internal-targets          {kind, value, port, category_id, note}
+ *   PUT    /api/settings/internal-targets/{id}     {kind, value, port, category_id, note}
  *   DELETE /api/settings/internal-targets/{id}
  *
- * Alle drei nur mit `network.internal_targets` (gefährlich: nur uneingeschränkt, nie für eine auf Kategorien
- * beschränkte Rolle). Ablauf: Sitzung (401) → bei POST/DELETE CSRF und Herkunft (403) → Recht (403) → Eingabe
- * (422) → Aktion → Audit `network.internal_target_added`/`_removed`. Texte der Antwort laufen durch den Masker.
+ * Alle vier nur mit `network.internal_targets` (gefährlich: nur uneingeschränkt, nie für eine auf Kategorien
+ * beschränkte Rolle). Ablauf: Sitzung (401) → bei POST/PUT/DELETE CSRF und Herkunft (403) → Recht (403) → Eingabe
+ * (422) → Aktion → Audit `network.internal_target_added`/`_updated`/`_removed`. Texte der Antwort laufen durch den Masker.
  */
 final class InternalTargetController
 {
@@ -50,6 +51,7 @@ final class InternalTargetController
     {
         $kernel->get('internal_targets_list', '/api/settings/internal-targets', $this->list(...));
         $kernel->post('internal_targets_add', '/api/settings/internal-targets', $this->add(...));
+        $kernel->put('internal_targets_update', '/api/settings/internal-targets/{id}', $this->update(...), ['id' => '[1-9][0-9]{0,17}']);
         $kernel->delete('internal_targets_remove', '/api/settings/internal-targets/{id}', $this->remove(...), ['id' => '[1-9][0-9]{0,17}']);
     }
 
@@ -85,6 +87,37 @@ final class InternalTargetController
         }
 
         return JsonReply::json(['target' => $this->present($record)], 201);
+    }
+
+    public function update(#[\SensitiveParameter] Request $request): Response
+    {
+        $session = $this->sessionAuth->authenticate($request);
+        if ($session === null) {
+            return JsonReply::error(401, 'Nicht angemeldet.');
+        }
+        if (!$this->csrf->check($request, $session->token)) {
+            return JsonReply::csrfFailed();
+        }
+        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageInternalTargets);
+
+        $id = $request->attributes->getString('id');
+        if (preg_match('/^[1-9][0-9]{0,17}$/D', $id) !== 1 || $this->store->find((int) $id) === null) {
+            return JsonReply::error(404, 'Freigabe nicht gefunden.');
+        }
+        [$kind, $value, $port, $categoryId, $note] = self::input($request);
+        try {
+            $target = $this->store->validate($kind, $value, $port, $categoryId, $note);
+            // Freigabe und Audit in einer Transaktion (scheitert das Protokoll, wird zurückgerollt).
+            $record = $this->store->update((int) $id, $target, $note, $session->userId, $this->audit);
+        } catch (InvalidTargetInput $e) {
+            throw ValidationFailed::field($e->field, $e->getMessage());
+        }
+
+        if ($record === null) {
+            return JsonReply::error(404, 'Freigabe nicht gefunden.');
+        }
+
+        return JsonReply::json(['target' => $this->present($record)]);
     }
 
     public function remove(#[\SensitiveParameter] Request $request): Response
