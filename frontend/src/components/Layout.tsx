@@ -5,6 +5,8 @@ import type { Route } from '../lib/useHashRoute';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { Profile } from '../types';
 import { Brand } from './Brand';
+import { LanguageSwitch } from './LanguageSwitch';
+import { t, useLang } from '../i18n';
 
 interface LayoutProps {
   profile: Profile;
@@ -58,17 +60,18 @@ function entries(profile: Profile): NavEntry[] {
 }
 
 export function Layout({ profile, route, kicker, title, onLogout, children }: LayoutProps) {
+  useLang();
   const initial = profile.user.display_name.trim().charAt(0).toUpperCase() || '?';
   return (
     <div className="shell">
-      <nav className="sidebar" aria-label="Hauptnavigation">
+      <nav className="sidebar" aria-label={t('Hauptnavigation')}>
         <Brand />
         <div className="nav">
           {entries(profile).map((entry) =>
             entry.path === null ? (
               <span key={entry.label} className="nav__item" aria-disabled="true">
-                <span>{entry.label}</span>
-                <span className="nav__hint">{entry.hint}</span>
+                <span>{t(entry.label)}</span>
+                <span className="nav__hint">{entry.hint === undefined ? '' : t(entry.hint)}</span>
               </span>
             ) : (
               <a
@@ -81,7 +84,7 @@ export function Layout({ profile, route, kicker, title, onLogout, children }: La
                   navigate(entry.path ?? '');
                 }}
               >
-                <span>{entry.label}</span>
+                <span>{t(entry.label)}</span>
               </a>
             ),
           )}
@@ -95,16 +98,17 @@ export function Layout({ profile, route, kicker, title, onLogout, children }: La
             <span className="userbox__role">{roleNames(profile)}</span>
           </div>
           <button type="button" className="btn btn--ghost btn--on-dark btn--small userbox__logout" onClick={onLogout}>
-            Abmelden
+            {t('Abmelden')}
           </button>
         </div>
       </nav>
       <main className="main">
         <header className="page-head">
           <div>
-            <span className="page-head__kicker">{kicker}</span>
-            <h1>{title}</h1>
+            <span className="page-head__kicker">{t(kicker)}</span>
+            <h1>{t(title)}</h1>
           </div>
+          <LanguageSwitch csrf={profile.csrf_token} />
         </header>
         <InsecureWarning />
         {children}

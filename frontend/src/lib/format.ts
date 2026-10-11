@@ -1,3 +1,5 @@
+import { locale } from '../i18n';
+
 const ACTIONS: Record<string, { label: string; tone: 'ok' | 'warn' | 'err' | 'info' }> = {
   'auth.login': { label: 'Angemeldet', tone: 'ok' },
   'auth.logout': { label: 'Abgemeldet', tone: 'info' },
@@ -32,7 +34,10 @@ const dateFormat = new Intl.DateTimeFormat('de-DE', {
 
 export function formatTime(iso: string): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : dateFormat.format(date);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return locale() === 'de-DE' ? dateFormat.format(date) : new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'medium' }).format(date);
 }
 
 /** Geheimnis in Vierergruppen, damit es sich in eine App abtippen lässt. */

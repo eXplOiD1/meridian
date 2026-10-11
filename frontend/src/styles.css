@@ -419,3 +419,8 @@ h1, h2, h3 { font-family: var(--schrift-kopf); font-weight: 600; margin: 0; }
 .statusitems__row { align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
 .statusitems__row .input { flex: 1 1 200px; }
 .statusitems__name { font-size: 12px; }
+
+.langswitch { display: inline-flex; border: 1px solid var(--linie-stark); border-radius: 999px; overflow: hidden; background: var(--karte); }
+.langswitch__btn { border: 0; background: transparent; padding: 4px 12px; font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--schiefer); cursor: pointer; }
+.langswitch__btn[aria-pressed='true'] { background: var(--tafel); color: #fff; }
+.langswitch__btn:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
