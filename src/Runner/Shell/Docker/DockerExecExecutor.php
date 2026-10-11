@@ -82,6 +82,7 @@ final class DockerExecExecutor implements Executor
         }
         // Docker löst auch ID und ID-Präfix auf: Meridians Container über seine ID ansprechen darf nicht klappen.
         // Geprüft wird deshalb der Name, den Docker selbst meldet; fehlt er, wird abgelehnt.
+        /** @var mixed $resolved */
         $resolved = $inspect['json']['Name'] ?? null;
         $resolved = is_string($resolved) ? ltrim($resolved, '/') : '';
         if ($resolved === '' || InfrastructureContainers::isInfrastructure($resolved)) {

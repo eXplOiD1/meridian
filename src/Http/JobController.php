@@ -557,7 +557,8 @@ final class JobController
             $permission = match ($query['permission']) {
                 'jobs.view' => Permission::ViewJobs,
                 'jobs.edit_http' => Permission::EditHttpJobs,
-                default => throw ValidationFailed::field('permission', 'Recht: „jobs.view“ oder „jobs.edit_http“.'),
+                'status_pages.edit' => Permission::EditStatusPages,
+                default => throw ValidationFailed::field('permission', 'Recht: „jobs.view“, „jobs.edit_http“ oder „status_pages.edit“.'),
             };
         }
 

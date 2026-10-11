@@ -278,6 +278,7 @@ export interface CategoryUsage {
   assignments: number;
   assignments_ineffective: number;
   internal_targets: number;
+  watchers: number;
   deletable: boolean;
 }
 
@@ -341,7 +342,7 @@ export interface Overview {
   window: { from: string; to: string; bucket_seconds: number; buckets: number; now_bucket: number };
   jobs: OverviewJob[];
   totals: { runs: number; failed: number; avg_duration_ms: number | null };
-  attention: Array<{ job: { id: number; name: string }; status: 'failed' | 'timeout' | 'slow'; finished_at: string | null; running_seconds: number | null; usual_seconds: number | null }>;
+  attention: Array<{ job: { id: number; name: string }; kind: 'job' | 'monitor'; status: 'failed' | 'timeout' | 'slow' | 'down'; finished_at: string | null; running_seconds: number | null; usual_seconds: number | null }>;
 }
 
 export type ChannelKind = 'email' | 'ntfy' | 'webhook' | 'telegram';
@@ -406,5 +407,46 @@ export interface ApiTokenEntry {
   read_only: boolean;
   expires_at: string | null;
   last_used_at: string | null;
+  created_at: string;
+}
+
+export type MonitorState = 'waiting' | 'up' | 'down' | 'paused';
+
+/** Herzschlag-Überwachung (`/api/monitors`). Das Ping-Token kommt nur beim Anlegen/Erneuern (einmal), nie in der Liste. */
+export interface Monitor {
+  id: number;
+  name: string;
+  category_id: number | null;
+  category: string | null;
+  interval_seconds: number;
+  grace_seconds: number;
+  enabled: boolean;
+  state: MonitorState;
+  state_since: string;
+  last_ping_at: string | null;
+  notify_on_down: boolean;
+  notify_on_up: boolean;
+  notify_channels: 'all' | 'none';
+  can_edit: boolean;
+  created_at: string;
+}
+
+export interface StatusPageItem {
+  type: 'job' | 'monitor';
+  id: number;
+  label: string;
+  /** Interner Name (nur in der Verwaltung sichtbar, nie öffentlich). */
+  name: string | null;
+}
+
+export interface StatusPage {
+  id: number;
+  title: string;
+  slug: string;
+  path: string;
+  category_id: number | null;
+  category: string | null;
+  enabled: boolean;
+  items: StatusPageItem[];
   created_at: string;
 }

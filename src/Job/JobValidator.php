@@ -397,15 +397,23 @@ final class JobValidator
 
             return false;
         }
-        if ($disableAfter !== null && (!is_int($disableAfter) || $disableAfter < 1 || $disableAfter > NotifySettings::MAX_DISABLE_AFTER)) {
-            $errors['notify.disable_after'] = 'Deaktivieren nach: ganze Zahl von 1 bis ' . NotifySettings::MAX_DISABLE_AFTER . ' Fehlschlägen oder null.';
+        $disable = null;
+        if ($disableAfter !== null) {
+            if (!is_int($disableAfter) || $disableAfter < 1 || $disableAfter > NotifySettings::MAX_DISABLE_AFTER) {
+                $errors['notify.disable_after'] = 'Deaktivieren nach: ganze Zahl von 1 bis ' . NotifySettings::MAX_DISABLE_AFTER . ' Fehlschlägen oder null.';
 
-            return false;
+                return false;
+            }
+            $disable = $disableAfter;
         }
-        if ($tlsDays !== null && (!is_int($tlsDays) || $tlsDays < 1 || $tlsDays > NotifySettings::MAX_TLS_DAYS)) {
-            $errors['notify.tls_warn_days'] = 'Zertifikatswarnung: ganze Zahl von 1 bis ' . NotifySettings::MAX_TLS_DAYS . ' Tagen oder null.';
+        $tls = null;
+        if ($tlsDays !== null) {
+            if (!is_int($tlsDays) || $tlsDays < 1 || $tlsDays > NotifySettings::MAX_TLS_DAYS) {
+                $errors['notify.tls_warn_days'] = 'Zertifikatswarnung: ganze Zahl von 1 bis ' . NotifySettings::MAX_TLS_DAYS . ' Tagen oder null.';
 
-            return false;
+                return false;
+            }
+            $tls = $tlsDays;
         }
         if (!is_int($after) || $after < 1 || $after > NotifySettings::MAX_AFTER) {
             $errors['notify.failure_after'] = 'Benachrichtigung nach: ganze Zahl von 1 bis ' . NotifySettings::MAX_AFTER . ' Fehlschlägen.';
@@ -437,7 +445,7 @@ final class JobValidator
             sort($list);
         }
 
-        return new NotifySettings($onFailure, $after, $onRecovery, $channels, $list, $disableAfter, $onDisable, $tlsDays);
+        return new NotifySettings($onFailure, $after, $onRecovery, $channels, $list, $disable, $onDisable, $tls);
     }
 
     /**

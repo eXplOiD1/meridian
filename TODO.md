@@ -140,10 +140,10 @@ Entwurf: `docs/decisions/0004-phase4-shell-jobs.md` (Abschnitte in Klammern). Be
 
 | Status | Aufgabe | Agent |
 |---|---|---|
-| [~] | Benachrichtigungen (ADR 0007): E-Mail über PHPMailer/SMTP (einrichtbar) und ntfy, Kanal-API und -Oberfläche, Einstellungen je Job (Fehlschlag nach n, Wiederherstellung, Kanalauswahl), Zusteller mit Ausgang und Wiederholung — **fertig**, dazu Webhook, Telegram und der Link zum Job (Einstellung `app.public_url`, Migration 0016). Offen: Herzschlag-Überwachung (eingehende Pings; braucht eigenen Entwurf), TLS-Ablauf-Warnung, „deaktiviert wegen zu vieler Fehlschläge“ | backend |
+| [x] | Benachrichtigungen (ADR 0007): E-Mail über PHPMailer/SMTP (einrichtbar) und ntfy, Kanal-API und -Oberfläche, Einstellungen je Job (Fehlschlag nach n, Wiederherstellung, Kanalauswahl), Zusteller mit Ausgang und Wiederholung — **fertig**, dazu Webhook, Telegram und der Link zum Job (Einstellung `app.public_url`, Migration 0016). Außerdem fertig: Herzschlag-Überwachung (ADR 0011), TLS-Ablauf-Warnung und „deaktiviert wegen zu vieler Fehlschläge“ (ADR 0010) | backend |
 | [x] | Statistik über Tage und Jobs (`GET /api/stats`, Seite „Statistik“) und Aufbewahrung des Verlaufs mit Verdichtung zu Tageswerten (ADR 0008, Migration 0017, Einstellung `runs.retention_days`, Standard 30 Tage) | backend, frontend |
 | [ ] | **Sekunden-Intervalle (Wunsch Alex):** Modus „Alle n Sekunden“ mit Untergrenze (Vorschlag 10 s) und vom Admin einstellbarer globaler Mindestzeit, Planer im Sekundentakt, Taktband gröber zusammenfassen. Voraussetzung: Verdichtung alter Läufe (Last: 8.000+ Läufe/Tag bei 10 s). Die Cron-Bibliothek kennt keine Sekunden, daher festes Intervall statt Cron | scheduler, backend, frontend |
-| [ ] | Öffentliche Statusseiten | frontend |
+| [x] | Öffentliche Statusseiten (ADR 0012: geheimer Link, nur Anzeigenamen und Zustände, `status_pages.edit`) | frontend, backend |
 | [x] | REST-API mit Tokens (ADR 0009) | backend |
 | [x] | curl-Import für Jobs (Browser-seitig, `frontend/src/lib/curl.ts`) | frontend |
 | [x] | Backup und Wiederherstellung (`backup:create/list/restore`, tägliche Sicherung im Planer, `docs/BETRIEB.md` mit Update-Ablauf) | infra |

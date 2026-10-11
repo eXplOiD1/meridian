@@ -104,6 +104,10 @@ export function canManageShellTargets(profile: Profile): boolean {
   return profile.roles.some((grant) => grant.categories === null && grant.permissions.includes('shell.targets'));
 }
 
+export function canEditStatusPages(profile: Profile): boolean {
+  return has(profile, 'status_pages.edit');
+}
+
 export function canRun(profile: Profile, category?: string | null): boolean {
   return has(profile, 'jobs.run', category);
 }

@@ -20,11 +20,13 @@ final readonly class CategoryImpact
         public int $assignments,
         public int $assignmentsIneffective,
         public int $internalTargets,
+        /** Überwachungen und Statusseiten dieser Kategorie (blockieren das Löschen wie Jobs). */
+        public int $watchers = 0,
     ) {
     }
 
     public function deletable(): bool
     {
-        return $this->jobs === 0;
+        return $this->jobs === 0 && $this->watchers === 0;
     }
 }

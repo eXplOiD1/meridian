@@ -31,7 +31,8 @@ final class CategoryService
         (SELECT COUNT(*) FROM user_role_categories a WHERE a.category_id = c.id) AS assignments,
         (SELECT COUNT(*) FROM user_role_categories a WHERE a.category_id = c.id
             AND (SELECT COUNT(*) FROM user_role_categories o WHERE o.user_role_id = a.user_role_id) = 1) AS ineffective,
-        (SELECT COUNT(*) FROM http_internal_targets t WHERE t.category_id = c.id) AS internal_targets
+        (SELECT COUNT(*) FROM http_internal_targets t WHERE t.category_id = c.id) AS internal_targets,
+        (SELECT COUNT(*) FROM monitors m WHERE m.category_id = c.id) + (SELECT COUNT(*) FROM status_pages s WHERE s.category_id = c.id) AS watchers
       FROM categories c
       WHERE (:id IS NULL OR c.id = :id)
       ORDER BY c.name COLLATE NOCASE, c.id';
@@ -134,6 +135,9 @@ final class CategoryService
             if ($impact->jobs > 0) {
                 throw CategoryException::hasJobs($impact->jobs);
             }
+            if ($impact->watchers > 0) {
+                throw CategoryException::hasWatchers($impact->watchers);
+            }
             if ($this->db->execute('DELETE FROM categories WHERE id = :id', ['id' => $id]) !== 1) {
                 throw CategoryException::notFound();
             }
@@ -161,6 +165,7 @@ final class CategoryService
                 Row::int($row, 'assignments'),
                 Row::int($row, 'ineffective'),
                 Row::int($row, 'internal_targets'),
+                Row::int($row, 'watchers'),
             );
         }
 

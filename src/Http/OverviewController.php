@@ -10,6 +10,7 @@ use Meridian\Job\JobRecord;
 use Meridian\Job\JobRepository;
 use Meridian\Job\JobSort;
 use Meridian\Job\OverviewRepository;
+use Meridian\Monitor\MonitorRepository;
 use Meridian\Schedule\CronSchedule;
 use Meridian\Schedule\RunStatus;
 use Meridian\Security\AccessControl;
@@ -44,6 +45,7 @@ final class OverviewController
         private readonly OverviewRepository $overview,
         private readonly Clock $clock,
         private readonly SecretMasker $masker,
+        private readonly ?MonitorRepository $monitors = null,
     ) {
     }
 
@@ -88,6 +90,7 @@ final class OverviewController
             if (isset($names[$running['job_id']]) && self::isSlow($elapsed * 1000, $running['usual_ms'])) {
                 $attention[] = [
                     'job' => ['id' => $running['job_id'], 'name' => $this->masker->mask($names[$running['job_id']])],
+                    'kind' => 'job',
                     'status' => 'slow',
                     'finished_at' => null,
                     'running_seconds' => $elapsed,
@@ -100,6 +103,7 @@ final class OverviewController
             if ($job->isEnabled && $last !== null && ($last->status === RunStatus::Failed || $last->status === RunStatus::Timeout)) {
                 $attention[] = [
                     'job' => ['id' => $job->id, 'name' => $this->masker->mask($job->name)],
+                    'kind' => 'job',
                     'status' => $last->status->value,
                     'finished_at' => $last->finishedAt,
                     'running_seconds' => null,
@@ -121,6 +125,20 @@ final class OverviewController
             ];
             if (count($rows) >= self::MAX_JOBS) {
                 break;
+            }
+        }
+
+        // Überwachungen ohne Lebenszeichen (ADR 0011) in derselben Kappung wie die Jobs.
+        foreach ($this->monitors?->list($scope) ?? [] as $monitor) {
+            if ($monitor->isEnabled && $monitor->state === 'down') {
+                $attention[] = [
+                    'job' => ['id' => $monitor->id, 'name' => $this->masker->mask($monitor->name)],
+                    'kind' => 'monitor',
+                    'status' => 'down',
+                    'finished_at' => $monitor->stateSince,
+                    'running_seconds' => null,
+                    'usual_seconds' => null,
+                ];
             }
         }
 
