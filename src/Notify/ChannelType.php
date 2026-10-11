@@ -8,13 +8,15 @@ enum ChannelType: string
 {
     case Email = 'email';
     case Ntfy = 'ntfy';
+    case Webhook = 'webhook';
+    case Telegram = 'telegram';
 
     /** Name des Geheimnisfelds in der Eingabe (Passwort bzw. Token). */
     public function secretField(): string
     {
         return match ($this) {
             self::Email => 'password',
-            self::Ntfy => 'token',
+            self::Ntfy, self::Webhook, self::Telegram => 'token',
         };
     }
 }

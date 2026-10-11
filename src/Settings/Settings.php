@@ -99,6 +99,41 @@ final class Settings
     }
 
     /**
+     * Die öffentliche Adresse für Links in Nachrichten (ohne Schluss-Schrägstrich) oder null, wenn keine gesetzt ist.
+     * Eine ungültige gespeicherte Adresse zählt als nicht gesetzt.
+     */
+    public function publicBaseUrl(): ?string
+    {
+        $value = $this->read(SettingKey::AppPublicUrl);
+
+        return is_string($value) && $value !== '' ? self::publicUrl($value) : null;
+    }
+
+    /** @return string|null die normalisierte Adresse oder null, wenn der Wert nicht erlaubt ist */
+    private static function publicUrl(string $value): ?string
+    {
+        if (strlen($value) > 200 || preg_match('/^[\x21-\x7E]+$/D', $value) !== 1) {
+            return null;
+        }
+        $parts = parse_url($value);
+        if ($parts === false || !isset($parts['scheme'], $parts['host']) || !in_array($parts['scheme'], ['http', 'https'], true)
+            || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])) {
+            return null;
+        }
+        $host = strtolower(trim($parts['host'], '[]'));
+        if (filter_var($host, FILTER_VALIDATE_IP) === false && !\Meridian\Runner\Http\UrlPolicy::isValidHostname($host)) {
+            return null;
+        }
+        $path = rtrim($parts['path'] ?? '', '/');
+        if ($path !== '' && preg_match('#^(/[A-Za-z0-9._~-]+)+$#D', $path) !== 1) {
+            return null;
+        }
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+
+        return $parts['scheme'] . '://' . (str_contains($host, ':') ? '[' . $host . ']' : $host) . $port . $path;
+    }
+
+    /**
      * Prüft einen neuen Wert streng (Typ und Bereich, kein Umdeuten von „300“ zu 300).
      *
      * @throws InvalidSetting mit fester Meldung ohne den Wert
@@ -146,6 +181,13 @@ final class Settings
                 }
 
                 return $reveal->value;
+            case SettingKey::AppPublicUrl:
+                $url = is_string($value) ? ($value === '' ? '' : self::publicUrl($value)) : null;
+                if ($url === null) {
+                    throw new InvalidSetting('Adresse von Meridian: http:// oder https://, Host und optional Port und Pfad (z. B. https://meridian.example.org), höchstens 200 Zeichen, ohne Benutzer, Parameter oder Anker.');
+                }
+
+                return $url;
         }
     }
 

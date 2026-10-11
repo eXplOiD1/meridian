@@ -16,6 +16,7 @@ enum SettingKey: string
     case HttpDisplayHost = 'http.display_host';
     case ShellMaxTimeout = 'shell.max_timeout_seconds';
     case JobsRevealForEdit = 'jobs.reveal_for_edit';
+    case AppPublicUrl = 'app.public_url';
 
     /** Standardwert ohne Zeile in `settings`. */
     public function default(): int|string
@@ -27,6 +28,7 @@ enum SettingKey: string
             self::HttpDisplayHost => DisplayHostMode::default()->value,
             self::ShellMaxTimeout => Settings::SHELL_DEFAULT_MAX_TIMEOUT_SECONDS,
             self::JobsRevealForEdit => RevealForEdit::default()->value,
+            self::AppPublicUrl => '',
         };
     }
 }

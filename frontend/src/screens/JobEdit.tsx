@@ -1021,7 +1021,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
                     onChange={(e) => set('notifyIds', e.target.checked ? [...form.notifyIds, channel.id] : form.notifyIds.filter((id) => id !== channel.id))}
                   />
                   <span>
-                    {channel.name} ({channel.type === 'email' ? 'E-Mail' : 'ntfy'}){!channel.enabled ? ' – ausgeschaltet' : ''}
+                    {channel.name} ({{ email: 'E-Mail', ntfy: 'ntfy', webhook: 'Webhook', telegram: 'Telegram' }[channel.type]}){!channel.enabled ? ' – ausgeschaltet' : ''}
                   </span>
                 </label>
               ))}
