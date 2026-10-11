@@ -113,7 +113,7 @@ final class AccountController
             'password_change_required' => false,
             'csrf_token' => $this->csrf->tokenFor($fresh->token),
         ]);
-        $response->headers->setCookie($this->sessionAuth->cookie($request, $fresh->token, $this->clock->now()->modify('+' . SessionManager::ABSOLUTE_SECONDS . ' seconds')));
+        $response->headers->setCookie($this->sessionAuth->cookie($request, $fresh->token, $this->clock->now()->modify('+' . $this->sessions->cookieSeconds() . ' seconds')));
 
         return $response;
     }

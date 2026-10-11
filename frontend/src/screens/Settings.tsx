@@ -22,6 +22,8 @@ interface SettingSpec {
   text?: boolean;
   /** Einheit der Anzeige bei Zahlen (Standard: Sekunden). */
   unit?: string;
+  /** Eigene Anzeige für Sonderwerte (z. B. -1 = Standard, 0 = niemals). */
+  describe?: (value: number) => string | null;
   extra?: (entry: SettingEntry) => ReactNode;
 }
 
@@ -113,6 +115,16 @@ const EDITOR_SPECS: SettingSpec[] = [
 
 const APP_SPECS: SettingSpec[] = [
   {
+    key: 'auth.session_days',
+    title: 'Sitzungsdauer',
+    lead: 'Wie lange eine Anmeldung gilt. Standard: 2 Stunden ohne Aktivität, höchstens 12 Stunden. Mit einer Zahl von 1 bis 365 gilt die Anmeldung so viele Tage; 0 heißt: läuft nie ab (der Browser behält das Cookie höchstens 400 Tage). Die neue Dauer gilt für neue Anmeldungen, ein kürzerer Leerlauf wirkt sofort. „Zurücksetzen“ stellt den Standard wieder her.',
+    options: null,
+    numberLabel: 'Tage (0 = niemals)',
+    unit: 'Tage',
+    describe: (value) => (value < 0 ? 'Standard (2 Std. Leerlauf, 12 Std. gesamt)' : value === 0 ? 'niemals ablaufen' : null),
+    extra: () => <Alert tone="warn">Lange Sitzungen sind bequem, aber ein gestohlenes Cookie gilt dann ebenso lange. Besser sparsam einstellen; Benutzer können eigene Sitzungen unter „Mein Konto“ beenden.</Alert>,
+  },
+  {
     key: 'jobs.min_interval_seconds',
     title: 'Kleinster Abstand fester Intervalle',
     lead: 'Wie klein der Abstand „Alle n Sekunden“ beim Speichern eines Jobs sein darf. Kurze Abstände belasten Meridian und das Ziel und erzeugen viele Läufe im Verlauf (bei 10 s über 8.000 am Tag und Job). 1 bis 3600 Sekunden, Standard 10. Schon gespeicherte Jobs laufen unverändert weiter.',
@@ -144,6 +156,10 @@ function optionLabel(spec: SettingSpec, value: number | string): string {
     return value === '' ? '(nicht gesetzt)' : String(value);
   }
   if (spec.options === null) {
+    const special = spec.describe !== undefined && typeof value === 'number' ? spec.describe(value) : null;
+    if (special !== null) {
+      return special;
+    }
     return String(value) + ' ' + (spec.unit ?? 's');
   }
   return spec.options.find((option) => option.value === value)?.label ?? String(value);

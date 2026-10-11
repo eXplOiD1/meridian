@@ -37,6 +37,12 @@ final class SessionAuth
      * Name ohne Präfix und ohne Secure. Ob HTTPS vorliegt, entscheidet Request::isSecure() (Proxy-Header nur von
      * vertrauenswürdigen Proxys).
      */
+    /** Lebensdauer des Sitzungs-Cookies nach der Einstellung (ADR 0015). */
+    public function cookieSeconds(): int
+    {
+        return $this->sessions->cookieSeconds();
+    }
+
     public function cookieName(#[\SensitiveParameter] Request $request): string
     {
         return $request->isSecure() ? '__Host-meridian_session' : 'meridian_session';

@@ -287,7 +287,7 @@ final class AuthController
 
     private function cookie(#[\SensitiveParameter] Request $request, #[\SensitiveParameter] string $token): Cookie
     {
-        $expires = $this->clock->now()->modify('+' . SessionManager::ABSOLUTE_SECONDS . ' seconds');
+        $expires = $this->clock->now()->modify('+' . $this->sessionAuth->cookieSeconds() . ' seconds');
 
         return Cookie::create($this->sessionAuth->cookieName($request), $token, $expires, '/', null, $request->isSecure(), true, false, Cookie::SAMESITE_STRICT);
     }
