@@ -309,17 +309,24 @@ final class JobValidator
             return null;
         }
         if (!is_string($value) || strlen($value) > 100) {
-            $errors['cron'] = 'Ungültiger Cron-Ausdruck: Text mit höchstens 100 Zeichen, fünf Felder, z. B. */5 * * * *.';
+            $errors['cron'] = 'Ungültiger Cron-Ausdruck: Text mit höchstens 100 Zeichen, fünf Felder, z. B. */5 * * * * (oder @every 30s).';
 
             return null;
         }
         try {
             $schedule = CronSchedule::forJob($value, $timezone ?? 'UTC');
             $schedule->nextAfter($this->clock->now());
+            // Festes Intervall: kleinster Abstand aus den Einstellungen (nur beim Speichern; ein schon gespeicherter Job läuft weiter).
+            $minimum = $this->settings->minIntervalSeconds();
+            if ($schedule->everySeconds !== null && $schedule->everySeconds < $minimum && $schedule->expression() !== $existing?->cron) {
+                $errors['cron'] = 'Der kleinste erlaubte Abstand ist ' . $minimum . ' Sekunden (Einstellung „Kleinster Abstand fester Intervalle“). Größeren Abstand wählen oder einen Cron-Ausdruck benutzen.';
+
+                return null;
+            }
 
             return $schedule->expression();
         } catch (\InvalidArgumentException) {
-            $errors['cron'] = 'Ungültiger Cron-Ausdruck. Erwartet werden fünf Felder, z. B. */5 * * * *.';
+            $errors['cron'] = 'Ungültiger Cron-Ausdruck. Erwartet werden fünf Felder, z. B. */5 * * * *, oder ein festes Intervall @every 30s (1 bis 86400 Sekunden).';
         } catch (\RuntimeException) {
             $errors['cron'] = 'Der Zeitplan hat keinen weiteren Termin. Cron-Ausdruck prüfen.';
         }

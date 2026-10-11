@@ -27,6 +27,9 @@ final class Settings
     /** Shell-Jobs (ADR 0004 E12, O8): Standard-Maximum 1 h, höchstens 24 h. */
     public const SHELL_DEFAULT_MAX_TIMEOUT_SECONDS = 3600;
     public const SHELL_MAX_TIMEOUT_LIMIT_SECONDS = 86400;
+    public const DEFAULT_MIN_INTERVAL_SECONDS = 10;
+    public const MIN_INTERVAL_FLOOR = 1;
+    public const MAX_INTERVAL_FLOOR = 3600;
     public const DEFAULT_RETENTION_DAYS = 30;
     public const MIN_RETENTION_DAYS = 1;
     public const MAX_RETENTION_DAYS = 3650;
@@ -53,6 +56,14 @@ final class Settings
         $value = $this->read(SettingKey::ShellMaxTimeout);
 
         return is_int($value) ? $value : Settings::SHELL_DEFAULT_MAX_TIMEOUT_SECONDS;
+    }
+
+    /** Kleinster erlaubter Abstand eines festen Intervalls („alle n Sekunden“) beim Speichern eines Jobs (ADR 0013). */
+    public function minIntervalSeconds(): int
+    {
+        $value = $this->read(SettingKey::JobsMinInterval);
+
+        return is_int($value) ? $value : self::DEFAULT_MIN_INTERVAL_SECONDS;
     }
 
     /** Wie lange einzelne Läufe aufbewahrt werden, bevor sie zu Tageswerten zusammengefasst werden. */
@@ -195,6 +206,12 @@ final class Settings
             case SettingKey::RunsRetentionDays:
                 if (!is_int($value) || $value < self::MIN_RETENTION_DAYS || $value > self::MAX_RETENTION_DAYS) {
                     throw new InvalidSetting('Aufbewahrung des Verlaufs: ganze Zahl von 1 bis 3650 (Tage).');
+                }
+
+                return $value;
+            case SettingKey::JobsMinInterval:
+                if (!is_int($value) || $value < self::MIN_INTERVAL_FLOOR || $value > self::MAX_INTERVAL_FLOOR) {
+                    throw new InvalidSetting('Kleinster Abstand fester Intervalle: ganze Zahl von ' . self::MIN_INTERVAL_FLOOR . ' bis ' . self::MAX_INTERVAL_FLOOR . ' (Sekunden).');
                 }
 
                 return $value;

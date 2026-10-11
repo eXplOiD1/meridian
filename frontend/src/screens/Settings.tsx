@@ -113,6 +113,14 @@ const EDITOR_SPECS: SettingSpec[] = [
 
 const APP_SPECS: SettingSpec[] = [
   {
+    key: 'jobs.min_interval_seconds',
+    title: 'Kleinster Abstand fester Intervalle',
+    lead: 'Wie klein der Abstand „Alle n Sekunden“ beim Speichern eines Jobs sein darf. Kurze Abstände belasten Meridian und das Ziel und erzeugen viele Läufe im Verlauf (bei 10 s über 8.000 am Tag und Job). 1 bis 3600 Sekunden, Standard 10. Schon gespeicherte Jobs laufen unverändert weiter.',
+    options: null,
+    numberLabel: 'Sekunden',
+    unit: 'Sekunden',
+  },
+  {
     key: 'runs.retention_days',
     title: 'Aufbewahrung einzelner Läufe',
     lead: 'Wie viele Tage einzelne Läufe (mit Ausgabe und Live-Log) im Verlauf bleiben. Ältere Läufe werden zu Tageswerten je Job zusammengefasst und gelöscht: Die Statistik bleibt, Ausgabe und Einzelheiten sind danach nicht mehr da. 1 bis 3650 Tage, Standard 30.',

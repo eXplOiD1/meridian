@@ -13,6 +13,10 @@ export const CRON_PRESETS: ReadonlyArray<{ label: string; cron: string }> = [
 ];
 
 export function presetName(cron: string): string | null {
+  const every = /^@every ([1-9][0-9]{0,4})s$/.exec(cron.trim());
+  if (every !== null && every[1] !== undefined) {
+    return 'Alle ' + every[1] + ' Sekunden';
+  }
   return CRON_PRESETS.find((preset) => preset.cron === cron.trim().replace(/\s+/g, ' '))?.label ?? null;
 }
 
