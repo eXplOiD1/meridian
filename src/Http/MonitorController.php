@@ -155,6 +155,7 @@ final class MonitorController
             'notify_on_down' => $m->notifyOnDown,
             'notify_on_up' => $m->notifyOnUp,
             'notify_channels' => $m->notifyChannels,
+            'channel_ids' => $m->channelIds,
             'can_edit' => $canEdit,
             'created_at' => $m->createdAt,
         ];
@@ -181,7 +182,7 @@ final class MonitorController
      */
     private static function body(#[\SensitiveParameter] Request $request): array
     {
-        $data = JsonBody::object($request->getContent(), self::MAX_BODY, 2);
+        $data = JsonBody::object($request->getContent(), self::MAX_BODY, 4);
         if ($data === null) {
             throw ValidationFailed::field('body', 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).');
         }

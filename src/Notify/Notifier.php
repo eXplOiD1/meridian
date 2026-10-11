@@ -194,13 +194,13 @@ final class Notifier
         $nowText = Timestamp::format($now);
         $queued = 0;
         $rows = $this->db->fetchAll(
-            'SELECT id, name, kind, state, armed_at, last_ping_at, interval_seconds, grace_seconds, notify_on_down, notify_on_up, notify_channels, recovery_pending, down_pending, last_check_note
+            'SELECT id, name, category_id, kind, state, armed_at, last_ping_at, interval_seconds, grace_seconds, notify_on_down, notify_on_up, notify_channels, notify_channel_ids, recovery_pending, down_pending, last_check_note
                FROM monitors WHERE is_enabled = 1 ORDER BY id',
         );
         foreach ($rows as $row) {
             $id = Row::int($row, 'id');
             $state = Row::string($row, 'state');
-            $job = ['id' => null, 'name' => Row::string($row, 'name'), 'notify_channels' => Row::string($row, 'notify_channels')];
+            $job = ['id' => null, 'category_id' => Row::intOrNull($row, 'category_id'), 'name' => Row::string($row, 'name'), 'notify_channels' => Row::string($row, 'notify_channels'), 'channel_ids' => Row::stringOrNull($row, 'notify_channel_ids')];
             if (Row::bool($row, 'recovery_pending')) {
                 $queued += $this->db->immediate(function () use ($id, $row, $job, $nowText): int {
                     if ($this->db->execute('UPDATE monitors SET recovery_pending = 0 WHERE id = :id AND recovery_pending = 1', ['id' => $id]) !== 1) {
@@ -363,21 +363,27 @@ final class Notifier
         if ($mode === NotifySettings::NONE) {
             return 0;
         }
+        $monitorIds = $jobId === null ? Row::stringOrNull($job, 'channel_ids') : null;
         $ids = $mode === NotifySettings::SELECTED && $jobId !== null
             ? $this->db->fetchAll('SELECT c.id FROM notification_channels c JOIN job_channels j ON j.channel_id = c.id WHERE j.job_id = :job AND c.is_enabled = 1 ORDER BY c.id', ['job' => $jobId])
             : $this->db->fetchAll('SELECT id FROM notification_channels WHERE is_enabled = 1 ORDER BY id');
+        if ($monitorIds !== null) {
+            $ids = $this->db->fetchAll('SELECT id FROM notification_channels WHERE is_enabled = 1 AND id IN (SELECT value FROM json_each(:ids)) ORDER BY id', ['ids' => $monitorIds]);
+        }
         $now = Timestamp::format($this->clock->now());
         $detail = $note;
         if ($detail !== null) {
             $detail = $this->masker->mask(mb_strcut($detail, 0, self::DETAIL_BYTES));
         }
         $count = 0;
+        $recipients = $this->recipientsFor($job);
         foreach ($ids as $channel) {
             $this->db->execute(
-                'INSERT INTO notification_outbox (kind, channel_id, job_id, job_name, run_id, run_status, occurred_at, detail, failures, status, next_attempt_at, created_at)
-                 VALUES (:kind, :channel, :job, :name, :run, :status, :at, :detail, :failures, \'pending\', :now, :now)',
+                'INSERT INTO notification_outbox (kind, channel_id, job_id, job_name, run_id, run_status, occurred_at, detail, failures, status, next_attempt_at, created_at, recipients)
+                 VALUES (:kind, :channel, :job, :name, :run, :status, :at, :detail, :failures, \'pending\', :now, :now, :recipients)',
                 [
                     'kind' => $kind,
+                    'recipients' => $recipients === [] ? null : json_encode($recipients, JSON_THROW_ON_ERROR),
                     'channel' => Row::int($channel, 'id'),
                     'job' => $jobId,
                     'name' => Row::string($job, 'name'),
@@ -395,6 +401,31 @@ final class Notifier
         return $count;
     }
 
+    /** @param array<string, mixed> $job
+     * @return list<string>
+     */
+    private function recipientsFor(array $job): array
+    {
+        $jobId = Row::intOrNull($job, 'id');
+        $categoryId = Row::intOrNull($job, 'category_id');
+        if ($jobId !== null) {
+            $current = $this->db->fetchOne('SELECT notify_recipients, category_id FROM jobs WHERE id = :id', ['id' => $jobId]);
+            if ($current === null) {
+                return [];
+            }
+            $own = Recipients::decode(Row::string($current, 'notify_recipients'));
+            if ($own !== []) {
+                return $own;
+            }
+            $categoryId = Row::intOrNull($current, 'category_id');
+        }
+        if ($categoryId === null) {
+            return [];
+        }
+        $category = $this->db->fetchOne('SELECT notify_recipients FROM categories WHERE id = :id', ['id' => $categoryId]);
+        return $category === null ? [] : Recipients::decode(Row::string($category, 'notify_recipients'));
+    }
+
     /**
      * @return array{sent: int, retry: int, failed: int}
      */
@@ -403,7 +434,7 @@ final class Notifier
         $result = ['sent' => 0, 'retry' => 0, 'failed' => 0];
         $nowText = Timestamp::format($this->clock->now());
         $due = $this->db->fetchAll(
-            "SELECT id, kind, channel_id, job_id, job_name, run_status, occurred_at, detail, failures FROM notification_outbox
+            "SELECT id, kind, channel_id, job_id, job_name, run_status, occurred_at, detail, failures, recipients FROM notification_outbox
               WHERE status = 'pending' AND next_attempt_at <= :now ORDER BY id LIMIT :limit",
             ['now' => $nowText, 'limit' => self::BATCH],
         );
@@ -476,6 +507,12 @@ final class Notifier
         $channel = $this->channels->find(Row::int($row, 'channel_id'));
         if ($channel === null || !$channel->isEnabled) {
             return SendFailed::DISABLED;
+        }
+        $recipientsJson = Row::stringOrNull($row, 'recipients');
+        if ($channel->type === ChannelType::Email && $recipientsJson !== null) {
+            $config = $channel->config;
+            $config['to'] = Recipients::decode($recipientsJson);
+            $channel = new ChannelRecord($channel->id, $channel->name, $channel->type, $config, $channel->hasSecret, $channel->isEnabled, $channel->createdAt, $channel->updatedAt);
         }
         $sender = $this->senders[$channel->type->value] ?? null;
         if ($sender === null) {

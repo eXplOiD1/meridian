@@ -22,7 +22,7 @@ final class MonitorValidator
     public const MAX_GRACE = 86_400;
     public const DEFAULT_GRACE = 300;
 
-    private const KEYS = ['name', 'category_id', 'interval_seconds', 'grace_seconds', 'is_enabled', 'notify_on_down', 'notify_on_up', 'notify_channels', 'kind', 'target', 'expected_status', 'fail_after'];
+    private const KEYS = ['name', 'category_id', 'interval_seconds', 'grace_seconds', 'is_enabled', 'notify_on_down', 'notify_on_up', 'notify_channels', 'channel_ids', 'kind', 'target', 'expected_status', 'fail_after'];
 
     public function __construct(private readonly CategoryRepository $categories, private readonly UrlPolicy $urls = new UrlPolicy())
     {
@@ -115,8 +115,17 @@ final class MonitorValidator
         }
         /** @var mixed $channels */
         $channels = array_key_exists('notify_channels', $input) ? $input['notify_channels'] : ($existing->notifyChannels ?? 'all');
-        if ($channels !== 'all' && $channels !== 'none') {
-            $errors['notify_channels'] = 'Kanäle: „all“ (alle aktiven) oder „none“ (keine).';
+        if (!in_array($channels, ['all', 'selected', 'none'], true)) {
+            $errors['notify_channels'] = 'Kanäle: „all“, „selected“ oder „none“.';
+        }
+
+        $channelIds = [];
+        if ($channels === 'selected') {
+            try {
+                $channelIds = \Meridian\Notify\ChannelIds::validate(array_key_exists('channel_ids', $input) ? $input['channel_ids'] : ($existing->channelIds ?? []));
+            } catch (ValidationFailed $e) {
+                $errors += $e->fields();
+            }
         }
 
         /** @var mixed $category */
@@ -141,6 +150,6 @@ final class MonitorValidator
             throw new ValidationFailed($errors);
         }
 
-        return new MonitorDraft(trim($name), $categoryId, $categoryName, $interval, $kind->isActive() ? 0 : $grace, $flags['is_enabled'] ?? true, $flags['notify_on_down'] ?? true, $flags['notify_on_up'] ?? true, $channels, $kind, $target, $displayTarget, $expectedInput, $failAfter);
+        return new MonitorDraft(trim($name), $categoryId, $categoryName, $interval, $kind->isActive() ? 0 : $grace, $flags['is_enabled'] ?? true, $flags['notify_on_down'] ?? true, $flags['notify_on_up'] ?? true, $channels, $kind, $target, $displayTarget, $expectedInput, $failAfter, $channelIds);
     }
 }

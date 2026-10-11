@@ -278,6 +278,7 @@ export interface OneTimePasswordReply {
 }
 
 export interface CategoryUsage {
+  recipients: string[];
   id: number;
   name: string;
   jobs: number;
@@ -398,6 +399,7 @@ export interface JobNotify {
   on_disable: boolean;
   tls_warn_days: number | null;
   runtime_warn_percent: number | null;
+  recipients: string[];
 }
 
 /** Antwort von `GET /api/stats` (Läufe je Tag und je Job). */
@@ -446,7 +448,8 @@ export interface Monitor {
   last_ping_at: string | null;
   notify_on_down: boolean;
   notify_on_up: boolean;
-  notify_channels: 'all' | 'none';
+  notify_channels: 'all' | 'selected' | 'none';
+  channel_ids: number[];
   can_edit: boolean;
   created_at: string;
 }
