@@ -66,7 +66,7 @@ final class AppFactory
         $masker = new SecretMasker();
         $hasher = new PasswordHasher();
         $users = new UserRepository($db, $hasher);
-        $sessions = new SessionManager($db, $clock, $masker);
+        $sessions = new SessionManager($db, $clock, $masker, static fn (): int => (new Settings($db, $clock))->sessionDays());
         $twoFactor = new TwoFactor($db, $box, $hasher, $clock);
 
         $throttle = new LoginThrottle($db, $clock);

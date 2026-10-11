@@ -27,6 +27,10 @@ final class Settings
     /** Shell-Jobs (ADR 0004 E12, O8): Standard-Maximum 1 h, höchstens 24 h. */
     public const SHELL_DEFAULT_MAX_TIMEOUT_SECONDS = 3600;
     public const SHELL_MAX_TIMEOUT_LIMIT_SECONDS = 86400;
+    /** Sitzungsdauer: -1 = Standard (2 Std. Leerlauf, 12 Std. gesamt), 0 = niemals, sonst Tage. */
+    public const SESSION_STANDARD = -1;
+    public const SESSION_NEVER = 0;
+    public const MAX_SESSION_DAYS = 365;
     public const DEFAULT_MIN_INTERVAL_SECONDS = 10;
     public const MIN_INTERVAL_FLOOR = 1;
     public const MAX_INTERVAL_FLOOR = 3600;
@@ -56,6 +60,14 @@ final class Settings
         $value = $this->read(SettingKey::ShellMaxTimeout);
 
         return is_int($value) ? $value : Settings::SHELL_DEFAULT_MAX_TIMEOUT_SECONDS;
+    }
+
+    /** Dauer einer Sitzung (ADR 0015): -1 Standard, 0 niemals, 1 bis 365 Tage. */
+    public function sessionDays(): int
+    {
+        $value = $this->read(SettingKey::AuthSessionDays);
+
+        return is_int($value) && $value >= self::SESSION_NEVER && $value <= self::MAX_SESSION_DAYS ? $value : self::SESSION_STANDARD;
     }
 
     /** Kleinster erlaubter Abstand eines festen Intervalls („alle n Sekunden“) beim Speichern eines Jobs (ADR 0013). */
@@ -212,6 +224,12 @@ final class Settings
             case SettingKey::JobsMinInterval:
                 if (!is_int($value) || $value < self::MIN_INTERVAL_FLOOR || $value > self::MAX_INTERVAL_FLOOR) {
                     throw new InvalidSetting('Kleinster Abstand fester Intervalle: ganze Zahl von ' . self::MIN_INTERVAL_FLOOR . ' bis ' . self::MAX_INTERVAL_FLOOR . ' (Sekunden).');
+                }
+
+                return $value;
+            case SettingKey::AuthSessionDays:
+                if (!is_int($value) || $value < self::SESSION_NEVER || $value > self::MAX_SESSION_DAYS) {
+                    throw new InvalidSetting('Sitzungsdauer: 0 (niemals ablaufen) oder ganze Zahl von 1 bis ' . self::MAX_SESSION_DAYS . ' (Tage). Zurücksetzen stellt den Standard wieder her.');
                 }
 
                 return $value;

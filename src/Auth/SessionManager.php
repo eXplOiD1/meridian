@@ -21,6 +21,9 @@ final class SessionManager
     /** Unabhängig von der Aktivität nach spätestens 12 Stunden. */
     public const ABSOLUTE_SECONDS = 43200;
     public const MAX_USER_AGENT = 120;
+    /** Browser begrenzen Cookies ohnehin auf 400 Tage; „niemals“ heißt serverseitig 10 Jahre. */
+    public const NEVER_SECONDS = 315_360_000;
+    public const MAX_COOKIE_SECONDS = 34_560_000;
 
     private const INSERT_SQL = 'INSERT INTO sessions (token_hash, user_id, created_at, last_seen_at, expires_at, user_agent, client_ip)
       VALUES (:h, :u, :c, :c, :e, :ua, :ip)';
@@ -44,8 +47,42 @@ final class SessionManager
         private readonly Connection $db,
         private readonly Clock $clock,
         ?SecretMasker $masker = null,
+        /** @var (\Closure(): int)|null Sitzungsdauer in Tagen (Settings::sessionDays): -1 Standard, 0 niemals */
+        private readonly ?\Closure $days = null,
     ) {
         $this->masker = $masker ?? new SecretMasker();
+    }
+
+    /** Leerlaufgrenze in Sekunden nach der aktuellen Einstellung (ADR 0015). */
+    public function idleSeconds(): int
+    {
+        return $this->policy()[0];
+    }
+
+    /** Absolute Lebensdauer neuer Sitzungen in Sekunden nach der aktuellen Einstellung. */
+    public function absoluteSeconds(): int
+    {
+        return $this->policy()[1];
+    }
+
+    /** Lebensdauer des Cookies (höchstens 400 Tage, die Grenze der Browser). */
+    public function cookieSeconds(): int
+    {
+        return min($this->absoluteSeconds(), self::MAX_COOKIE_SECONDS);
+    }
+
+    /**
+     * @return array{int, int} Leerlauf, absolut
+     */
+    private function policy(): array
+    {
+        $days = $this->days === null ? -1 : ($this->days)();
+        if ($days < 0) {
+            return [self::IDLE_SECONDS, self::ABSOLUTE_SECONDS];
+        }
+        $seconds = $days === 0 ? self::NEVER_SECONDS : $days * 86400;
+
+        return [$seconds, $seconds];
     }
 
     /**
@@ -60,7 +97,7 @@ final class SessionManager
             'h' => self::hash($token),
             'u' => $userId,
             'c' => Timestamp::format($now),
-            'e' => Timestamp::format($now->modify('+' . self::ABSOLUTE_SECONDS . ' seconds')),
+            'e' => Timestamp::format($now->modify('+' . $this->absoluteSeconds() . ' seconds')),
             'ua' => $this->cleanUserAgent($userAgent),
             'ip' => self::cleanIp($clientIp),
         ]);
@@ -89,7 +126,7 @@ final class SessionManager
         }
 
         $now = $this->clock->now();
-        $idleUntil = (new \DateTimeImmutable($row['last_seen_at']))->modify('+' . self::IDLE_SECONDS . ' seconds');
+        $idleUntil = (new \DateTimeImmutable($row['last_seen_at']))->modify('+' . $this->idleSeconds() . ' seconds');
         if ($now >= new \DateTimeImmutable($row['expires_at']) || $now >= $idleUntil) {
             $this->end($token);
 
@@ -230,7 +267,7 @@ final class SessionManager
 
         return [
             'now' => Timestamp::format($now),
-            'idle' => Timestamp::format($now->modify('-' . self::IDLE_SECONDS . ' seconds')),
+            'idle' => Timestamp::format($now->modify('-' . $this->idleSeconds() . ' seconds')),
         ];
     }
 

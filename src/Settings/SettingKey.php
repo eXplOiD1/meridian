@@ -19,6 +19,7 @@ enum SettingKey: string
     case AppPublicUrl = 'app.public_url';
     case RunsRetentionDays = 'runs.retention_days';
     case JobsMinInterval = 'jobs.min_interval_seconds';
+    case AuthSessionDays = 'auth.session_days';
 
     /** Standardwert ohne Zeile in `settings`. */
     public function default(): int|string
@@ -33,6 +34,7 @@ enum SettingKey: string
             self::AppPublicUrl => '',
             self::RunsRetentionDays => Settings::DEFAULT_RETENTION_DAYS,
             self::JobsMinInterval => Settings::DEFAULT_MIN_INTERVAL_SECONDS,
+            self::AuthSessionDays => Settings::SESSION_STANDARD,
         };
     }
 }
