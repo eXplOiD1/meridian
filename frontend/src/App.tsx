@@ -10,6 +10,7 @@ import { Categories } from './screens/Categories';
 import { JobDetail } from './screens/JobDetail';
 import { JobEdit } from './screens/JobEdit';
 import { History } from './screens/History';
+import { setLang } from './i18n';
 import { Statistics } from './screens/Statistics';
 import { Monitors } from './screens/Monitors';
 import { StatusPages } from './screens/StatusPages';
@@ -54,7 +55,11 @@ export function App() {
   // Die Sitzung liegt im HttpOnly-Cookie: ob jemand angemeldet ist, erfährt die Seite nur vom Server.
   const refresh = useCallback(async (): Promise<void> => {
     try {
-      setSession({ status: 'in', profile: await request<Profile>('GET', '/api/auth/me') });
+      const profile = await request<Profile>('GET', '/api/auth/me');
+      if (profile.language !== undefined) {
+        setLang(profile.language);
+      }
+      setSession({ status: 'in', profile });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setSession({ status: 'anonymous' });

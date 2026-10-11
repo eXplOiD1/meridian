@@ -250,6 +250,7 @@ final class AuthController
             // Anzeigename ist freier Text des Benutzers: maskiert wie in jeder anderen Antwort (Regel 4).
             'user' => ['id' => $user->id, 'username' => $user->username, 'display_name' => $this->masker->mask($user->displayName)],
             'roles' => $roles,
+            'language' => $this->users->languageOf($user->id),
             'totp_enabled' => $this->twoFactor->isEnabled($user->id),
             'password_change_required' => $user->passwordMustChange,
             'csrf_token' => $this->csrf->tokenFor($session->token),

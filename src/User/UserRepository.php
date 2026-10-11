@@ -188,6 +188,27 @@ final class UserRepository
         return $this->db->execute('UPDATE users SET display_name = :d WHERE id = :id AND deleted_at IS NULL', ['d' => $displayName, 'id' => $userId]) === 1;
     }
 
+    public const LANGUAGES = ['de', 'en'];
+
+    /** Oberflächensprache des Benutzers (ADR 0016); unbekannt → Deutsch. */
+    public function languageOf(int $userId): string
+    {
+        $row = $this->db->fetchOne('SELECT language FROM users WHERE id = :id', ['id' => $userId]);
+        $language = $row === null ? 'de' : \Meridian\Job\Row::stringOrNull($row, 'language');
+
+        return $language !== null && in_array($language, self::LANGUAGES, true) ? $language : 'de';
+    }
+
+    /** @return bool ob eine Zeile geändert wurde */
+    public function setLanguage(int $userId, string $language): bool
+    {
+        if (!in_array($language, self::LANGUAGES, true)) {
+            throw new \InvalidArgumentException('Unbekannte Sprache.');
+        }
+
+        return $this->db->execute('UPDATE users SET language = :l WHERE id = :id AND deleted_at IS NULL', ['l' => $language, 'id' => $userId]) === 1;
+    }
+
     /** Aktiviert oder deaktiviert einen nicht gelöschten Benutzer. @return bool ob eine Zeile geändert wurde */
     public function setActive(int $userId, bool $active): bool
     {

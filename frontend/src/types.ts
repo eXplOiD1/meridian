@@ -8,6 +8,8 @@ export interface RoleInfo {
 export interface Profile {
   user: { id: number; username: string; display_name: string };
   roles: RoleInfo[];
+  /** Oberflächensprache des Benutzers (ADR 0016). */
+  language?: 'de' | 'en';
   totp_enabled: boolean;
   /** Einmalpasswort noch nicht gewechselt: Der Server gibt dann keine Rechte, nur den Passwortwechsel. */
   password_change_required?: boolean;

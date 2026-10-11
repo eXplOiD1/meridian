@@ -47,6 +47,7 @@ final class AccountController
     public function register(Kernel $kernel): void
     {
         $kernel->put('auth_profile', '/api/auth/profile', $this->profile(...));
+        $kernel->put('auth_language', '/api/auth/language', $this->language(...));
         $kernel->post('auth_password', '/api/auth/password', $this->password(...));
         $kernel->get('auth_sessions', '/api/auth/sessions', $this->listSessions(...));
         $kernel->post('auth_sessions_end_others', '/api/auth/sessions/end-others', $this->endOthers(...));
@@ -71,6 +72,26 @@ final class AccountController
             'username' => $this->masker->mask($user->username),
             'display_name' => $this->masker->mask($displayName),
         ]]);
+    }
+
+    /**
+     * Oberflächensprache des angemeldeten Benutzers (`de` oder `en`); eine persönliche Einstellung, ohne Passwort.
+     */
+    public function language(#[\SensitiveParameter] Request $request): Response
+    {
+        $own = $this->own($request, mutating: true, allowPasswordChange: false);
+        if ($own instanceof Response) {
+            return $own;
+        }
+        [, $user] = $own;
+        $data = self::body($request, ['language']);
+        $language = $data['language'];
+        if (!is_string($language) || !in_array($language, UserRepository::LANGUAGES, true)) {
+            throw ValidationFailed::field('language', 'Sprache: „de“ oder „en“.');
+        }
+        $this->users->setLanguage($user->id, $language);
+
+        return JsonReply::json(['language' => $language]);
     }
 
     /**
