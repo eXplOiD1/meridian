@@ -2,7 +2,7 @@
 
 Arbeitsverzeichnis ist ausschließlich das Produktverzeichnis `Meridian/`. GitHub-Arbeitsbranch: `claude/great-clarke-ubr0vc`.
 
-Die offenen Aufgaben stehen in [TODO.md](../TODO.md). Für Docker- und Agent-Tests stellt Alex einen SSH-Testcontainer bereit. Die bisherige Umgebung war Alpine mit s6 ohne PHP, Docker CLI oder systemd. SMTP sowie GHCR-Freigabe und Update-Abruf sind bis zum Schluss zurückgestellt. Alex übernimmt die Veröffentlichung auf `main` selbst. Der Laufzeitvergleich ist implementiert: optionale Warnung nach erfolgreichem Lauf, Median der letzten 20 erfolgreichen Läufe, mindestens fünf Vergleichswerte, Schwelle 110–1000 Prozent (UI-Vorgabe 200). Testläufe werden ausgeschlossen. Migration 0027 erhält bestehende Outbox-Nachrichten atomar; Datenerhalt und Rollback sind getestet.
+Die offenen Aufgaben stehen in [TODO.md](../TODO.md). Docker- und Host-Agent-Abnahme auf einem echten Ubuntu-Server mit systemd sind erfolgreich, einschließlich Prozessgruppen-Abbruch, Zeitlimit, Isolation und Geheimnismaskierung über API und Worker. SMTP sowie GHCR-Freigabe und Update-Abruf sind bis zum Schluss zurückgestellt. Alex übernimmt die Veröffentlichung auf `main` selbst. Der Laufzeitvergleich ist implementiert: optionale Warnung nach erfolgreichem Lauf, Median der letzten 20 erfolgreichen Läufe, mindestens fünf Vergleichswerte, Schwelle 110–1000 Prozent (UI-Vorgabe 200). Testläufe werden ausgeschlossen. Migration 0027 erhält bestehende Outbox-Nachrichten atomar; Datenerhalt und Rollback sind getestet.
 
 ## Veröffentlichung
 
@@ -10,7 +10,7 @@ Die offenen Aufgaben stehen in [TODO.md](../TODO.md). Für Docker- und Agent-Tes
 
 ## Prüfungen
 
-PHPStan max unter PHP 8.4 und Psalm-Taint-Analyse waren lokal erfolgreich. Frontend-Build sowie gezielte API-Tests für interne Ziele und Benachrichtigungssprache waren erfolgreich. Die vollständige Suite unter Linux/PHP 8.4 ist erfolgreich: 1.145 Tests, 179.656 Assertions, ohne Fehler oder Warnungen. Auch der Container-Workflow besteht die gesamte Suite und PHPStan. Testbericht: https://github.com/eXplOiD1/meridian/actions/runs/38150001005. Echte Docker-, systemd- und SMTP-Abnahme stehen weiterhin aus.
+PHPStan max unter PHP 8.4 und Psalm-Taint-Analyse waren lokal erfolgreich. Frontend-Build sowie gezielte API-Tests für interne Ziele und Benachrichtigungssprache waren erfolgreich. Die vollständige Suite unter Linux/PHP 8.4 ist erfolgreich: 1.147 Tests, 179.664 Assertions, ohne Fehler oder Warnungen. Auch der Container-Workflow besteht die gesamte Suite und PHPStan. Testbericht: https://github.com/eXplOiD1/meridian/actions/runs/38164244272. Auf Ubuntu 26.04.1 mit PHP CLI 8.5.4 ist die vollständige Suite ebenfalls grün. FrankenPHP 1.13.0 (PHP 8.5.11), Node.js 22.22.1 und Docker 29.1.3 wurden für die reale Abnahme verwendet. Installation, erneute Installation mit unverändertem Schlüssel und automatischer Dienststart nach Server-Neustart sind geprüft. SMTP bleibt zurückgestellt.
 
 ## Sprache
 
