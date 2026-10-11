@@ -21,7 +21,7 @@ final class WorkerSupervisor
     private const POLL_MICROSECONDS = 200_000;
 
     /** Umgebung jedes Kindes: nur diese Namen, nie Passwörter, Tokens oder andere Variablen des Aufsehers. */
-    public const CHILD_ENV = ['PATH', 'TZ', 'LANG', 'MERIDIAN_ENV', 'MERIDIAN_DATA_DIR', 'MERIDIAN_KEY_FILE', 'MERIDIAN_TIMEZONE'];
+    public const CHILD_ENV = ['PATH', 'TZ', 'LANG', 'MERIDIAN_ENV', 'MERIDIAN_DATA_DIR', 'MERIDIAN_KEY_FILE', 'MERIDIAN_TIMEZONE', 'CREDENTIALS_DIRECTORY'];
     /** HTTP-Worker: Namen des Docker-Proxys, die nie erreichbar sein dürfen (InfrastructureTargets). */
     public const CHILD_ENV_HTTP = ['MERIDIAN_DOCKER_PROXY_HOSTS'];
     /** Shell-Worker: Proxy-Socket, Container- und Host-Allowlist (zweite Schicht, keine Geheimnisse). */

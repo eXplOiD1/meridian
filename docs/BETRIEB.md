@@ -79,7 +79,8 @@ komplett neu einfügen. Danach die Anmeldung und einen Testlauf prüfen.
 ```bash
 systemctl stop meridian-web meridian-scheduler
 sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/meridian backup:create
-./deploy/install.sh        # ersetzt den Programmcode, behält Schlüssel und Daten, spielt Migrationen ein, startet die Dienste
+cd frontend && npm ci && npm run build && cd ..
+sudo bash deploy/install.sh
 ```
 
 **Zurück zur alten Version:** Migrationen laufen nur vorwärts. Wer zurück will, spielt die Sicherung von vor dem Update ein
@@ -92,10 +93,10 @@ Für einen isolierten Entwicklungscontainer kann der Agent mit `MERIDIAN_ENV=dev
 Der Installer richtet Web, Planer und `meridian-worker-http` ein (ohne Worker läuft kein Job). Shell-Jobs **auf dem Host** sind aus. Einschalten:
 
 ```bash
-MERIDIAN_ENABLE_SHELL=1 sudo ./deploy/install.sh
+sudo env MERIDIAN_ENABLE_SHELL=1 bash deploy/install.sh
 ```
 
-Das legt den Benutzer `meridian-run` an (ohne Zugriff auf Schlüssel und Datenbank), aktiviert `meridian-shell.socket` und `meridian-worker-shell` und trägt `MERIDIAN_SHELL_HOST_SOCKETS` ein. Danach in Meridian unter Einstellungen → Ausführungsorte `host default` freigeben. Jeder Lauf bekommt einen eigenen Prozess als `meridian-run` mit fester Umgebung; Details und Grenzen: `docs/decisions/0014-host-agent.md`. **Noch nicht auf einem echten systemd abgenommen: erst auf einem Testserver prüfen.**
+Das legt den Benutzer `meridian-run` an (ohne Zugriff auf Schlüssel und Datenbank), aktiviert `meridian-shell.socket` und `meridian-worker-shell` und trägt `MERIDIAN_SHELL_HOST_SOCKETS` ein. Danach in Meridian unter Einstellungen → Ausführungsorte `host default` freigeben. Jeder Lauf bekommt einen eigenen Prozess als `meridian-run` mit fester Umgebung; Details und Grenzen: `docs/decisions/0014-host-agent.md`.
 
 ## Prüfliste nach dem Einrichten
 
