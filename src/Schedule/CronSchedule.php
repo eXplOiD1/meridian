@@ -104,6 +104,12 @@ final readonly class CronSchedule
             $next = \DateTimeImmutable::createFromInterface(
                 $expression->getNextRunDate($current->setTimezone($this->timezone), 0, false, $this->timezone->getName()),
             )->setTimezone($this->timezone);
+            if ($this->fixedTime) {
+                $shifted = $this->shiftedGapAfter($after, $next);
+                if ($shifted !== null) {
+                    return $shifted;
+                }
+            }
             // Die Bibliothek arbeitet minutengenau; ein Termin muss echt nach $after liegen.
             if ($next->getTimestamp() <= $after->getTimestamp()) {
                 $current = $after->modify('+1 minute');
@@ -139,6 +145,36 @@ final readonly class CronSchedule
         }
 
         return $runs;
+    }
+
+    /** Auch halbstündige Zeitumstellungen verschieben feste Termine um die tatsächliche Lücke. */
+    private function shiftedGapAfter(\DateTimeImmutable $after, \DateTimeImmutable $before): ?\DateTimeImmutable
+    {
+        $transitions = $this->timezone->getTransitions($after->getTimestamp() - 86400, $before->getTimestamp() + 1);
+        if ($transitions === false) {
+            return null;
+        }
+        $expression = $this->expression ?? throw new \LogicException('Cron-Ausdruck fehlt.');
+        $previousOffset = null;
+        foreach ($transitions as $transition) {
+            $offset = $transition['offset'];
+            if ($previousOffset !== null && $offset > $previousOffset) {
+                $gap = $offset - $previousOffset;
+                for ($seconds = 0; $seconds < $gap; $seconds += 60) {
+                    $timestamp = $transition['ts'] + $seconds;
+                    if ($timestamp <= $after->getTimestamp() || $timestamp >= $before->getTimestamp()) {
+                        continue;
+                    }
+                    $wall = new \DateTimeImmutable('@' . ($timestamp + $previousOffset));
+                    if ($expression->isDue($wall, 'UTC')) {
+                        return (new \DateTimeImmutable('@' . $timestamp))->setTimezone($this->timezone);
+                    }
+                }
+            }
+            $previousOffset = $offset;
+        }
+
+        return null;
     }
 
     public function isDue(\DateTimeImmutable $now): bool

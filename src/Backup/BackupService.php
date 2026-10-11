@@ -215,7 +215,8 @@ final class BackupService
         }
         self::remove($file . '-wal');
         self::remove($file . '-shm');
-        if (($check['quick_check'] ?? null) !== 'ok' || (int) ($migrations['n'] ?? 0) < 1) {
+        $migrationCount = $migrations['n'] ?? null;
+        if (($check['quick_check'] ?? null) !== 'ok' || !is_int($migrationCount) || $migrationCount < 1) {
             throw new BackupFailed('Die Datenbankdatei ist beschädigt oder keine Meridian-Datenbank.');
         }
     }
