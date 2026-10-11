@@ -382,7 +382,7 @@ final class JobValidator
 
             return false;
         }
-        $base = $existing?->notify ?? new NotifySettings();
+        $base = $existing->notify ?? new NotifySettings();
         /** @var mixed $onFailure */
         $onFailure = $given['on_failure'] ?? $base->onFailure;
         /** @var mixed $onRecovery */
