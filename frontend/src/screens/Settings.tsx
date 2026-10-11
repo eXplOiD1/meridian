@@ -401,7 +401,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
     try {
       const result = await request<{ target: InternalTarget }>('POST', '/api/settings/internal-targets', {
         csrf,
-        body: { kind: form.kind, value: form.value.trim(), port, category_id: form.categoryId === '' ? null : Number.parseInt(form.categoryId, 10), note: form.note.trim() },
+        body: { kind: form.kind, value: form.value.replace(/[\s\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, ''), port, category_id: form.categoryId === '' ? null : Number.parseInt(form.categoryId, 10), note: form.note.trim() },
       });
       setTargets((current) => [...(current ?? []), result.target]);
       setForm({ ...EMPTY_FORM, kind: form.kind });
