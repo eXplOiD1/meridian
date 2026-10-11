@@ -105,7 +105,7 @@ final class LeakPipelineTest extends TestCase
             self::assertStringContainsString($secret, $plain);
         }
         $config = json_decode($stored['config_json'], true, 8, JSON_THROW_ON_ERROR);
-        self::assertSame('http://127.0.0.1:' . $server->port . '/echo/••••?token=••••', self::dig($config, 'http', 'display_url'), 'display_url nach Regel E2, ohne Geheimnisteil');
+        self::assertSame('http://127.0.0.1:' . $server->port . '/••••?••••', self::dig($config, 'http', 'display_url'), 'display_url nach Regel E2, ohne Geheimnisteil');
         self::assertSame(['scheme' => 'http', 'host' => '127.0.0.1', 'port' => $server->port], self::dig($config, 'http', 'target'));
 
         // Ändern ohne und mit neuer Anfrage, danach Löschen: jede Antwort und jeder Audit-Eintrag.
