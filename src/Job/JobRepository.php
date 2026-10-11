@@ -208,8 +208,18 @@ final class JobRepository
     private function writeNotify(int $jobId, NotifySettings $notify): void
     {
         $this->db->execute(
-            'UPDATE jobs SET notify_on_failure = :failure, notify_failure_after = :after, notify_on_recovery = :recovery, notify_channels = :channels WHERE id = :id',
-            ['failure' => $notify->onFailure ? 1 : 0, 'after' => $notify->failureAfter, 'recovery' => $notify->onRecovery ? 1 : 0, 'channels' => $notify->channels, 'id' => $jobId],
+            'UPDATE jobs SET notify_on_failure = :failure, notify_failure_after = :after, notify_on_recovery = :recovery, notify_channels = :channels,
+                auto_disable_after = :disable_after, notify_on_disable = :on_disable, tls_warn_days = :tls_days WHERE id = :id',
+            [
+                'failure' => $notify->onFailure ? 1 : 0,
+                'after' => $notify->failureAfter,
+                'recovery' => $notify->onRecovery ? 1 : 0,
+                'channels' => $notify->channels,
+                'disable_after' => $notify->disableAfter,
+                'on_disable' => $notify->onDisable ? 1 : 0,
+                'tls_days' => $notify->tlsWarnDays,
+                'id' => $jobId,
+            ],
         );
         $this->db->execute('DELETE FROM job_channels WHERE job_id = :id', ['id' => $jobId]);
         if ($notify->channels !== NotifySettings::SELECTED) {
@@ -240,9 +250,9 @@ final class JobRepository
             $channels[Row::int($row, 'job_id')][] = Row::int($row, 'channel_id');
         }
         $out = [];
-        foreach ($this->db->fetchAll('SELECT id, notify_on_failure, notify_failure_after, notify_on_recovery, notify_channels FROM jobs WHERE id IN (SELECT value FROM json_each(:ids))', ['ids' => $json]) as $row) {
+        foreach ($this->db->fetchAll('SELECT id, notify_on_failure, notify_failure_after, notify_on_recovery, notify_channels, auto_disable_after, notify_on_disable, tls_warn_days FROM jobs WHERE id IN (SELECT value FROM json_each(:ids))', ['ids' => $json]) as $row) {
             $id = Row::int($row, 'id');
-            $out[$id] = new NotifySettings(Row::bool($row, 'notify_on_failure'), Row::int($row, 'notify_failure_after'), Row::bool($row, 'notify_on_recovery'), Row::string($row, 'notify_channels'), $channels[$id] ?? []);
+            $out[$id] = new NotifySettings(Row::bool($row, 'notify_on_failure'), Row::int($row, 'notify_failure_after'), Row::bool($row, 'notify_on_recovery'), Row::string($row, 'notify_channels'), $channels[$id] ?? [], Row::intOrNull($row, 'auto_disable_after'), Row::bool($row, 'notify_on_disable'), Row::intOrNull($row, 'tls_warn_days'));
         }
 
         return $out;

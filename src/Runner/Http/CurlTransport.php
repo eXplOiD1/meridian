@@ -83,6 +83,9 @@ final class CurlTransport implements HttpTransport
             $errno = is_array($info) && isset($info['result']) && is_int($info['result']) ? $info['result'] : null;
             $status = filter_var(curl_getinfo($ch, CURLINFO_RESPONSE_CODE), FILTER_VALIDATE_INT);
             $hop->status = is_int($status) && $status > 0 ? $status : $hop->status;
+            if ($request->target->url->scheme === 'https') {
+                $hop->tlsExpiresAt = self::certificateExpiry(curl_getinfo($ch, CURLINFO_CERTINFO));
+            }
             curl_multi_remove_handle($mh, $ch);
         } finally {
             curl_multi_close($mh);
@@ -114,7 +117,25 @@ final class CurlTransport implements HttpTransport
             $hop->bodyBytes,
             $hop->bodyLimitReached,
             $duration,
+            $hop->tlsExpiresAt,
         );
+    }
+
+    /**
+     * Ablauf des Serverzertifikats (erste Kette) aus `CURLINFO_CERTINFO`, sonst null.
+     */
+    private static function certificateExpiry(mixed $info): ?int
+    {
+        if (!is_array($info) || !isset($info[0]) || !is_array($info[0])) {
+            return null;
+        }
+        $text = $info[0]['Expire date'] ?? null;
+        if (!is_string($text)) {
+            return null;
+        }
+        $time = strtotime($text);
+
+        return $time === false ? null : $time;
     }
 
     /**
@@ -153,6 +174,7 @@ final class CurlTransport implements HttpTransport
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_RETURNTRANSFER => false,
             CURLOPT_NOPROGRESS => false,
+            CURLOPT_CERTINFO => $url->scheme === 'https',
         ];
         $options[CURLOPT_PROTOCOLS_STR] = 'http,https';
         $options[CURLOPT_REDIR_PROTOCOLS_STR] = 'http,https';

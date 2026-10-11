@@ -34,6 +34,7 @@ final class OverviewController
     public const BUCKET_SECONDS = 300;
     public const MAX_WINDOW_SECONDS = 26 * 3600;
     public const MAX_JOBS = 30;
+    public const SLOW_MIN_EXTRA_SECONDS = 30;
 
     public function __construct(
         private readonly SessionAuth $sessionAuth,
@@ -78,6 +79,22 @@ final class OverviewController
         $listing = $this->jobs->list($scope, null, null, false, JobSort::NextRun);
         $rows = [];
         $attention = [];
+        $names = [];
+        foreach ($listing->jobs as $job) {
+            $names[$job->id] = $job->name;
+        }
+        foreach ($this->overview->runningWithUsualDuration($scope) as $running) {
+            $elapsed = $now->getTimestamp() - Timestamp::parse($running['started_at'])->getTimestamp();
+            if (isset($names[$running['job_id']]) && self::isSlow($elapsed * 1000, $running['usual_ms'])) {
+                $attention[] = [
+                    'job' => ['id' => $running['job_id'], 'name' => $this->masker->mask($names[$running['job_id']])],
+                    'status' => 'slow',
+                    'finished_at' => null,
+                    'running_seconds' => $elapsed,
+                    'usual_seconds' => intdiv($running['usual_ms'], 1000),
+                ];
+            }
+        }
         foreach ($listing->jobs as $job) {
             $last = $job->lastRun;
             if ($job->isEnabled && $last !== null && ($last->status === RunStatus::Failed || $last->status === RunStatus::Timeout)) {
@@ -85,6 +102,8 @@ final class OverviewController
                     'job' => ['id' => $job->id, 'name' => $this->masker->mask($job->name)],
                     'status' => $last->status->value,
                     'finished_at' => $last->finishedAt,
+                    'running_seconds' => null,
+                    'usual_seconds' => null,
                 ];
             }
             $buckets = $byJob[$job->id] ?? [];
@@ -117,6 +136,14 @@ final class OverviewController
             'totals' => $this->overview->totals($scope, $from, $to),
             'attention' => array_slice($attention, 0, 10),
         ]);
+    }
+
+    /**
+     * „Braucht länger als üblich“: mehr als das Doppelte des üblichen Werts und mindestens {@see self::SLOW_MIN_EXTRA_SECONDS} Sekunden mehr.
+     */
+    public static function isSlow(int $elapsedMs, int $usualMs): bool
+    {
+        return $elapsedMs > 2 * $usualMs && $elapsedMs - $usualMs >= self::SLOW_MIN_EXTRA_SECONDS * 1000;
     }
 
     /**

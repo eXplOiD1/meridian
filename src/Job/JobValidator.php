@@ -358,7 +358,7 @@ final class JobValidator
         }
         /** @var mixed $given */
         $given = $input['notify'];
-        $shape = 'Muss ein Objekt mit on_failure, failure_after, on_recovery, channels und channel_ids sein.';
+        $shape = 'Muss ein Objekt mit on_failure, failure_after, on_recovery, channels, channel_ids, disable_after, on_disable und tls_warn_days sein.';
         if (!is_array($given)) {
             $errors['notify'] = $shape;
 
@@ -369,9 +369,9 @@ final class JobValidator
 
             return false;
         }
-        $unknown = array_diff(array_map(strval(...), array_keys($given)), ['on_failure', 'failure_after', 'on_recovery', 'channels', 'channel_ids']);
+        $unknown = array_diff(array_map(strval(...), array_keys($given)), ['on_failure', 'failure_after', 'on_recovery', 'channels', 'channel_ids', 'disable_after', 'on_disable', 'tls_warn_days']);
         if ($unknown !== []) {
-            $errors['notify'] = 'Unbekannte Felder. Erlaubt sind: on_failure, failure_after, on_recovery, channels, channel_ids.';
+            $errors['notify'] = 'Unbekannte Felder. Erlaubt sind: on_failure, failure_after, on_recovery, channels, channel_ids, disable_after, on_disable, tls_warn_days.';
 
             return false;
         }
@@ -386,8 +386,24 @@ final class JobValidator
         $channels = $given['channels'] ?? $base->channels;
         /** @var mixed $ids */
         $ids = $given['channel_ids'] ?? $base->channelIds;
-        if (!is_bool($onFailure) || !is_bool($onRecovery)) {
-            $errors['notify'] = 'on_failure und on_recovery müssen true oder false sein.';
+        /** @var mixed $disableAfter */
+        $disableAfter = array_key_exists('disable_after', $given) ? $given['disable_after'] : $base->disableAfter;
+        /** @var mixed $onDisable */
+        $onDisable = $given['on_disable'] ?? $base->onDisable;
+        /** @var mixed $tlsDays */
+        $tlsDays = array_key_exists('tls_warn_days', $given) ? $given['tls_warn_days'] : $base->tlsWarnDays;
+        if (!is_bool($onFailure) || !is_bool($onRecovery) || !is_bool($onDisable)) {
+            $errors['notify'] = 'on_failure, on_recovery und on_disable müssen true oder false sein.';
+
+            return false;
+        }
+        if ($disableAfter !== null && (!is_int($disableAfter) || $disableAfter < 1 || $disableAfter > NotifySettings::MAX_DISABLE_AFTER)) {
+            $errors['notify.disable_after'] = 'Deaktivieren nach: ganze Zahl von 1 bis ' . NotifySettings::MAX_DISABLE_AFTER . ' Fehlschlägen oder null.';
+
+            return false;
+        }
+        if ($tlsDays !== null && (!is_int($tlsDays) || $tlsDays < 1 || $tlsDays > NotifySettings::MAX_TLS_DAYS)) {
+            $errors['notify.tls_warn_days'] = 'Zertifikatswarnung: ganze Zahl von 1 bis ' . NotifySettings::MAX_TLS_DAYS . ' Tagen oder null.';
 
             return false;
         }
@@ -421,7 +437,7 @@ final class JobValidator
             sort($list);
         }
 
-        return new NotifySettings($onFailure, $after, $onRecovery, $channels, $list);
+        return new NotifySettings($onFailure, $after, $onRecovery, $channels, $list, $disableAfter, $onDisable, $tlsDays);
     }
 
     /**

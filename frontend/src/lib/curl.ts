@@ -10,6 +10,15 @@ export interface CurlImport {
   ignored: string[];
 }
 
+/** Wert für `Authorization: Basic …` (UTF-8, wie curl und Browser es senden). */
+export function basicAuthValue(credentials: string): string {
+  const bytes = new TextEncoder().encode(credentials);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+
+  return 'Basic ' + btoa(binary);
+}
+
 const METHODS: readonly string[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
 
 /** Zerlegt eine Befehlszeile wie eine POSIX-Shell (Anführungszeichen, Backslash, Zeilenfortsetzung), ohne etwas auszuführen. */
@@ -110,7 +119,7 @@ export function parseCurl(input: string): CurlImport | null {
       case '-u':
       case '--user': {
         const credentials = value();
-        headers.push({ name: 'Authorization', value: 'Basic ' + btoa(credentials) });
+        headers.push({ name: 'Authorization', value: basicAuthValue(credentials) });
         break;
       }
       case '-A':

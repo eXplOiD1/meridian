@@ -58,6 +58,7 @@ final class HttpRunner implements Runner
         private readonly TargetGuard $guard,
         private readonly HttpTransport $transport,
         private readonly UrlPolicy $urls = new UrlPolicy(),
+        private readonly ?TlsExpirySink $tls = null,
     ) {
     }
 
@@ -107,7 +108,7 @@ final class HttpRunner implements Runner
         // http.display_host = hidden: auch die Laufausgabe nennt keinen Host (frisch je Lauf gelesen).
         $hideHost = $this->settings->hidesHost();
 
-        return $this->hops($spec, $payload, $job->categoryId, $timeout, $store, $notes, $heartbeat, $masker, $live, $hideHost);
+        return $this->hops($spec, $payload, $job->categoryId, $timeout, $store, $notes, $heartbeat, $masker, $live, $hideHost, $request->jobId);
     }
 
     /**
@@ -129,7 +130,7 @@ final class HttpRunner implements Runner
     /**
      * @param list<string> $notes
      */
-    private function hops(HttpJobConfig $spec, #[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat, SecretMasker $masker, LiveLog $live, bool $hideHost): RunResult
+    private function hops(HttpJobConfig $spec, #[\SensitiveParameter] HttpPayload $payload, ?int $categoryId, int $timeout, bool $store, array $notes, Heartbeat $heartbeat, SecretMasker $masker, LiveLog $live, bool $hideHost, int $jobId): RunResult
     {
         $deadline = (int) hrtime(true) + $timeout * 1_000_000_000;
         $url = $payload->url();
@@ -163,6 +164,10 @@ final class HttpRunner implements Runner
             self::live($live, $masker, LiveStream::Sys, end($lines));
             $response = $this->transport->send(new TransportRequest($method, $pinned, $headers, $body, $remainingMs), $heartbeat);
 
+            // Nur das Zertifikat des Ziels selbst (erster Hop), nicht das eines Weiterleitungsziels.
+            if ($hop === 0 && $response->tlsExpiresAt !== null) {
+                $this->tls?->record($jobId, $response->tlsExpiresAt);
+            }
             if ($response->error !== null) {
                 return self::transportFailure($response, $lines, $notes, $timeout);
             }

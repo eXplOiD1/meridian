@@ -31,6 +31,9 @@ final class CurlHop
     /** Ist die verbundene Adresse schon gegen die festgehaltenen geprüft? */
     public bool $peerChecked = false;
 
+    /** Ablauf des Zertifikats des Servers (Unix-Zeit), nur bei https und erfolgreichem Handshake. */
+    public ?int $tlsExpiresAt = null;
+
     /**
      * @param non-empty-list<string> $pinnedIps kanonische Textform
      */

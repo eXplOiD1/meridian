@@ -12,7 +12,7 @@ import { canEditHttp, canEditShell } from '../lib/permissions';
 import { setPendingRun } from '../lib/pending';
 import { triggerRun } from '../lib/runs';
 import { hrefOf, navigate } from '../lib/useHashRoute';
-import { parseCurl } from '../lib/curl';
+import { basicAuthValue, parseCurl } from '../lib/curl';
 import type { CategoryRef, HttpMethod, JobDetail, JobLimits, JobSource, JobType, NotificationChannelName, OverlapPolicy, Profile, StoreResponse } from '../types';
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
@@ -48,6 +48,11 @@ interface Form {
   /** Benachrichtigungen (ADR 0007 N4). */
   notifyFailure: boolean;
   notifyAfter: string;
+  disableEnabled: boolean;
+  disableAfter: string;
+  notifyDisable: boolean;
+  tlsEnabled: boolean;
+  tlsDays: string;
   notifyRecovery: boolean;
   notifyChannels: 'all' | 'selected' | 'none';
   notifyIds: number[];
@@ -114,6 +119,11 @@ function formFromJob(job: JobDetail): Form {
     expiresLocal: localDateTime(job.expires_at, job.timezone),
     notifyFailure: job.notify.on_failure,
     notifyAfter: String(job.notify.failure_after),
+    disableEnabled: job.notify.disable_after !== null,
+    disableAfter: String(job.notify.disable_after ?? 5),
+    notifyDisable: job.notify.on_disable,
+    tlsEnabled: job.notify.tls_warn_days !== null,
+    tlsDays: String(job.notify.tls_warn_days ?? 14),
     notifyRecovery: job.notify.on_recovery,
     notifyChannels: job.notify.channels,
     notifyIds: job.notify.channel_ids,
@@ -140,6 +150,11 @@ function initialForm(limits: JobLimits | null, categories: CategoryRef[]): Form 
     expiresLocal: '',
     notifyFailure: false,
     notifyAfter: '1',
+    disableEnabled: false,
+    disableAfter: '5',
+    notifyDisable: true,
+    tlsEnabled: false,
+    tlsDays: '14',
     notifyRecovery: false,
     notifyChannels: 'all',
     notifyIds: [],
@@ -243,6 +258,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
       cancelled = true;
     };
   }, []);
+  const [auth, setAuth] = useState<{ mode: 'basic' | 'bearer'; user: string; secret: string }>({ mode: 'basic', user: '', secret: '' });
   const [curlText, setCurlText] = useState('');
   const [curlNote, setCurlNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const [sourceNote, setSourceNote] = useState<string | null>(null);
@@ -403,7 +419,7 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
   const inheritLabel = 'Wie global (' + (limits.response_storage === 'on' ? 'an' : 'aus') + ')';
 
   const shownKeys = new Set([
-    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'notify', 'notify.failure_after', 'notify.channels', 'notify.channel_ids', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
+    'name', 'category_id', 'cron', 'timezone', 'expires_at', 'notify', 'notify.failure_after', 'notify.disable_after', 'notify.tls_warn_days', 'notify.channels', 'notify.channel_ids', 'overlap_policy', 'retry_count', 'retry_delay_seconds', 'http.method',
     'http.timeout_seconds', 'http.expected_status', 'http.max_redirects', 'http.store_response', 'request.url', 'request.body',
     'shell.target', 'shell.interpreter', 'shell.user', 'shell.workdir', 'shell.timeout_seconds', 'script.source',
   ]);
@@ -454,6 +470,18 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
     setCurlText('');
     const note = 'Übernommen: ' + parsed.method + ', ' + String(parsed.headers.length) + ' Header' + (parsed.body !== null ? ', Body' : '') + '. Bitte prüfen und speichern.';
     setCurlNote({ tone: 'ok', text: parsed.ignored.length > 0 ? note + ' Nicht übernommen: ' + parsed.ignored.join(', ') + '.' : note });
+  }
+
+  /** Setzt aus den Zugangsdaten den Header `Authorization` (ersetzt einen vorhandenen) und leert die Felder. */
+  function applyAuth(): void {
+    const value = auth.mode === 'basic' ? basicAuthValue(auth.user + ':' + auth.secret) : 'Bearer ' + auth.secret.trim();
+    let key = nextKey;
+    setDraft((current) => {
+      const others = current.headers.filter((h) => h.name.trim().toLowerCase() !== 'authorization');
+      return { ...current, headers: [...others, { key: key++, name: 'Authorization', value }] };
+    });
+    setNextKey(key);
+    setAuth({ mode: auth.mode, user: '', secret: '' });
   }
 
   function addHeader(): void {
@@ -538,6 +566,9 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
         on_recovery: form.notifyRecovery,
         channels: form.notifyChannels,
         channel_ids: form.notifyChannels === 'selected' ? form.notifyIds : [],
+        disable_after: form.disableEnabled ? (/^\d+$/.test(form.disableAfter) ? Number.parseInt(form.disableAfter, 10) : form.disableAfter) : null,
+        on_disable: form.notifyDisable,
+        tls_warn_days: form.tlsEnabled && !shellActive ? (/^\d+$/.test(form.tlsDays) ? Number.parseInt(form.tlsDays, 10) : form.tlsDays) : null,
       },
       overlap_policy: form.overlap,
       retry_count: retryCount,
@@ -872,7 +903,34 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
                 </div>
               ) : (
                 <div className="replace">
-                                <fieldset className="headers">
+                                <fieldset className="authbox">
+                  <legend className="field__label">Authentifizierung</legend>
+                  <p className="hint">Setzt den Header „Authorization“ für dich. Die Zugangsdaten werden danach nur noch verschlüsselt gespeichert und nie wieder angezeigt.</p>
+                  <div className="grid-2">
+                    <FormField label="Art">
+                      {(aria) => (
+                        <select {...aria} className="input" name="auth-mode" value={auth.mode} onChange={(e) => setAuth({ ...auth, mode: e.target.value === 'bearer' ? 'bearer' : 'basic' })}>
+                          <option value="basic">Basic (Benutzer und Passwort)</option>
+                          <option value="bearer">Bearer-Token</option>
+                        </select>
+                      )}
+                    </FormField>
+                    {auth.mode === 'basic' && (
+                      <FormField label="Benutzer">
+                        {(aria) => <input {...aria} className="input" name="auth-user" autoComplete="off" value={auth.user} onChange={(e) => setAuth({ ...auth, user: e.target.value })} />}
+                      </FormField>
+                    )}
+                  </div>
+                  <FormField label={auth.mode === 'basic' ? 'Passwort' : 'Token'}>
+                    {(aria) => <input {...aria} className="input" type="password" name="auth-secret" autoComplete="new-password" value={auth.secret} onChange={(e) => setAuth({ ...auth, secret: e.target.value })} />}
+                  </FormField>
+                  <div className="row">
+                    <button type="button" className="btn btn--ghost btn--small" disabled={auth.secret === '' || (auth.mode === 'basic' && (auth.user === '' || auth.user.includes(':')))} onClick={applyAuth}>
+                      Als Header übernehmen
+                    </button>
+                  </div>
+                </fieldset>
+                <fieldset className="headers">
                 <legend className="field__label">Header</legend>
                 {draft.headers.length === 0 && <p className="hint">Keine Header. Werte werden verschlüsselt gespeichert und nie wieder angezeigt.</p>}
                 {draft.headers.map((header, index) => (
@@ -1036,6 +1094,34 @@ export function JobEdit({ profile, id }: { profile: Profile; id: string | null }
             <input type="checkbox" checked={form.notifyRecovery} onChange={(e) => set('notifyRecovery', e.target.checked)} />
             <span>Mich benachrichtigen, wenn die Ausführung wieder erfolgreich ist, nachdem sie fehlschlug</span>
           </label>
+          <label className="check">
+            <input type="checkbox" checked={form.disableEnabled} onChange={(e) => set('disableEnabled', e.target.checked)} />
+            <span>Job automatisch deaktivieren, wenn er mehrfach in Folge fehlschlägt</span>
+          </label>
+          {form.disableEnabled && (
+            <div className="stack">
+              <FormField label="Deaktivieren nach … Fehlschlägen in Folge" error={errors['notify.disable_after']} hint="Bis 1000. Danach plant Meridian keine Läufe mehr, bis du den Job wieder aktivierst. Alte Fehlschläge deaktivieren nie nachträglich.">
+                {(aria) => <input {...aria} className="input" name="disable-after" inputMode="numeric" value={form.disableAfter} onChange={(e) => set('disableAfter', e.target.value)} />}
+              </FormField>
+              <label className="check">
+                <input type="checkbox" checked={form.notifyDisable} onChange={(e) => set('notifyDisable', e.target.checked)} />
+                <span>Mich benachrichtigen, wenn der Job deaktiviert wurde</span>
+              </label>
+            </div>
+          )}
+          {!shellActive && (
+            <>
+              <label className="check">
+                <input type="checkbox" checked={form.tlsEnabled} onChange={(e) => set('tlsEnabled', e.target.checked)} />
+                <span>Mich warnen, bevor das TLS-Zertifikat des Ziels abläuft</span>
+              </label>
+              {form.tlsEnabled && (
+                <FormField label="Warnen … Tage vor dem Ablauf" error={errors['notify.tls_warn_days']} hint="1 bis 90. Das Ablaufdatum wird bei jedem erfolgreichen Verbindungsaufbau des Jobs gemerkt; gewarnt wird einmal je Zertifikat.">
+                  {(aria) => <input {...aria} className="input" name="tls-days" inputMode="numeric" value={form.tlsDays} onChange={(e) => set('tlsDays', e.target.value)} />}
+                </FormField>
+              )}
+            </>
+          )}
           <fieldset className="radios">
             <legend className="field__label">Benachrichtigen über …</legend>
             {(['all', 'selected', 'none'] as const).map((mode) => (
