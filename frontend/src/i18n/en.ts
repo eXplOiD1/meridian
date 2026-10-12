@@ -908,7 +908,7 @@ export const EN: Record<string, string> = {
   'Einen Moment …': 'One moment …',
   'Bestätigen': 'Confirm',
   'Zurück': 'Back',
-  'Die Anmeldung funktioniert nur über HTTPS (oder im Entwicklungsmodus).': 'Sign-in only works over HTTPS (or in development mode).',
+  'Für eine geschützte Anmeldung HTTPS verwenden.': 'Use HTTPS for a secure sign-in.',
   'Einfach: die wichtigsten Angaben. Weitere Optionen findest du im Experten-Modus.': 'Simple: the essentials. More options are in expert mode.',
   'Experte: alle Optionen in Reitern. Nichts geht beim Umschalten verloren.': 'Expert: all options in tabs. Nothing is lost when you switch.',
   'Ansicht des Editors': 'Editor view',
