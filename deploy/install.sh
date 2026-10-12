@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
 # SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 # Meridian auf einem Linux-Server installieren (Debian/Ubuntu, als root).
-# Voraussetzungen: PHP 8.3+ mit pdo_sqlite, sodium, pcntl, curl (Debian/Ubuntu: php-curl, ca-certificates); Composer; rsync; FrankenPHP unter /usr/local/bin.
+# Voraussetzungen: PHP 8.3+ mit pdo_sqlite, sodium, pcntl, curl, mbstring, openssl (Debian/Ubuntu: php-curl, php-mbstring, php-gmp, ca-certificates); Composer; rsync; FrankenPHP unter /usr/local/bin.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
@@ -27,13 +27,13 @@ fi
 id meridian &>/dev/null || useradd --system --home "$DATA" --shell /usr/sbin/nologin meridian
 
 # Erweiterungen und CA-Bündel prüfen, bevor etwas installiert wird (der HTTP-Runner braucht curl mit TLS).
-for ext in pdo_sqlite sodium pcntl posix curl; do
+for ext in pdo_sqlite sodium pcntl posix curl mbstring openssl; do
   if ! php -r 'exit(extension_loaded($argv[1]) ? 0 : 1);' "$ext"; then
-    echo "PHP-Erweiterung $ext fehlt. Bitte installieren (z. B. apt install php-cli php-sqlite3 php-curl) und erneut starten." >&2
+    echo "PHP-Erweiterung $ext fehlt. Bitte installieren (z. B. apt install php-cli php-sqlite3 php-curl php-mbstring php-gmp) und erneut starten." >&2
     exit 1
   fi
 done
-/usr/local/bin/frankenphp php-cli -r 'foreach (["pdo_sqlite", "sodium", "curl"] as $ext) { if (!extension_loaded($ext)) { fwrite(STDERR, "FrankenPHP-Erweiterung $ext fehlt.\n"); exit(1); } }'
+/usr/local/bin/frankenphp php-cli -r 'foreach (["pdo_sqlite", "sodium", "curl", "mbstring", "openssl"] as $ext) { if (!extension_loaded($ext)) { fwrite(STDERR, "FrankenPHP-Erweiterung $ext fehlt.\n"); exit(1); } }'
 if [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
   echo "CA-Bündel /etc/ssl/certs/ca-certificates.crt fehlt. Bitte 'apt install ca-certificates' ausführen und erneut starten." >&2
   exit 1

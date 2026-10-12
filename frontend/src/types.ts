@@ -355,7 +355,7 @@ export interface Overview {
   attention: Array<{ job: { id: number; name: string }; kind: 'job' | 'monitor'; status: 'failed' | 'timeout' | 'slow' | 'down'; finished_at: string | null; running_seconds: number | null; usual_seconds: number | null }>;
 }
 
-export type ChannelKind = 'email' | 'ntfy' | 'webhook' | 'telegram';
+export type ChannelKind = 'email' | 'ntfy' | 'webhook' | 'telegram' | 'discord' | 'slack' | 'pushover' | 'homeassistant' | 'browser';
 
 /** Kanal der Benachrichtigungen (`/api/notifications/channels`). Das Geheimnis kommt nie zurück, nur `has_secret`. */
 export interface NotificationChannel {
@@ -377,6 +377,8 @@ export interface NotificationChannel {
     priority?: number;
     url?: string;
     chat_id?: string;
+    service?: string;
+    contact?: string;
   };
   has_secret: boolean;
   created_at: string;
@@ -466,6 +468,7 @@ export interface StatusPageItem {
 }
 
 export interface StatusPage {
+  language: 'de' | 'en';
   id: number;
   title: string;
   slug: string;

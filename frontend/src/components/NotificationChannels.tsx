@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Alert } from './Alert';
+import { BrowserPushDevices } from './BrowserPushDevices';
 import { Confirm } from './Confirm';
 import { FormField } from './FormField';
 import { ApiError, request } from '../lib/api';
@@ -32,6 +33,9 @@ interface ChannelForm {
   token: string;
   url: string;
   chatId: string;
+  userKey: string;
+  service: string;
+  contact: string;
 }
 
 const EMPTY: ChannelForm = {
@@ -54,9 +58,12 @@ const EMPTY: ChannelForm = {
   token: '',
   url: '',
   chatId: '',
+  userKey: '',
+  service: 'persistent_notification.create',
+  contact: '',
 };
 
-const TYPE_LABEL: Record<NotificationChannel['type'], string> = { email: 'Email (SMTP)', ntfy: 'ntfy', webhook: 'Webhook', telegram: 'Telegram' };
+const TYPE_LABEL: Record<NotificationChannel['type'], string> = { email: 'Email (SMTP)', ntfy: 'ntfy', webhook: 'Webhook', telegram: 'Telegram', discord: 'Discord', slack: 'Slack', pushover: 'Pushover', homeassistant: 'Home Assistant', browser: 'Browser (Chrome / Firefox)' };
 const ENCRYPTION_LABEL = { none: 'Keine (nur im vertrauenswürdigen Heimnetz)', starttls: 'STARTTLS (meist Port 587)', ssl: 'SSL/TLS (meist Port 465)' } as const;
 const STATUS_LABEL: Record<string, string> = { pending: 'wartet auf Zustellung', sent: 'zugestellt', failed: 'fehlgeschlagen' };
 
@@ -80,6 +87,8 @@ function fromChannel(channel: NotificationChannel): ChannelForm {
     priority: String(c.priority ?? 3),
     url: c.url ?? '',
     chatId: c.chat_id ?? '',
+    service: c.service ?? 'persistent_notification.create',
+    contact: c.contact ?? '',
   };
 }
 
@@ -98,6 +107,15 @@ function bodyOf(form: ChannelForm): Record<string, unknown> {
       body.password = null;
     } else if (form.password !== '') {
       body.password = form.password;
+    }
+  } else if (['discord', 'slack', 'pushover', 'homeassistant', 'browser'].includes(form.type)) {
+    if (form.type === 'homeassistant') { body.server = form.server.trim(); body.service = form.service.trim(); }
+    if (form.type === 'browser') body.contact = form.contact.trim();
+    if (form.type === 'pushover') body.priority = /^-?\d+$/.test(form.priority) ? Number.parseInt(form.priority, 10) : form.priority;
+    if (form.type !== 'browser') {
+      if (form.clearSecret) body.token = null;
+      else if (form.token !== '') { body.token = form.token; if (form.type === 'pushover') body.user_key = form.userKey.trim(); }
+      else if (form.type === 'pushover' && form.userKey !== '') body.user_key = form.userKey.trim();
     }
   } else if (form.type === 'webhook') {
     body.url = form.url.trim();
@@ -133,6 +151,9 @@ function summary(channel: NotificationChannel): string {
       return (c.host ?? '') + ':' + String(c.port ?? '') + ' · ' + t('an {n} Empfänger', { n: (c.to ?? []).length });
     case 'webhook':
       return c.url ?? '';
+    case 'browser': return t('Browser-Geräte');
+    case 'homeassistant': return (c.server ?? '') + ' · ' + (c.service ?? '');
+    case 'discord': case 'slack': case 'pushover': return TYPE_LABEL[channel.type];
     case 'telegram':
       return 'Chat ' + (c.chat_id ?? '');
     default:
@@ -304,11 +325,12 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
         <div className="grid-2">
           <FormField label={t('Art')} error={errors.type} hint={editing !== null ? t('Die Art eines Kanals lässt sich nicht ändern.') : undefined}>
             {(aria) => (
-              <select {...aria} className="input" name="channel-type" value={form.type} disabled={editing !== null} onChange={(e) => set('type', e.target.value as ChannelForm['type'])}>
+              <select {...aria} className="input" name="channel-type" value={form.type} disabled={editing !== null} onChange={(e) => { set('type', e.target.value as ChannelKind); set('token', ''); set('userKey', ''); set('priority', e.target.value === 'pushover' ? '0' : '3'); set('server', e.target.value === 'homeassistant' ? '' : 'https://ntfy.sh'); }}>
                 <option value="email">{TYPE_LABEL.email}</option>
                 <option value="ntfy">{TYPE_LABEL.ntfy}</option>
                 <option value="webhook">{TYPE_LABEL.webhook}</option>
                 <option value="telegram">{TYPE_LABEL.telegram}</option>
+                {(["discord", "slack", "pushover", "homeassistant", "browser"] as ChannelKind[]).map(type => <option key={type} value={type}>{TYPE_LABEL[type]}</option>)}
               </select>
             )}
           </FormField>
@@ -364,6 +386,31 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
               {(aria) => <textarea {...aria} className="input" name="smtp-to" rows={3} value={form.to} onChange={(e) => set('to', e.target.value)} />}
             </FormField>
           </>
+        ) : ['discord', 'slack', 'pushover', 'homeassistant', 'browser'].includes(form.type) ? (
+          <>
+            {form.type === 'browser' ? <>
+              <FormField label={t('Kontaktadresse')} error={errors.contact} hint={t('E-Mail-Adresse für die Registrierung beim Browser-Push-Dienst.')}>
+                {aria => <input {...aria} className="input" type="email" value={form.contact} onChange={e => set('contact', e.target.value)} />}
+              </FormField>
+              {editing ? <BrowserPushDevices channelId={editing.id} csrf={csrf} /> : <p className="hint">{t('Kanal zuerst speichern, dann bearbeiten und deinen Browser verbinden.')}</p>}
+            </> : <>
+              {form.type === 'homeassistant' && <>
+                <FormField label={t('Home-Assistant-Adresse')} error={errors.server}>{aria => <input {...aria} className="input" placeholder="http://homeassistant:8123" value={form.server} onChange={e => set('server', e.target.value)} />}</FormField>
+                <FormField label={t('Zielaktion')} error={errors.service} hint={t('persistent_notification.create für das Dashboard oder notify.mobile_app_name für Handy-Push.')}>
+                  {aria => <input {...aria} className="input" value={form.service} onChange={e => set('service', e.target.value)} />}
+                </FormField>
+              </>}
+              <FormField label={t(form.type === 'discord' || form.type === 'slack' ? 'Webhook-Adresse' : form.type === 'pushover' ? 'Pushover App-Token' : 'Home Assistant Long-Lived Access Token')} error={errors.token} hint={t('Zugangsdaten werden verschlüsselt gespeichert. Beim Bearbeiten leer lassen, um sie zu behalten.')}>
+                {aria => <input {...aria} className="input" type="password" autoComplete="new-password" disabled={form.clearSecret} value={form.token} onChange={e => set('token', e.target.value)} />}
+              </FormField>
+              {form.type === 'pushover' && <>
+                <FormField label={t('Pushover User/Group-Key')} error={errors.user_key} hint={t('Beim Ändern beide Pushover-Schlüssel neu eingeben.')}>
+                  {aria => <input {...aria} className="input" type="password" autoComplete="new-password" disabled={form.clearSecret} value={form.userKey} onChange={e => set('userKey', e.target.value)} />}
+                </FormField>
+                <FormField label={t('Priorität')} error={errors.priority}>{aria => <select {...aria} className="input" value={form.priority} onChange={e => set('priority', e.target.value)}><option value="-1">{t('Niedrig')}</option><option value="0">{t('Normal')}</option><option value="1">{t('Hoch')}</option></select>}</FormField>
+              </>}
+            </>}
+          </>
         ) : form.type === 'webhook' ? (
           <>
             <FormField label={t('Adresse (URL)')} error={errors.url} hint={t('Meridian sendet einen JSON-Körper per POST (Ereignis, Job, Status, Zeit, Hinweis, Link, Text). Parameter in der Adresse sind nicht erlaubt; Zugangsdaten gehören ins Token-Feld.')}>
@@ -402,7 +449,7 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
             </div>
           </>
         )}
-        {stored && (
+        {stored && form.type !== 'browser' && (
           <label className="check">
             <input type="checkbox" checked={form.clearSecret} onChange={(e) => set('clearSecret', e.target.checked)} />
             <span>{isEmail ? t('Gespeichertes Passwort entfernen') : t('Gespeichertes Token entfernen')}</span>
@@ -414,7 +461,7 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
         </label>
         <div className="row">
           <button type="submit" className="btn btn--solid" disabled={busy}>
-            {editing === null ? 'Kanal anlegen' : t('Speichern')}
+            {editing === null ? t('Kanal anlegen') : t('Speichern')}
           </button>
           {editing !== null && (
             <button type="button" className="btn btn--ghost" onClick={reset}>

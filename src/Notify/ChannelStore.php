@@ -95,6 +95,11 @@ final class ChannelStore
                 throw new InvalidChannel('name', 'Höchstens ' . self::MAX_CHANNELS . ' Kanäle. Nicht benötigte Kanäle zuerst löschen.');
             }
             $this->assertNameFree($draft->name, null);
+            if ($draft->type === ChannelType::Browser) {
+                $keys = \Minishlink\WebPush\VAPID::createVapidKeys();
+                if (!is_string($keys['publicKey'] ?? null) || !is_string($keys['privateKey'] ?? null)) { throw new \RuntimeException('Browser-Push-Schlüssel konnten nicht erzeugt werden.'); }
+                $draft = new ChannelDraft($draft->name, $draft->type, $draft->config + ['public_key' => $keys['publicKey']], $keys['privateKey'], $draft->isEnabled);
+            }
             $now = Timestamp::format($this->clock->now());
             $this->db->execute(
                 'INSERT INTO notification_channels (name, type, config_json, secret_enc, is_enabled, created_at, updated_at, language_user_id)
@@ -127,6 +132,9 @@ final class ChannelStore
                 return null;
             }
             $this->assertNameFree($draft->name, $id);
+            if ($draft->type === ChannelType::Browser) {
+                $draft = new ChannelDraft($draft->name, $draft->type, $draft->config + ['public_key' => $existing->config['public_key'] ?? ''], null, $draft->isEnabled);
+            }
             $this->db->execute(
                 'UPDATE notification_channels SET name = :name, config_json = :config, language_user_id = :user, is_enabled = :enabled, updated_at = :now,
                         secret_enc = CASE WHEN :change = 0 THEN secret_enc WHEN :secret IS NULL THEN NULL ELSE :secret END

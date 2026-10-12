@@ -14,6 +14,28 @@ Bei einem öffentlichen GitHub-Repository bleiben die von GitHubs Bedingungen er
 
 E-Mail-Empfänger lassen sich im SMTP-Kanal, pro Kategorie und pro Job einstellen. Eigene Job-Empfänger ersetzen die Kategorie-Vorgabe; ohne Kategorie-Empfänger gelten die Empfänger des Kanals. Leer bedeutet erben. Die Auswahl gilt für alle gewählten E-Mail-Kanäle. Überwachungen bieten ebenfalls eine Kanalauswahl und übernehmen die Empfänger ihrer Kategorie.
 
+Bei Statusseiten lässt sich die Standardsprache beim Anlegen und Bearbeiten auf Deutsch oder Englisch setzen. Neue Seiten übernehmen zunächst deine UI-Sprache. Besucher können auf der öffentlichen Seite über DE/EN wechseln; dieser Wechsel verändert die gespeicherte Standardsprache nicht. Eigene Titel und Anzeigenamen werden nicht übersetzt.
+
+## Benachrichtigungskanäle
+
+Unter **Einstellungen → Benachrichtigungen** einen Kanal anlegen und anschließend bei den gewünschten Jobs oder Überwachungen auswählen. Die Sprache des Kanals folgt standardmäßig deiner gespeicherten UI-Sprache; Deutsch und Englisch lassen sich auch fest einstellen.
+
+| Kanal | Einrichtung |
+|---|---|
+| E-Mail (SMTP) | Server, Port, Absender, Empfänger und gegebenenfalls Anmeldedaten eintragen. |
+| ntfy | Server und Thema eintragen; Browser und Mobilgeräte können das Thema in ntfy abonnieren. |
+| Telegram | Bot-Token und Chat-ID eintragen. |
+| Webhook | Eigene Zieladresse; Meridian sendet ein JSON-Ereignis. |
+| Discord | Die vollständige HTTPS-Webhook-Adresse des Discord-Kanals im geschützten Feld eintragen. |
+| Slack | Die vollständige Slack-Incoming-Webhook-Adresse im geschützten Feld eintragen. |
+| Pushover | App-Token und User/Group-Key eintragen. Beim Ändern beide Schlüssel erneut eingeben; leer lassen behält die gespeicherten Werte. Prioritäten niedrig, normal und hoch sind unterstützt. |
+| Home Assistant | Basisadresse, Long-Lived Access Token und Zielaktion eintragen. `persistent_notification.create` erzeugt Dashboard-Meldungen; `notify.mobile_app_name` sendet über die Companion-App. Der HTTP-Worker muss Home Assistant erreichen können; HTTPS-Zertifikate werden geprüft. |
+| Browser (Chrome / Firefox) | Kontakt-E-Mail eintragen und den Kanal speichern. Danach **Bearbeiten → Diesen Browser verbinden**, einen Gerätenamen vergeben und die Benachrichtigungen im Browser erlauben. |
+
+Direktes Browser-Push benötigt HTTPS und das Recht zum Verwalten der Einstellungen. Jeder Browser bzw. jedes Gerät muss einzeln verbunden werden. Geräte werden dem angemeldeten Konto zugeordnet; nur die eigenen Geräte sind in der Liste sichtbar. Bis zu zehn Geräte pro Kanal sind möglich. Auf Desktop muss Chrome bzw. Firefox weiter laufen, der Meridian-Tab darf geschlossen sein. Betriebssystem- oder Browser-Einstellungen können Benachrichtigungen blockieren. Abgelaufene Push-Abonnements entfernt Meridian beim Versand automatisch. Die Browser-Geräte und deren Schlüssel bleiben bei Updates zusammen mit dem Hauptschlüssel erhalten.
+
+Zugangsdaten werden verschlüsselt gespeichert und beim Bearbeiten nicht wieder angezeigt. Bei Discord und Slack ist die Webhook-Adresse selbst ein Zugangsschlüssel. Nach der Einrichtung am Kanal **Testnachricht** auslösen und die letzte Zustellung prüfen. E-Mail-Empfänger pro Kategorie bzw. Job betreffen nur SMTP; die anderen Kanäle verwenden ihre jeweils konfigurierten Ziele oder verbundenen Geräte.
+
 ## Betrieb mit Docker
 
 Im Job unter „Benachrichtigungen“ lässt sich eine Laufzeitwarnung aktivieren. Meridian vergleicht abgeschlossene erfolgreiche Läufe mit dem Median der letzten 20 erfolgreichen Läufe, sobald mindestens fünf Vergleichswerte vorliegen. 200 Prozent bedeutet doppelte Dauer; einstellbar sind 110 bis 1000 Prozent. Testläufe zählen nicht, und jede Warnung wird einmal pro Lauf eingereiht.
@@ -213,13 +235,13 @@ Die Weboberfläche (React + Vite) liegt unter `frontend/` und wird vom Server un
 
 ## Betrieb auf Linux mit systemd
 
-Voraussetzungen: ein Linux-Host mit systemd, PHP 8.3 oder neuer für die CLI (mit `pdo_sqlite`, `sodium`, `curl`, `pcntl` und `posix`), Composer, rsync und FrankenPHP unter `/usr/local/bin/frankenphp`. Zum Bauen der Oberfläche wird Node.js 22 oder neuer mit npm benötigt. Der Host-Agent verwendet `setsid` aus `util-linux`; für Ping-Prüfungen wird `iputils-ping` benötigt.
+Voraussetzungen: ein Linux-Host mit systemd, PHP 8.3 oder neuer für die CLI (mit `pdo_sqlite`, `sodium`, `curl`, `mbstring`, `openssl`, `pcntl` und `posix`; für schnelle Browser-Push-Verschlüsselung außerdem `gmp`), Composer, rsync und FrankenPHP unter `/usr/local/bin/frankenphp`. Zum Bauen der Oberfläche wird Node.js 22 oder neuer mit npm benötigt. Der Host-Agent verwendet `setsid` aus `util-linux`; für Ping-Prüfungen wird `iputils-ping` benötigt.
 
 Unter Debian/Ubuntu die Pakete installieren (die PHP-Version der Distribution muss mindestens 8.3 sein):
 
 ```bash
 sudo apt update
-sudo apt install php-cli php-curl php-sqlite3 php-mbstring php-xml \
+sudo apt install php-cli php-curl php-mbstring php-gmp php-sqlite3 php-xml \
   composer git curl ca-certificates rsync sudo util-linux iputils-ping nodejs npm
 php --version
 node --version

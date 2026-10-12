@@ -12,10 +12,10 @@ WORKDIR /app
 COPY composer.json composer.lock* ./
 # Die PHP-Extensions bringt das Laufzeit-Image mit; hier nur die Pakete laden.
 RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader \
-    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium --ignore-platform-req=ext-curl
+    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium --ignore-platform-req=ext-curl --ignore-platform-req=ext-mbstring
 COPY src/ src/
 RUN composer dump-autoload --no-dev --classmap-authoritative \
-    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium --ignore-platform-req=ext-curl
+    --ignore-platform-req=ext-pdo_sqlite --ignore-platform-req=ext-sodium --ignore-platform-req=ext-curl --ignore-platform-req=ext-mbstring
 
 # --- Oberfläche (React + Vite) --------------------------------------------
 FROM node:22-alpine AS ui
@@ -29,7 +29,7 @@ RUN npm run build
 FROM dunglas/frankenphp:1-php8.4-alpine
 
 RUN apk add --no-cache iputils \
- && install-php-extensions pdo_sqlite sodium pcntl opcache \
+ && install-php-extensions pdo_sqlite sodium pcntl opcache mbstring gmp \
  && addgroup -S -g 1000 meridian \
  && adduser -S -u 1000 -G meridian -h /var/lib/meridian meridian \
  && mkdir -p /var/lib/meridian /etc/meridian /config/caddy /data/caddy \

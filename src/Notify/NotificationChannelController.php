@@ -214,6 +214,7 @@ final class NotificationChannelController
         $config = [];
         /** @var mixed $value */
         foreach ($channel->config as $key => $value) {
+            if ($key === 'public_key') { continue; }
             if (is_array($value)) {
                 /** @var list<string> $strings */
                 $strings = array_values($value);

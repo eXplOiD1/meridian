@@ -20,13 +20,22 @@ final class StatusPageRenderer
         'paused' => ['Pausiert', 'paused'],
         'unknown' => ['Noch keine Daten', 'unknown'],
     ];
+    private const STATES_EN = [
+        'ok' => ['Operational', 'ok'],
+        'down' => ['Disrupted', 'down'],
+        'paused' => ['Paused', 'paused'],
+        'unknown' => ['No data yet', 'unknown'],
+    ];
 
     /**
      * @param list<array{label: string, state: string, since: string|null}> $items
      * @param \Closure(string): string                                         $mask   SecretMasker::mask
      */
-    public function render(string $title, array $items, \DateTimeZone $zone, \DateTimeImmutable $now, \Closure $mask): string
+    public function render(string $title, array $items, \DateTimeZone $zone, \DateTimeImmutable $now, \Closure $mask, string $language = 'de'): string
     {
+        $language = $language === 'en' ? 'en' : 'de';
+        $english = $language === 'en';
+        $states = $english ? self::STATES_EN : self::STATES;
         $down = 0;
         $unknown = 0;
         foreach ($items as $item) {
@@ -34,26 +43,37 @@ final class StatusPageRenderer
             $unknown += $item['state'] === 'unknown' ? 1 : 0;
         }
         [$bannerClass, $banner] = match (true) {
-            $items === [] => ['unknown', 'Diese Seite zeigt noch nichts an.'],
-            $down > 0 => ['down', $down === 1 ? 'Es gibt eine Störung.' : 'Es gibt ' . $down . ' Störungen.'],
-            $unknown === count($items) => ['unknown', 'Noch keine Daten.'],
-            default => ['ok', 'Alles läuft.'],
+            $items === [] => ['unknown', $english ? 'Nothing to show yet.' : 'Diese Seite zeigt noch nichts an.'],
+            $down > 0 => ['down', $english
+                ? ($down === 1 ? 'There is one disruption.' : 'There are ' . $down . ' disruptions.')
+                : ($down === 1 ? 'Es gibt eine Störung.' : 'Es gibt ' . $down . ' Störungen.')],
+            $unknown === count($items) => ['unknown', $english ? 'No data yet.' : 'Noch keine Daten.'],
+            default => ['ok', $english ? 'All systems operational.' : 'Alles läuft.'],
         };
 
         $rows = '';
         foreach ($items as $item) {
-            [$text, $class] = self::STATES[$item['state']] ?? self::STATES['unknown'];
-            $since = $item['since'] === null ? '' : '<span class="since">' . self::e(self::time($item['since'], $zone)) . '</span>';
+            [$text, $class] = $states[$item['state']] ?? $states['unknown'];
+            $since = $item['since'] === null ? '' : '<span class="since">' . self::e(self::time($item['since'], $zone, $language)) . '</span>';
             $rows .= '<li class="item item--' . $class . '"><span class="dot" aria-hidden="true"></span><span class="label">' . self::e($mask($item['label']))
                 . '</span><span class="state">' . $text . '</span>' . $since . "</li>\n";
         }
 
-        return "<!doctype html>\n<html lang=\"de\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+        $switch = '<nav class="languages" aria-label="' . ($english ? 'Language' : 'Sprache') . '">';
+        foreach (['de' => 'Deutsch', 'en' => 'English'] as $code => $name) {
+            $switch .= '<a href="?lang=' . $code . '" lang="' . $code . '" hreflang="' . $code . '" aria-label="' . $name . '"'
+                . ($language === $code ? ' aria-current="page"' : '') . '>' . strtoupper($code) . '</a>';
+        }
+        $switch .= '</nav>';
+
+        return "<!doctype html>\n<html lang=\"" . $language . "\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
             . "<meta name=\"robots\" content=\"noindex, nofollow, noarchive\">\n<meta http-equiv=\"refresh\" content=\"60\">\n"
-            . '<title>' . self::e($mask($title)) . " – Status</title>\n<link rel=\"stylesheet\" href=\"/status/status.css\">\n</head>\n<body>\n<main>\n"
-            . '<h1>' . self::e($mask($title)) . "</h1>\n<p class=\"banner banner--" . $bannerClass . '" role="status">' . self::e($banner) . "</p>\n"
+            . '<title>' . self::e($mask($title)) . " – Status</title>\n<link rel=\"stylesheet\" href=\"/status/status.css?v="
+            . substr(hash('sha256', self::stylesheet()), 0, 12) . "\">\n</head>\n<body>\n<main>\n"
+            . '<header><h1>' . self::e($mask($title)) . '</h1>' . $switch . "</header>\n<p class=\"banner banner--" . $bannerClass . '" role="status">' . self::e($banner) . "</p>\n"
             . "<ul class=\"items\">\n" . $rows . "</ul>\n"
-            . '<p class="stamp">Stand: ' . self::e(self::time($now->format('Y-m-d\TH:i:sP'), $zone)) . " · aktualisiert sich selbst</p>\n</main>\n</body>\n</html>\n";
+            . '<p class="stamp">' . ($english ? 'Updated: ' : 'Stand: ') . self::e(self::time($now->format('Y-m-d\TH:i:sP'), $zone, $language))
+            . ($english ? ' · refreshes automatically' : ' · aktualisiert sich selbst') . "</p>\n</main>\n</body>\n</html>\n";
     }
 
     public static function stylesheet(): string
@@ -76,7 +96,12 @@ body {
   font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
 }
 main { max-width: 960px; margin: 0 auto; padding: 56px 24px 48px; }
-h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); font-weight: 600; margin: 0 0 24px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); font-weight: 600; margin: 0; letter-spacing: -.01em; overflow-wrap: anywhere; min-width: 0; }
+.languages { display: inline-flex; flex: none; background: var(--info-bg); border-radius: 999px; overflow: hidden; }
+.languages a { min-width: 44px; min-height: 44px; display: grid; place-items: center; color: var(--dim); font-size: 12px; font-weight: 700; text-decoration: none; }
+.languages a[aria-current='page'] { background: linear-gradient(120deg, var(--accent), var(--end)); color: var(--bg); }
+.languages a:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .banner {
   display: flex; align-items: center; gap: 12px; margin: 0 0 24px; padding: 18px 22px;
   border: 1px solid currentColor; border-radius: 14px; font-weight: 600;
@@ -124,10 +149,10 @@ CSS;
         return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
-    private static function time(string $iso, \DateTimeZone $zone): string
+    private static function time(string $iso, \DateTimeZone $zone, string $language): string
     {
         try {
-            return (new \DateTimeImmutable($iso))->setTimezone($zone)->format('d.m.Y H:i') . ' (' . $zone->getName() . ')';
+            return (new \DateTimeImmutable($iso))->setTimezone($zone)->format($language === 'en' ? 'Y-m-d H:i' : 'd.m.Y H:i') . ' (' . $zone->getName() . ')';
         } catch (\Exception) {
             return '';
         }
