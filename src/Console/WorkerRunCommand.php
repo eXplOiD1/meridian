@@ -46,12 +46,14 @@ final class WorkerRunCommand extends Command
      * @param string                    $script      Pfad zu bin/meridian
      * @param (\Closure(JobType, bool): list<string>)|null $maintenance im Kind beim Start (true) und alle
      *                                   {@see self::MAINTENANCE_SECONDS} s; liefert feste Texte ohne Geheimnisse
+     * @param (\Closure(JobType): list<string>)|null $delivery schnelle Ausgangsprüfung je Worker-Durchgang
      */
     public function __construct(
         private readonly \Closure $childWorker,
         private readonly array $env,
         private readonly string $script,
         private readonly ?\Closure $maintenance = null,
+        private readonly ?\Closure $delivery = null,
     ) {
         parent::__construct();
     }
@@ -147,6 +149,11 @@ final class WorkerRunCommand extends Command
                         $lastMaintenance = microtime(true);
                     }
                     // Ein Lauf je Durchgang; --once (Tests) arbeitet alles Fällige einmal ab.
+                    if ($this->delivery !== null && !$this->stop) {
+                        foreach (($this->delivery)($type) as $line) {
+                            $output->writeln($line);
+                        }
+                    }
                     $events = $worker->work($stopRequested, $once ? Worker::MAX_RUNS_PER_TICK : 1);
                 } catch (\Throwable $e) {
                     // Die Meldung kann Geheimnisse enthalten: nur die Klasse.

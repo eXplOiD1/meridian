@@ -238,6 +238,12 @@ if (is_dir($config->dataDir)) {
 
             return $maintenance->run($first);
         },
+        static function (JobType $type) use (&$notifier): array {
+            if ($type !== JobType::Http || $notifier === null) { return []; }
+            $result = $notifier->deliver();
+            if ($result['sent'] === 0 && $result['retry'] === 0 && $result['failed'] === 0) { return []; }
+            return ['Benachrichtigungen: ' . $result['sent'] . ' zugestellt, ' . $result['retry'] . ' zur Wiederholung, ' . $result['failed'] . ' endgültig fehlgeschlagen.'];
+        },
     ));
 }
 
