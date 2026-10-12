@@ -21,6 +21,9 @@ jobs:
             dockerfile: docker/Dockerfile
           - image: meridian-sandbox
             dockerfile: docker/Dockerfile.sandbox
+          - image: meridian
+            dockerfile: docker/Dockerfile.updater
+            variant: updater-
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -35,10 +38,10 @@ jobs:
         with:
           images: ghcr.io/exploid1/${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=candidate,enable=${{ github.ref != 'refs/heads/main' }}
-            type=sha,format=long
+            type=raw,value=${{ matrix.variant }}latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ matrix.variant }}main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ matrix.variant }}candidate,enable=${{ github.ref != 'refs/heads/main' }}
+            type=sha,format=long,prefix=${{ matrix.variant }}sha-
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -47,5 +50,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          build-args: |
+            MERIDIAN_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.variant }}

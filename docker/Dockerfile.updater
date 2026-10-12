@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+FROM docker:27-cli
+RUN apk add --no-cache python3
+COPY deploy/updater.py /usr/local/lib/meridian-updater.py
+COPY LICENSE THIRD_PARTY_NOTICES.md /usr/local/share/meridian/
+COPY licenses/ /usr/local/share/meridian/licenses/
+RUN python3 -m py_compile /usr/local/lib/meridian-updater.py
+RUN python3 - <<'PY'
+import importlib.util, json, os, pathlib, tempfile
+spec = importlib.util.spec_from_file_location('meridian_updater', '/usr/local/lib/meridian-updater.py')
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.command = lambda *args, **kwargs: 'a' * 40
+with tempfile.TemporaryDirectory() as temporary:
+    root = pathlib.Path(temporary)
+    (root / 'data').mkdir()
+    os.environ.update(MERIDIAN_UPDATE_MODE='docker', MERIDIAN_UPDATE_DATA=str(root / 'data'), MERIDIAN_UPDATE_PRIVATE=str(root / 'private'), MERIDIAN_UPDATE_UID='0', MERIDIAN_UPDATE_GID='0')
+    updater = module.Updater()
+    updater.publish()
+    queue = root / 'data/updates/request.json'
+    queue.write_text(json.dumps({'action': 'check', 'id': 'b' * 32}))
+    assert updater.request() == 'check' and not queue.exists()
+    queue.write_text(json.dumps({'action': 'shell', 'id': 'b' * 32}))
+    assert updater.request() is None and not queue.exists()
+    target = root / 'private/protected'
+    target.write_text('unchanged')
+    queue.symlink_to(target)
+    try:
+        updater.request()
+        raise AssertionError('symlink must be rejected')
+    except OSError:
+        pass
+    assert target.read_text() == 'unchanged'
+    assert json.loads((root / 'data/updates/status.json').read_text())['mode'] == 'docker'
+    os.close(updater.fd)
+    os.close(updater.lock)
+print('Linux update queue and symlink protection passed.')
+PY
+ENV MERIDIAN_UPDATE_MODE=docker
+CMD ["python3", "/usr/local/lib/meridian-updater.py"]

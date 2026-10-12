@@ -91,6 +91,11 @@ final class Kernel
     public function handle(#[\SensitiveParameter] Request $request): Response
     {
         try {
+            if ($this->maintenance($request)) {
+                $response = JsonReply::error(503, 'Meridian wird aktualisiert. Bitte nach dem Neustart erneut versuchen.');
+                $response->headers->set('Retry-After', '30');
+                return SecurityHeaders::apply($response, !$this->config->isDev() && $request->isSecure());
+            }
             $matcher = new UrlMatcher($this->routes, (new RequestContext())->fromRequest($request));
             $match = $matcher->matchRequest($request);
             // Pfadparameter (z. B. {path}) stehen dem Handler als Attribute der Anfrage zur Verfügung.
@@ -137,5 +142,17 @@ final class Kernel
     private function error(int $status, string $message): JsonResponse
     {
         return JsonReply::error($status, $message);
+    }
+
+    private function maintenance(#[\SensitiveParameter] Request $request): bool
+    {
+        $path = $request->getPathInfo();
+        if ($request->getMethod() === 'GET' && in_array($path, ['/api/admin/updates', '/api/health', '/api/auth/me'], true)) { return false; }
+        if (!str_starts_with($path, '/api/') && !str_starts_with($path, '/ping/')) { return false; }
+        $file = $this->config->dataDir . '/updates/status.json';
+        if (!is_file($file) || is_link($file) || filesize($file) > 8192 || filemtime($file) < time() - 90) { return false; }
+        $content = file_get_contents($file);
+        $data = $content === false ? null : json_decode($content, true);
+        return is_array($data) && (($data['recovery_required'] ?? false) === true || (($data['busy'] ?? false) === true && in_array($data['phase'] ?? '', ['backup', 'installing', 'verifying', 'rollback'], true)));
     }
 }

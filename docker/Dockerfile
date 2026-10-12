@@ -47,6 +47,8 @@ RUN apk add --no-cache iputils \
 
 WORKDIR /app
 COPY --from=vendor /app/vendor ./vendor
+ARG MERIDIAN_REVISION=unknown
+RUN printf '%s\n' "$MERIDIAN_REVISION" > /app/REVISION
 COPY bin/ bin/
 COPY migrations/ migrations/
 COPY public/ public/
