@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { useEffect, useState } from 'react';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';

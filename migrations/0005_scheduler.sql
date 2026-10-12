@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 2: Scheduler-Kern.
 --
 -- runs: Status 'skipped' (übersprungener Termin, z. B. Überlappung), geplanter Zeitpunkt, Versuch,

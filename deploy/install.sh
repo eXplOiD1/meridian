@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 # Meridian auf einem Linux-Server installieren (Debian/Ubuntu, als root).
 # Voraussetzungen: PHP 8.3+ mit pdo_sqlite, sodium, pcntl, curl (Debian/Ubuntu: php-curl, ca-certificates); Composer; rsync; FrankenPHP unter /usr/local/bin.
 set -euo pipefail

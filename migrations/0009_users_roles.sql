@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 4a: Benutzer- und Rollenverwaltung (docs/decisions/0005-benutzer-und-rollen.md, §3.1).
 -- Ergänzt nur: bestehende Benutzer, Zuweisungen, Sitzungen und Kategorien bleiben unverändert.
 

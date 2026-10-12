@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { useCallback, useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
 import { ApiError, PASSWORD_CHANGE_EVENT, request, SESSION_ENDED_EVENT, setCsrfRefresher } from './lib/api';

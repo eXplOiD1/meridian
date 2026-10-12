@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Meridian Grundschema (Phase 1)
 -- Geheimnisse liegen nur verschlüsselt in Spalten mit dem Suffix _enc.
 

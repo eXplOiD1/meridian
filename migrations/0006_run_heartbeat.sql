@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Herzschlag eines laufenden Laufs (UTC). Der Worker schreibt ihn beim Übernehmen und während des Laufs;
 -- hängend ist ein Lauf erst, wenn sein Herzschlag älter als die Sperrdauer ist. Ältere laufende Läufe
 -- übernehmen ihren Startzeitpunkt.

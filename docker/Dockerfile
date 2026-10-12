@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 #
 # Build-Kontext ist das Repository-Root:
 #   docker build -f docker/Dockerfile .
@@ -51,6 +53,8 @@ COPY public/ public/
 COPY src/ src/
 # Die gebaute Oberfläche liegt außerhalb von public/: der Kernel liefert sie aus (mit allen Sicherheits-Headern).
 COPY --from=ui /ui/dist /app/ui
+COPY LICENSE THIRD_PARTY_NOTICES.md /app/
+COPY licenses/ /app/licenses/
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/meridian-entrypoint
 
 ENV MERIDIAN_DATA_DIR=/var/lib/meridian \

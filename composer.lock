@@ -2,9 +2,11 @@
     "_readme": [
         "This file locks the dependencies of your project to a known state",
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
-        "This file is @generated automatically"
+        "This file is @generated automatically",
+        "Copyright (c) 2026 Alexander von Pidoll. All rights reserved.",
+        "SPDX-License-Identifier: LicenseRef-Meridian-Proprietary"
     ],
-    "content-hash": "1a30db8f0b26365a960600f7e71fbefb",
+    "content-hash": "09c4961656c243af53c4192b51213268",
     "packages": [
         {
             "name": "dragonmantank/cron-expression",
@@ -1057,7 +1059,7 @@
     "packages-dev": [],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
@@ -1066,6 +1068,6 @@
         "ext-pdo_sqlite": "*",
         "ext-sodium": "*"
     },
-    "platform-dev": {},
+    "platform-dev": [],
     "plugin-api-version": "2.6.0"
 }

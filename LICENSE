@@ -1,0 +1,80 @@
+Meridian Proprietary License, Version 1.0
+
+Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+
+1. Scope and ownership
+
+This license applies to the original Meridian software, source code,
+documentation and project assets to the extent that Alexander von Pidoll owns
+the corresponding rights. Meridian is proprietary software, not open-source
+software. No ownership, trademark rights or rights not expressly stated here
+are transferred.
+
+Third-party components, including dependencies, fonts and container base
+images, retain their own copyrights and licenses. This license does not limit
+rights granted by those licenses. See THIRD_PARTY_NOTICES.md and the original
+notices distributed with those components.
+
+2. Limited permission to use
+
+The rights holder grants you a non-exclusive, non-transferable permission to
+download, install and run an unmodified copy of Meridian on systems you own or
+control for your personal use or your organization's internal business use.
+Copies strictly necessary for installation, operation, updates and backups
+are permitted. Internal business use does not authorize offering Meridian
+itself to customers or third parties as a product or service.
+
+3. Restrictions
+
+Unless the rights holder gives prior written permission, you must not:
+
+(a) distribute, publish, share, upload, sublicense, rent, lease or otherwise
+    make Meridian or copies of it available to third parties, whether free of
+    charge or for payment, in source, compiled, container-image or other form;
+(b) sell or resell Meridian, bundle it into a product offered to third parties,
+    or offer access to Meridian as a hosted, managed, SaaS or white-label
+    service for third parties;
+(c) create or publish forks, modified versions or derivative products, or
+    incorporate Meridian code or assets into another product;
+(d) remove or alter copyright, license or ownership notices.
+
+Displaying Meridian's intended public status pages to third parties is
+permitted and is not redistribution of the software. Configuring Meridian
+through its documented settings, Compose configuration and integrations is
+permitted and is not creation of a modified software version.
+
+4. Mandatory rights and hosting platforms
+
+These restrictions apply only to the extent permitted by applicable law.
+Mandatory statutory rights, including any rights concerning necessary backup
+copies, interoperability, observation or correction of errors, are unaffected.
+No restriction here overrides rights that cannot lawfully be excluded.
+
+Where the rights holder publishes Meridian on a hosting platform, permissions
+necessarily granted under that platform's applicable terms remain unaffected.
+In particular, a public GitHub repository permits viewing and forking within
+GitHub under GitHub's terms. This license does not revoke those permissions or
+grant additional permission to redistribute, resell or operate a fork outside
+the limited permissions above. A private repository is required to restrict
+public GitHub forking; a license alone cannot disable that functionality.
+
+Previously granted rights are not retroactively revoked by this license.
+
+5. Warranty and liability
+
+To the extent permitted by applicable law, Meridian is provided without
+contractual warranties of availability, fitness for a particular purpose or
+error-free operation. You are responsible for your deployment, access control,
+backups and the commands and jobs you configure. Nothing in this license
+excludes liability or consumer rights that applicable law does not allow to
+be excluded, including liability for intent, gross negligence or injury to
+life, body or health.
+
+6. Separate agreements
+
+Additional permissions, commercial distribution, managed hosting, modifications
+or support require a separate written agreement with Alexander von Pidoll.
+A separate agreement prevails where it expressly changes these terms.
+
+Contact the rights holder through the official Meridian repository:
+https://github.com/eXplOiD1/meridian

@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 3: HTTP-Jobs (docs/decisions/0003-phase3-http-jobs.md, §3.1).
 -- Zwei neue Rechte, beide lockern Schutzfunktionen: nur für die Rolle Admin
 -- (neue Rechte nie automatisch an Operator/Beobachter). Ergänzt nur Fehlendes.

@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import type { ReactNode } from 'react';
 
 /** Meldungen immer als Text; err/warn werden Screenreadern sofort vorgelesen. */

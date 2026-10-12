@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Gespeicherte Skripte und Links im Editor anzeigen (docs/decisions/0003 Nachtrag N1, 0004 Nachtrag N1).
 -- Neuer Schlüssel jobs.reveal_for_edit (off|on, Standard off ohne Zeile). SQLite ändert kein CHECK -> Tabelle neu
 -- aufbauen, Zeilen übernehmen. Schlüsselliste = alle bisher erlaubten (0007, 0008, 0011) + jobs.reveal_for_edit.

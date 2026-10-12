@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 7 (ADR 0008): Aufbewahrung des Verlaufs. Beendete Läufe, die älter sind als `runs.retention_days`, werden zu Tageswerten
 -- je Job (UTC) zusammengefasst und gelöscht; Ausgabe und Live-Log gehen mit dem Lauf. Neuer Schlüssel runs.retention_days
 -- (SQLite ändert kein CHECK: settings neu aufbauen, alle bisherigen Schlüssel + der neue).

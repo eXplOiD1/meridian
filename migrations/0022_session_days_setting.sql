@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- ADR 0015: einstellbare Sitzungsdauer `auth.session_days` (-1 Standard 2 Std. Leerlauf / 12 Std. gesamt, 0 niemals, 1 bis 365 Tage).
 -- SQLite ändert kein CHECK: settings neu aufbauen, alle bisherigen Schlüssel + der neue.
 

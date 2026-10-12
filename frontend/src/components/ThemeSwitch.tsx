@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { request } from '../lib/api';
 import { t } from '../i18n';
 import { getTheme, setTheme, useTheme } from '../theme';

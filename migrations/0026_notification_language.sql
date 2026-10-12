@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 ALTER TABLE notification_channels ADD COLUMN language_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
 
 UPDATE notification_channels
