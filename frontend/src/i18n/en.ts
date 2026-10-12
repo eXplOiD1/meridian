@@ -1056,4 +1056,13 @@ export const EN: Record<string, string> = {
   "Update erfolgreich installiert.": "Update installed successfully.",
   "Vorgang fehlgeschlagen. Update-Dienst und Sicherungen prüfen; vor einem neuen Versuch erneut nach Updates suchen.": "Operation failed. Check the update service and backups; check for updates again before retrying.",
   "Testnachricht eingereiht.": "Test notification queued.",
+  "Update-Kanal": "Update channel",
+  "Update-Dienst nicht erreichbar. Bei der aktuellen Installation wird er automatisch eingerichtet. Bei Docker die aktuelle Compose-Datei übernehmen und den Stack neu bereitstellen; bei systemd den aktuellen Installer ausführen. Danach die Dienstprotokolle prüfen, falls diese Meldung bestehen bleibt.": "Update service unavailable. Current installations configure it automatically. For Docker, use the current Compose file and redeploy the stack; for systemd, run the current installer. Check the service logs if this message persists.",
+  "Anfrage wird verarbeitet …": "Processing request …",
+  "Bitte warten. Der Status wird automatisch aktualisiert. Bei einem Neustart verbindet sich die Seite erneut.": "Please wait. The status updates automatically. The page reconnects after a restart.",
+  "Main (stabil)": "Main (stable)",
+  "Beta (Vorabversion)": "Beta (preview)",
+  "Updates aus dem gewählten Kanal werden durch einen getrennten Update-Dienst installiert. Vorher wird eine Sicherung erstellt. Während des Neustarts ist Meridian kurz nicht erreichbar.": "Updates from the selected channel are installed by a separate update service. A backup is created first. Meridian is briefly unavailable during the restart.",
+  "Ein Kanalwechsel prüft die verfügbare Version und installiert noch nichts. Beta kann Fehler enthalten. Ein Rückwechsel auf Main kann ältere Software installieren; eine kompatible Datenbank ist dabei erforderlich.": "Changing the channel checks the available version without installing it. Beta may contain bugs. Switching back to Main may install older software and requires a compatible database.",
+  "Für die Kanalwahl zuerst das Updater-Image neu abrufen und den Stack bereitstellen oder den systemd-Installer erneut ausführen.": "To select a channel, first pull the new updater image and redeploy the stack, or run the systemd installer again.",
 };

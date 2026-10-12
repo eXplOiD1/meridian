@@ -20,6 +20,8 @@ final class UpdateController
         $kernel->get('update_status', '/api/admin/updates', $this->status(...));
         $kernel->post('update_check', '/api/admin/updates/check', fn (Request $request): Response => $this->action($request, 'check'));
         $kernel->post('update_install', '/api/admin/updates/install', fn (Request $request): Response => $this->action($request, 'install'));
+        $kernel->post('update_channel_main', '/api/admin/updates/channel/main', fn (Request $request): Response => $this->action($request, 'channel_main'));
+        $kernel->post('update_channel_beta', '/api/admin/updates/channel/beta', fn (Request $request): Response => $this->action($request, 'channel_beta'));
     }
 
     private function guard(#[\SensitiveParameter] Request $request, bool $mutating): int|Response
@@ -59,6 +61,7 @@ final class UpdateController
         $status = $this->read();
         if (($status['configured'] ?? false) !== true) { return JsonReply::error(409, 'Der Update-Dienst ist nicht eingerichtet oder nicht erreichbar.'); }
         if (($status['busy'] ?? false) === true) { return JsonReply::error(409, 'Ein Update-Vorgang läuft bereits.'); }
+        if (str_starts_with($action, 'channel_') && !in_array($status['channel'] ?? null, ['main', 'beta'], true)) { return JsonReply::error(409, 'Zuerst den Update-Dienst auf die aktuelle Version bringen.'); }
         if ($action === 'install' && (($status['available'] ?? false) !== true || ($status['phase'] ?? '') === 'failed')) { return JsonReply::error(409, 'Zuerst nach einem verfügbaren Update suchen.'); }
         $id = bin2hex(random_bytes(16));
         $temp = $this->directory . '/request-' . $id . '.tmp';
@@ -67,7 +70,7 @@ final class UpdateController
         try {
             if (!@link($temp, $this->directory . '/request.json')) { return JsonReply::error(409, 'Eine Update-Anfrage wartet bereits.'); }
         } finally { unlink($temp); }
-        $this->audit->record($user, 'update.' . $action . '_requested', 'main');
+        $this->audit->record($user, 'update.' . $action . '_requested', str_starts_with($action, 'channel_') ? substr($action, 8) : (in_array($status['channel'] ?? null, ['main', 'beta'], true) ? $status['channel'] : 'main'));
         return JsonReply::json(['queued' => true], 202);
     }
 }
