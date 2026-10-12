@@ -287,8 +287,8 @@ code { font-family: var(--schrift-mono); font-size: 0.92em; background: var(--so
 }
 .login__headline { font-weight: 500; font-size: clamp(34px, 4.4vw, 56px); line-height: 1.08; letter-spacing: -0.03em; margin: 0; }
 .login__headline span { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.login__main { display: flex; align-items: center; justify-content: center; padding: 32px clamp(16px, 4vw, 56px); position: relative; }
-.login__tools { position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; align-items: center; }
+.login__main { display: flex; flex-direction: column; gap: 24px; align-items: center; justify-content: center; padding: 32px clamp(16px, 4vw, 56px); }
+.login__tools { width: min(440px, 100%); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; align-items: center; }
 .login__card { width: min(440px, 100%); display: flex; flex-direction: column; gap: 22px; }
 .login__card h1 { font-size: 32px; font-weight: 500; }
 .login .alert p { margin: 6px 0 0; }
@@ -462,6 +462,16 @@ details.fold[open] { padding-bottom: 14px; }
   position: sticky; bottom: 0; z-index: 5; background: var(--panel); border-radius: 22px 22px 0 0; box-shadow: 0 -10px 24px rgb(0 0 0 / 14%);
   padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); margin-top: 4px; flex-wrap: wrap;
 }
+@media (max-width: 767.98px) {
+  .etabs { background: transparent; border-radius: 14px; padding: 0; gap: 8px; }
+  .etab { background: var(--soft); }
+  .editor__actions--sticky {
+    position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 16px; border-radius: 18px; box-shadow: none;
+  }
+  .editor__actions--sticky > .btn { width: 100%; min-width: 0; white-space: normal; text-align: center; }
+  .editor__actions--sticky > .confirm { grid-column: 1 / -1; }
+}
 .sb { display: grid; gap: 14px; }
 .sb__box { border-radius: 18px; background: var(--panel-2); padding: 14px 16px; display: grid; gap: 14px; }
 .sb__modes { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -551,7 +561,13 @@ details.fold[open] { padding-bottom: 14px; }
 .dialog-backdrop { position: fixed; inset: 0; z-index: 80; background: rgb(5 5 15 / 62%); display: grid; place-items: center; padding: 16px; }
 .dialog { background: var(--panel); border-radius: 26px; padding: 26px; width: min(520px, 100%); max-height: 90dvh; overflow: auto; box-shadow: var(--shadow-pop); display: grid; gap: 16px; }
 
-@media (max-width: 767.98px) { .nav__brand-desktop { display: none; } .userbox__actions { flex-direction: column; align-items: stretch; } .userbox__logout { margin-left: 0; } }
+@media (max-width: 767.98px) {
+  .nav__brand-desktop { display: none; }
+  .userbox__actions { flex-direction: column; align-items: stretch; }
+  .userbox__actions .langswitch, .userbox__actions .themeswitch { width: 100%; }
+  .userbox__actions .langswitch__btn, .userbox__actions .themeswitch__btn { flex: 1; }
+  .userbox__logout { margin-left: 0; width: 100%; }
+}
 @media (max-width: 767.98px) { .mobilebar__tools .langswitch { display: inline-flex; } }
 @media (min-width: 768px) { .nav__item { min-height: 40px; } .nav__label { margin: 10px 14px 4px; } .sidebar { gap: 12px; padding-top: 20px; } }
 @media (max-width: 767.98px) { .takt__grid { grid-template-columns: minmax(0, 1fr); row-gap: 2px; } .takt__row { margin-bottom: 8px; } .takt__grid > :empty { display: none; } }
