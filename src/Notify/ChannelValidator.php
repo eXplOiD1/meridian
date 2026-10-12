@@ -32,12 +32,12 @@ final class ChannelValidator
         $type = $fixedType;
         if (!array_key_exists('type', $input)) {
             if ($type === null) {
-                throw new InvalidChannel('type', 'Art des Kanals fehlt: „email“ oder „ntfy“.');
+                throw new InvalidChannel('type', 'Art des Kanals fehlt.');
             }
         } else {
             $given = is_string($input['type']) ? ChannelType::tryFrom($input['type']) : null;
             if ($given === null) {
-                throw new InvalidChannel('type', 'Art des Kanals: „email“ oder „ntfy“.');
+                throw new InvalidChannel('type', 'Art des Kanals ungültig.');
             }
             if ($type !== null && $given !== $type) {
                 throw new InvalidChannel('type', 'Die Art eines Kanals lässt sich nicht ändern.');
@@ -49,6 +49,10 @@ final class ChannelValidator
             ChannelType::Ntfy => self::NTFY_KEYS,
             ChannelType::Webhook => self::WEBHOOK_KEYS,
             ChannelType::Telegram => self::TELEGRAM_KEYS,
+            ChannelType::Discord, ChannelType::Slack => ['name', 'type', 'enabled', 'language', 'token'],
+            ChannelType::Pushover => ['name', 'type', 'enabled', 'language', 'token', 'user_key', 'priority'],
+            ChannelType::HomeAssistant => ['name', 'type', 'enabled', 'language', 'token', 'server', 'service'],
+            ChannelType::Browser => ['name', 'type', 'enabled', 'language', 'contact'],
         };
         foreach (array_keys($input) as $key) {
             if (!in_array((string) $key, $allowed, true)) {
@@ -72,13 +76,33 @@ final class ChannelValidator
             ChannelType::Ntfy => self::ntfy($input),
             ChannelType::Webhook => self::webhook($input),
             ChannelType::Telegram => self::telegram($input),
+            ChannelType::Discord, ChannelType::Slack => [],
+            ChannelType::Pushover => self::pushover($input),
+            ChannelType::HomeAssistant => self::homeAssistant($input),
+            ChannelType::Browser => self::browser($input),
         };
 
+        if ($type === ChannelType::Pushover && $secret !== null && $secret !== '') {
+            $user = $input['user_key'] ?? null;
+            if (!is_string($user) || preg_match('/^[A-Za-z0-9]{30}$/D', $user) !== 1 || preg_match('/^[A-Za-z0-9]{30}$/D', $secret) !== 1) {
+                throw new InvalidChannel('user_key', 'Pushover: App-Token und User/Group-Key müssen je 30 Buchstaben oder Ziffern haben.');
+            }
+            $secret = json_encode(['token' => $secret, 'user' => $user], JSON_THROW_ON_ERROR);
+        } elseif ($type === ChannelType::Pushover && array_key_exists('user_key', $input)) {
+            throw new InvalidChannel('user_key', 'Zum Ändern beide Pushover-Schlüssel neu eingeben.');
+        }
+        if (($type === ChannelType::Discord || $type === ChannelType::Slack) && $secret !== null && $secret !== '') {
+            self::integrationWebhook($type, $secret);
+        }
         $language = $input['language'] ?? 'ui';
         if (!is_string($language) || !in_array($language, ['ui', 'de', 'en'], true)) {
             throw new InvalidChannel('language', 'Sprache: „ui“, „de“ oder „en“.');
         }
         $config['language'] = $language;
+
+        if ($fixedType === null && in_array($type, [ChannelType::Discord, ChannelType::Slack, ChannelType::Pushover, ChannelType::HomeAssistant], true) && ($secret === null || $secret === '')) {
+            throw new InvalidChannel('token', 'Zugangsdaten für diesen Kanal sind erforderlich.');
+        }
 
         return new ChannelDraft($name, $type, $config, $secret, $enabled);
     }
@@ -227,6 +251,58 @@ final class ChannelValidator
         }
 
         return $value;
+    }
+
+    public static function integrationWebhook(ChannelType $type, string $url): string
+    {
+        $pattern = $type === ChannelType::Discord
+            ? '#^https://(?:discord\.com|discordapp\.com)/api/webhooks/[0-9]{5,30}/[A-Za-z0-9_-]{20,200}$#D'
+            : '#^https://hooks\.slack\.com/services/[A-Za-z0-9]+/[A-Za-z0-9]+/[A-Za-z0-9]+$#D';
+        if (preg_match($pattern, $url) !== 1) {
+            throw new InvalidChannel('token', 'Gültige HTTPS-Webhook-Adresse des Anbieters ohne zusätzliche Parameter eingeben.');
+        }
+        return $url;
+    }
+
+    /**
+     * @param array<mixed> $input
+     * @return array<string, mixed>
+     */
+    private static function pushover(array $input): array
+    {
+        $priority = $input['priority'] ?? 0;
+        if (!is_int($priority) || $priority < -1 || $priority > 1) {
+            throw new InvalidChannel('priority', 'Priorität: -1, 0 oder 1.');
+        }
+        return ['priority' => $priority];
+    }
+
+    /**
+     * @param array<mixed> $input
+     * @return array<string, mixed>
+     */
+    private static function homeAssistant(array $input): array
+    {
+        try {
+            $server = self::webhook(['url' => $input['server'] ?? null])['url'];
+        } catch (InvalidChannel $error) {
+            throw new InvalidChannel('server', $error->getMessage());
+        }
+        $service = $input['service'] ?? 'persistent_notification.create';
+        if (!is_string($service) || preg_match('/^(persistent_notification\.create|notify\.[a-z0-9_]{1,80})$/D', $service) !== 1) {
+            throw new InvalidChannel('service', 'Aktion: persistent_notification.create oder notify.name.');
+        }
+        return ['server' => $server, 'service' => $service];
+    }
+
+    /**
+     * @param array<mixed> $input
+     * @return array<string, mixed>
+     */
+    private static function browser(array $input): array
+    {
+        $contact = self::address($input['contact'] ?? null, 'contact');
+        return ['contact' => $contact];
     }
 
     private static function host(mixed $value, string $field): string

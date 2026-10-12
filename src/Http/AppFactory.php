@@ -138,6 +138,7 @@ final class AppFactory
         (new StatsController($sessionAuth, $users, $access, new \Meridian\Job\StatsRepository($db), $settings, $clock, $masker))->register($kernel);
         // Benachrichtigungskanäle (ADR 0007): Verwaltung nur mit settings.manage, Versand im Zusteller.
         (new \Meridian\Notify\NotificationChannelController($sessionAuth, $csrf, $users, $access, $audit, new \Meridian\Notify\ChannelStore($db, $box, $clock), $db, $clock, $masker))->register($kernel);
+        (new \Meridian\Notify\BrowserPushController($sessionAuth, $csrf, $users, $access, new \Meridian\Notify\ChannelStore($db, $box, $clock), $db, $box, $clock, $audit))->register($kernel);
         // Gespeicherte Werte zum Bearbeiten (nur bei jobs.reveal_for_edit = on, ADR 0003 N1 / 0004 N1).
         (new JobSourceController($sessionAuth, $csrf, $users, $access, $jobs, $settings, new JobSourceReader($db, $box), $audit, $db, $clock))->register($kernel);
         // Live-Log per Server-Sent Events (ADR 0004 §6.1), begrenzt über live_streams.

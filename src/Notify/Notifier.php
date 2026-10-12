@@ -530,6 +530,7 @@ final class Notifier
             Row::int($row, 'failures'),
             $this->link($row),
             $this->channels->languageFor($channel),
+            Row::int($row, 'id'),
         );
         try {
             $secret = $this->channels->secret($channel->id);

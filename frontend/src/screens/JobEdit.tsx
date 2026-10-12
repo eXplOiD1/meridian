@@ -1193,7 +1193,7 @@ export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile;
                     onChange={(e) => set('notifyIds', e.target.checked ? [...form.notifyIds, channel.id] : form.notifyIds.filter((id) => id !== channel.id))}
                   />
                   <span>
-                    {channel.name} ({{ email: 'E-Mail', ntfy: 'ntfy', webhook: 'Webhook', telegram: 'Telegram' }[channel.type]}){!channel.enabled ? ' – ausgeschaltet' : ''}
+                    {channel.name} ({{ email: 'E-Mail', ntfy: 'ntfy', webhook: 'Webhook', telegram: 'Telegram', discord: 'Discord', slack: 'Slack', pushover: 'Pushover', homeassistant: 'Home Assistant', browser: 'Browser' }[channel.type]}){!channel.enabled ? ' – ausgeschaltet' : ''}
                   </span>
                 </label>
               ))}

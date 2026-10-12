@@ -216,7 +216,7 @@ if (is_dir($config->dataDir)) {
                     $db,
                     $clock,
                     new ChannelStore($db, new SecretBox(KeyLoader::load($env)), $clock),
-                    ['email' => new SmtpSender($network), 'ntfy' => new NtfySender($network, $curl), 'webhook' => new WebhookSender($network, $curl), 'telegram' => new TelegramSender($network, $curl)],
+                    ['email' => new SmtpSender($network), 'ntfy' => new NtfySender($network, $curl), 'webhook' => new WebhookSender($network, $curl), 'telegram' => new TelegramSender($network, $curl), 'discord' => new \Meridian\Notify\IntegrationSender($network, $curl), 'slack' => new \Meridian\Notify\IntegrationSender($network, $curl), 'pushover' => new \Meridian\Notify\IntegrationSender($network, $curl), 'homeassistant' => new \Meridian\Notify\IntegrationSender($network, $curl), 'browser' => new \Meridian\Notify\BrowserPushSender($db, new SecretBox(KeyLoader::load($env)), $network)],
                     new SecretMasker(),
                     static fn (): ?string => (new Settings($db, $clock))->publicBaseUrl(),
                 );

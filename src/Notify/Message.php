@@ -22,6 +22,7 @@ final readonly class Message
         public int $failures,
         public ?string $link = null,
         public string $language = 'de',
+        public ?int $deliveryId = null,
     ) {
     }
 
