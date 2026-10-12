@@ -452,7 +452,7 @@ final class Notifier
             if ($error === null) {
                 $this->db->execute("UPDATE notification_outbox SET status = 'sent', sent_at = :now, last_error = NULL WHERE id = :id", ['now' => Timestamp::format($this->clock->now()), 'id' => $id]);
                 ++$result['sent'];
-            } elseif ($attempts >= self::MAX_ATTEMPTS || $error === SendFailed::DISABLED) {
+            } elseif (Row::string($row, 'kind') === 'test' || $attempts >= self::MAX_ATTEMPTS || $error === SendFailed::DISABLED) {
                 $this->db->execute("UPDATE notification_outbox SET status = 'failed', last_error = :error WHERE id = :id", ['error' => $error, 'id' => $id]);
                 ++$result['failed'];
             } else {
@@ -476,8 +476,13 @@ final class Notifier
         $now = $this->clock->now();
 
         return $this->db->execute(
-            "UPDATE notification_outbox SET attempts = attempts + 1, next_attempt_at = :lease WHERE id = :id AND status = 'pending' AND next_attempt_at <= :now",
-            ['lease' => Timestamp::format($now->modify('+' . self::CLAIM_SECONDS . ' seconds')), 'id' => $id, 'now' => Timestamp::format($now)],
+            // Test messages are at-most-once: reserve them permanently before network I/O.
+            // If a worker crashes after delivery, a later worker must not send the test again.
+            "UPDATE notification_outbox SET attempts = attempts + 1, next_attempt_at = :lease,
+                status = CASE WHEN kind = 'test' THEN 'failed' ELSE status END,
+                last_error = CASE WHEN kind = 'test' THEN :interrupted ELSE last_error END
+              WHERE id = :id AND status = 'pending' AND next_attempt_at <= :now",
+            ['lease' => Timestamp::format($now->modify('+' . self::CLAIM_SECONDS . ' seconds')), 'id' => $id, 'now' => Timestamp::format($now), 'interrupted' => 'Testzustellung begonnen, Ergebnis nicht bestätigt. Bei Bedarf erneut manuell testen.'],
         ) === 1;
     }
 

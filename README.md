@@ -20,6 +20,8 @@ Bei Statusseiten lässt sich die Standardsprache beim Anlegen und Bearbeiten auf
 
 Unter **Einstellungen → Benachrichtigungen** einen Kanal anlegen und anschließend bei den gewünschten Jobs oder Überwachungen auswählen. Die Sprache des Kanals folgt standardmäßig deiner gespeicherten UI-Sprache; Deutsch und Englisch lassen sich auch fest einstellen.
 
+**Testnachricht** startet einen einzigen Zustellversuch pro Klick. Tests werden bei Fehlern oder nach einem Worker-Abbruch nicht automatisch wiederholt, da eine Nachricht trotz fehlender Bestätigung bereits angekommen sein kann. Bei nicht bestätigter Zustellung den Kanal prüfen und bei Bedarf erneut manuell testen. Echte Ereignismeldungen behalten ihre Wiederholungsversuche bei Zustellfehlern.
+
 | Kanal | Einrichtung |
 |---|---|
 | E-Mail (SMTP) | Server, Port, Absender, Empfänger und gegebenenfalls Anmeldedaten eintragen. |
