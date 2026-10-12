@@ -159,12 +159,15 @@ final class NotificationChannelController
         if ($channel === null) {
             return JsonReply::error(404, 'Kanal nicht gefunden.');
         }
+        if ($channel->type === ChannelType::Browser && $this->db->fetchOne('SELECT id FROM browser_push_subscriptions WHERE channel_id = :channel AND user_id = :user LIMIT 1', ['channel' => $channel->id, 'user' => $session]) === null) {
+            return JsonReply::error(422, 'Zuerst diesen Browser verbinden.');
+        }
         $now = Timestamp::format($this->clock->now());
         $this->db->immediate(function () use ($channel, $now, $session): void {
             $this->db->execute(
-                "INSERT INTO notification_outbox (kind, channel_id, job_name, occurred_at, status, next_attempt_at, created_at)
-                 VALUES ('test', :channel, 'Testnachricht', :now, 'pending', :now, :now)",
-                ['channel' => $channel->id, 'now' => $now],
+                "INSERT INTO notification_outbox (kind, channel_id, job_name, occurred_at, status, next_attempt_at, created_at, browser_user_id)
+                 VALUES ('test', :channel, 'Testnachricht', :now, 'pending', :now, :now, :user)",
+                ['channel' => $channel->id, 'now' => $now, 'user' => $channel->type === ChannelType::Browser ? $session : null],
             );
             $this->audit->record($session, 'notification.channel_tested', 'channel:' . $channel->id . ' ' . $channel->name);
         });

@@ -11,6 +11,7 @@ import { groupSecret, retryHint } from '../lib/format';
 import { roleNames } from '../lib/permissions';
 import type { Profile } from '../types';
 import { ApiTokens } from '../components/ApiTokens';
+import { PersonalBrowserPush } from '../components/PersonalBrowserPush';
 import { DisplayNameCard, PasswordCard, SessionsCard } from './AccountExtras';
 import { t } from '../i18n';
 
@@ -146,6 +147,7 @@ export function Account({ profile, onChanged, onCsrfToken }: AccountProps) {
 
   return (
     <div className="settings">
+    <PersonalBrowserPush csrf={csrf} />
     <div className="grid-2">
       <section className="card" aria-label={t('Konto')}>
         <h2>{t('Konto')}</h2>

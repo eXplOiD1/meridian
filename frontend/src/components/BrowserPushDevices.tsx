@@ -40,6 +40,7 @@ export function BrowserPushDevices({ channelId, csrf }: { channelId: number; csr
   const [label, setLabel] = useState(t('Dieser Browser'));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(available() ? Notification.permission : 'unsupported');
   const scope = '/app/push/' + channelId + '/';
   const api = '/api/notifications/channels/' + channelId + '/browser';
   const load = useCallback(async () => { setDevices((await request<Devices>('GET', api)).devices); }, [api]);
@@ -49,7 +50,9 @@ export function BrowserPushDevices({ channelId, csrf }: { channelId: number; csr
     if (!available()) { setMessage(t('Browser-Push benötigt HTTPS und einen unterstützten Chrome- oder Firefox-Browser.')); return; }
     setBusy(true); setMessage(null);
     try {
-      if (await Notification.requestPermission() !== 'granted') throw new Error(t('Benachrichtigungen sind im Browser nicht erlaubt. Bitte in den Website-Einstellungen freigeben.'));
+      const result = await Notification.requestPermission();
+      setPermission(result);
+      if (result !== 'granted') throw new Error(t('Benachrichtigungen sind im Browser nicht erlaubt. Bitte in den Website-Einstellungen freigeben.'));
       const data = await request<Devices>('GET', api);
       const key = keyBytes(data.application_server_key);
       const registration = await navigator.serviceWorker.register('/app/push-worker.js?channel=' + channelId, { scope, updateViaCache: 'none' });
@@ -86,8 +89,11 @@ export function BrowserPushDevices({ channelId, csrf }: { channelId: number; csr
     <legend className="field__label">{t('Browser-Geräte')}</legend>
     <p className="hint">{t('Chrome und Firefox: Jeder Browser muss die Benachrichtigungen selbst erlauben. Auf Desktop muss der Browser weiterhin laufen. Nur deine eigenen Geräte werden angezeigt.')}</p>
     {message && <Alert tone="info">{message}</Alert>}
+    {permission === 'denied' && <Alert tone="warn">{t('Die Freigabe wurde im Browser abgelehnt. Öffne die Website-Einstellungen über das Symbol neben der Adresse, erlaube Benachrichtigungen und klicke danach erneut auf „Diesen Browser verbinden“. Der Browser darf eine abgelehnte Freigabe nicht erneut automatisch abfragen.')}</Alert>}
+    <p className="hint">{t('Browser-Freigabe')}: {permission === 'granted' ? t('Erlaubt') : permission === 'denied' ? t('Abgelehnt') : permission === 'unsupported' ? t('Nicht unterstützt') : t('Noch nicht erteilt')}</p>
     <label className="field"><span className="field__label">{t('Gerätename')}</span><input className="input" value={label} maxLength={60} onChange={e => setLabel(e.target.value)} /></label>
     <button type="button" className="btn btn--solid" disabled={busy || !label.trim()} onClick={() => void connect()}>{t('Diesen Browser verbinden')}</button>
+    <button type="button" className="btn btn--ghost" disabled={busy || devices.length === 0} onClick={() => { setBusy(true); void request('POST', api + '/test', { csrf }).then(() => setMessage(t('Testnachricht eingereiht.'))).catch(error => setMessage(error instanceof Error ? error.message : t('Browser konnte nicht verbunden werden.'))).finally(() => setBusy(false)); }}>{t('Testnachricht')}</button>
     {devices.map(device => <div className="row" key={device.id}><span>{device.label}</span><button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void remove(device)}>{t('Entfernen')}</button></div>)}
   </fieldset>;
 }
