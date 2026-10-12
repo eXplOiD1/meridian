@@ -32,6 +32,29 @@ Unter **Einstellungen → Benachrichtigungen** einen Kanal anlegen und anschlie�
 | Home Assistant | Basisadresse, Long-Lived Access Token und Zielaktion eintragen. `persistent_notification.create` erzeugt Dashboard-Meldungen; `notify.mobile_app_name` sendet über die Companion-App. Der HTTP-Worker muss Home Assistant erreichen können; HTTPS-Zertifikate werden geprüft. |
 | Browser (Chrome / Firefox) | Kontakt-E-Mail eintragen und den Kanal speichern. Danach **Bearbeiten → Diesen Browser verbinden**, einen Gerätenamen vergeben und die Benachrichtigungen im Browser erlauben. |
 
+### Home Assistant: Dashboard oder Handy-Push einrichten
+
+Die Zielaktion entscheidet, wo eine Nachricht ankommt:
+
+| Zielaktion | Zustellung |
+| --- | --- |
+| `persistent_notification.create` | Benachrichtigungsbereich im Home-Assistant-Dashboard; erzeugt keinen Handy-Push. |
+| `notify.mobile_app_<gerätekennung>` | Push an die Home-Assistant-Companion-App des ausgewählten Geräts. Der vollständige Name muss aus deiner Installation übernommen werden. |
+| `notify.<gruppenname>` | Eine in Home Assistant bereits konfigurierte Benachrichtigungsgruppe, beispielsweise für mehrere Handys. |
+
+1. Für Handy-Push die Home-Assistant-Companion-App auf dem Handy einrichten, mit deinem Server verbinden und Benachrichtigungen erlauben.
+2. In Home Assistant unter **Entwicklerwerkzeuge → Aktionen** nach `notify.mobile_app` suchen. Die tatsächliche Aktion deines Handys auswählen und mit `message: Meridian Direkt-Test` testen. Fehlt die Aktion, die Companion-App erneut öffnen und Home Assistant neu starten. Kommt schon dieser direkte Test nicht an, zuerst die Companion-App und deren Android-/iOS-Benachrichtigungseinstellungen prüfen.
+3. In Home Assistant unter **Benutzerprofil → Sicherheit → Langlebige Zugriffstoken** ein Token namens `Meridian` erstellen und kopieren.
+4. In Meridian unter **Einstellungen → Benachrichtigungen** einen Home-Assistant-Kanal anlegen. Als Adresse die vom Meridian-HTTP-Worker erreichbare Basisadresse eintragen, beispielsweise `http://192.168.0.176:8123`, ohne `/api/services`. Bei internen Adressen gegebenenfalls die interne Netzwerkfreigabe des Kanals aktivieren. Als Token nur den Tokenwert ohne `Bearer ` einsetzen; Meridian ergänzt den Header. Bei HTTPS muss das Zertifikat gültig sein.
+5. Als **Zielaktion** den vollständigen Namen aus Schritt 2 eintragen, beispielsweise `notify.mobile_app_mein_handy`. Das Beispiel nicht unverändert übernehmen. Für reine Dashboard-Meldungen stattdessen `persistent_notification.create` wählen.
+6. Kanal speichern und einmal **Testnachricht** auslösen. Anschließend den Kanal bei den gewünschten Jobs oder Überwachungen auswählen und speichern.
+
+Die Android-Kategorien **Sensor-Aktualisierungen** und **Standort** betreffen Hintergrundfunktionen der Companion-App. Eine normale Push-Nachricht ohne eigene Kanalangabe verwendet standardmäßig die Kategorie **General/Allgemein**. Diese Kategorie und die allgemeine Benachrichtigungsfreigabe der App müssen aktiviert sein. Eine sichtbare Dashboard-Testnachricht bestätigt nur die Zustellung ins Dashboard, nicht auf das Handy.
+
+Offizielle Anleitungen: [Companion-App-Benachrichtigungen](https://companion.home-assistant.io/docs/notifications/notifications-basic/), [Fehlersuche](https://companion.home-assistant.io/docs/troubleshooting/faqs/), [Zugriffstoken](https://developers.home-assistant.io/docs/auth_api/).
+
+### Browser-Push
+
 Direktes Browser-Push benötigt HTTPS. Ein Admin legt den Kanal an; danach verbindet jeder Nutzer seinen Browser unter **Mein Konto → Meine Browser-Benachrichtigungen** und bestätigt die Browser-Abfrage. Nach dem Anlegen bleibt das Kanalformular direkt beim Verbindungsschritt. Jeder Browser bzw. jedes Gerät benötigt eine eigene Freigabe. Nutzer erhalten nur Meldungen zu Jobs und Überwachungen, die sie aktuell sehen dürfen und für die dieser Browser-Kanal aktiviert ist. Entzogene Rechte werden auch vor dem Versand erneut geprüft. Die persönlichen Testnachrichten gehen nur an Geräte des eigenen Kontos.
 
 Bei abgelehnter Freigabe die Website-Einstellungen über das Symbol neben der Browser-Adresse öffnen, Benachrichtigungen erlauben und erneut **Diesen Browser verbinden** wählen. Eine zuvor blockierte Berechtigungsabfrage darf Meridian nicht automatisch erneut anzeigen. Über **Entfernen** lässt sich ein Gerät später abmelden. Nur eigene Geräte sind sichtbar; bis zu zehn Geräte pro Konto und Kanal sind möglich. Auf Desktop muss Chrome bzw. Firefox weiter laufen, der Meridian-Tab darf geschlossen sein. Betriebssystem-Einstellungen können Benachrichtigungen zusätzlich blockieren. Abgelaufene Abonnements entfernt Meridian beim Versand. Geräte und Schlüssel bleiben bei Updates erhalten.
