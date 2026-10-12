@@ -32,10 +32,13 @@ def command(args, timeout=600, env=None):
     return result.stdout.decode("utf-8", errors="strict").strip()
 
 
-def latest_revision():
-    request = urllib.request.Request(REPO, headers={"User-Agent": "Meridian-Updater", "Accept": "application/vnd.github+json"})
+def latest_revision(channel='main'):
+    if channel not in ('main', 'beta'):
+        raise ValueError('invalid update channel')
+    url = REPO.rsplit('/', 1)[0] + '/' + channel
+    request = urllib.request.Request(url, headers={"User-Agent": "Meridian-Updater", "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(request, timeout=20) as response:
-        if response.geturl() != REPO:
+        if response.geturl() != url:
             raise RuntimeError("unexpected redirect")
         data = json.loads(response.read(65536))
     revision = data.get("sha", "")
@@ -67,6 +70,11 @@ class Updater:
         self.compose_file = os.environ.get("MERIDIAN_UPDATE_COMPOSE", "")
         self.compose_location = None
         self.state = {"mode": self.mode, "current": self.current(), "latest": "", "available": False, "busy": False, "phase": "idle", "message": "Bereit."}
+        channel_file = self.private / 'channel'
+        channel = channel_file.read_text().strip() if channel_file.exists() else 'main'
+        if channel not in ('main', 'beta'):
+            raise RuntimeError('invalid persisted update channel')
+        self.state['channel'] = channel
         self.last_check = 0
         self.publish_lock = threading.Lock()
         try:
@@ -189,7 +197,7 @@ class Updater:
             with os.fdopen(descriptor, "r") as stream:
                 descriptor = -1
                 data = json.load(stream)
-            if set(data) != {"action", "id"} or data["action"] not in ("check", "install") or not isinstance(data["id"], str) or not re.fullmatch(r"[0-9a-f]{32}", data["id"]):
+            if set(data) != {"action", "id"} or data["action"] not in ("check", "install", "channel_main", "channel_beta") or not isinstance(data["id"], str) or not re.fullmatch(r"[0-9a-f]{32}", data["id"]):
                 raise ValueError("invalid request")
             return data["action"]
         except (ValueError, TypeError):
@@ -201,7 +209,7 @@ class Updater:
 
     def check(self):
         self.publish("checking", "Updates werden geprüft.", True)
-        revision = latest_revision()
+        revision = latest_revision(self.state.get('channel', 'main'))
         self.state.update(current=self.current(), latest=revision, checked_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
         self.state["available"] = revision != self.state["current"]
         if self.mode == "docker" and self.state["available"]:
@@ -373,8 +381,8 @@ class Updater:
         raise RuntimeError("health check failed")
 
     def install(self):
-        # Resolve main again. Clients cannot choose arbitrary commits or repositories.
-        revision = latest_revision()
+        # Resolve the approved channel again. Clients cannot choose commits or repositories.
+        revision = latest_revision(self.state.get('channel', 'main'))
         if revision != self.state["latest"]:
             self.check()
             return
@@ -385,6 +393,22 @@ class Updater:
             self.systemd_install(revision)
         self.state.update(current=self.current(), available=False)
         self.publish("success", "Update erfolgreich installiert.", False)
+
+    def select_channel(self, channel):
+        if channel not in ('main', 'beta'):
+            raise ValueError('invalid update channel')
+        # The selection lives in the root-private volume, not the application data.
+        with tempfile.NamedTemporaryFile(mode='w', dir=self.private, delete=False) as stream:
+            path = pathlib.Path(stream.name)
+            stream.write(channel + '\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.replace(path, self.private / 'channel')
+        finally:
+            path.unlink(missing_ok=True)
+        self.state.update(channel=channel, latest='', available=False)
+        self.check()
 
     def run(self):
         self.publish()
@@ -400,7 +424,9 @@ class Updater:
                     time.sleep(5)
                     continue
                 action = self.request()
-                if action == "install" and self.state["available"]:
+                if action in ('channel_main', 'channel_beta'):
+                    self.select_channel(action.removeprefix('channel_'))
+                elif action == "install" and self.state["available"]:
                     self.install()
                 elif action == "check" or time.time() - self.last_check > 21600:
                     self.check()
