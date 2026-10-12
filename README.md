@@ -22,6 +22,8 @@ Unter **Einstellungen → Benachrichtigungen** einen Kanal anlegen und anschlie�
 
 **Testnachricht** startet einen einzigen Zustellversuch pro Klick. Tests werden bei Fehlern oder nach einem Worker-Abbruch nicht automatisch wiederholt, da eine Nachricht trotz fehlender Bestätigung bereits angekommen sein kann. Bei nicht bestätigter Zustellung den Kanal prüfen und bei Bedarf erneut manuell testen. Echte Ereignismeldungen behalten ihre Wiederholungsversuche bei Zustellfehlern.
 
+Der HTTP-Worker prüft den Benachrichtigungsausgang in jedem Durchgang, bei freien Workern etwa jede Sekunde. Tests warten deshalb nicht mehr auf die Wartung im Minutenrhythmus. Laufende Aufträge sowie der externe Anbieter können die Zustellung weiterhin verzögern. Bei Browser-Push bedeutet der Versandstatus „zugestellt“, dass der Push-Dienst die Nachricht angenommen hat; er bestätigt nicht ihre Anzeige auf dem Gerät.
+
 | Kanal | Einrichtung |
 |---|---|
 | E-Mail (SMTP) | Server, Port, Absender, Empfänger und gegebenenfalls Anmeldedaten eintragen. |
