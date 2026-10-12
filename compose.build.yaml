@@ -96,6 +96,75 @@ x-common: &common
     - ALL
 
 services:
+  updater:
+    build:
+      dockerfile_inline: |
+        # --- Quellcode von GitHub (Archiv per HTTPS, auf dem Host wird kein git gebraucht) ---------
+        FROM alpine:3 AS source
+        ADD https://github.com/eXplOiD1/meridian/archive/${MERIDIAN_REPO_REF:-main}.tar.gz /src.tar.gz
+        RUN mkdir /src && tar xzf /src.tar.gz -C /src --strip-components=1
+
+        FROM docker:27-cli
+        RUN apk add --no-cache python3
+        COPY --from=source /src/deploy/updater.py /usr/local/lib/meridian-updater.py
+        COPY --from=source /src/LICENSE /src/THIRD_PARTY_NOTICES.md /usr/local/share/meridian/
+        COPY --from=source /src/licenses/ /usr/local/share/meridian/licenses/
+        RUN python3 -m py_compile /usr/local/lib/meridian-updater.py
+        RUN python3 - <<'PY'
+        import importlib.util, json, os, pathlib, tempfile
+        spec = importlib.util.spec_from_file_location('meridian_updater', '/usr/local/lib/meridian-updater.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.command = lambda *args, **kwargs: 'a' * 40
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            (root / 'data').mkdir()
+            os.environ.update(MERIDIAN_UPDATE_MODE='docker', MERIDIAN_UPDATE_DATA=str(root / 'data'), MERIDIAN_UPDATE_PRIVATE=str(root / 'private'), MERIDIAN_UPDATE_UID='0', MERIDIAN_UPDATE_GID='0')
+            updater = module.Updater()
+            updater.publish()
+            queue = root / 'data/updates/request.json'
+            queue.write_text(json.dumps({'action': 'check', 'id': 'b' * 32}))
+            assert updater.request() == 'check' and not queue.exists()
+            queue.write_text(json.dumps({'action': 'shell', 'id': 'b' * 32}))
+            assert updater.request() is None and not queue.exists()
+            target = root / 'private/protected'
+            target.write_text('unchanged')
+            queue.symlink_to(target)
+            try:
+                updater.request()
+                raise AssertionError('symlink must be rejected')
+            except OSError:
+                pass
+            assert target.read_text() == 'unchanged'
+            assert json.loads((root / 'data/updates/status.json').read_text())['mode'] == 'docker'
+            os.close(updater.fd)
+            os.close(updater.lock)
+        print('Linux update queue and symlink protection passed.')
+        PY
+        ENV MERIDIAN_UPDATE_MODE=docker
+        CMD ["python3", "/usr/local/lib/meridian-updater.py"]
+    image: meridian-updater:local
+    container_name: meridian-updater
+    restart: unless-stopped
+    environment:
+      MERIDIAN_UPDATE_MODE: docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - meridian-data:/var/lib/meridian
+      - meridian-updater-data:/var/lib/meridian-updater
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    pids_limit: 256
+    mem_limit: 512m
   web:
     <<: *common
     container_name: meridian-web
@@ -230,3 +299,4 @@ volumes:
   meridian-data:
   meridian-secrets:
   meridian-docker-proxy:
+  meridian-updater-data:

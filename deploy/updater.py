@@ -64,7 +64,8 @@ class Updater:
         self.uid, self.gid = uid, gid
         self.lock = os.open(self.private / "daemon.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        self.compose_file = os.environ.get("MERIDIAN_UPDATE_COMPOSE", "/stack/compose.yaml")
+        self.compose_file = os.environ.get("MERIDIAN_UPDATE_COMPOSE", "")
+        self.compose_location = None
         self.state = {"mode": self.mode, "current": self.current(), "latest": "", "available": False, "busy": False, "phase": "idle", "message": "Bereit."}
         self.last_check = 0
         self.publish_lock = threading.Lock()
@@ -80,10 +81,76 @@ class Updater:
             pass
 
     def compose(self, *args, override=None):
-        base = ["docker", "compose", "--project-name", "meridian", "--project-directory", str(pathlib.Path(self.compose_file).parent), "-f", self.compose_file]
+        if self.compose_file:
+            # Explicit configuration remains available for existing custom installations.
+            base = ["docker", "compose", "--project-name", "meridian", "--project-directory", str(pathlib.Path(self.compose_file).parent), "-f", self.compose_file]
+        else:
+            project, directory, files, image = self.location()
+            directories = sorted({directory, *(str(pathlib.PurePosixPath(file).parent) for file in files)})
+            base = ["docker", "run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL", "--cap-add", "DAC_OVERRIDE", "--security-opt", "no-new-privileges:true", "--tmpfs", "/tmp", "--volumes-from", "meridian-updater"]
+            for mount in directories:
+                base += ["--mount", "type=bind,src=" + mount + ",dst=" + mount + ",readonly"]
+            base += ["--entrypoint", "docker", image, "compose", "--project-name", project, "--project-directory", directory]
+            for file in files:
+                base += ["-f", file]
         if override:
             base += ["-f", str(override)]
-        return command(base + list(args), timeout=1800)
+        try:
+            return command(base + list(args), timeout=1800)
+        except RuntimeError:
+            # Portainer records paths inside its own data volume; resolve those host paths once.
+            if not self.compose_file and args and args[0] == 'config' and self.portainer_location():
+                return self.compose(*args, override=override)
+            raise
+
+    def portainer_location(self):
+        if getattr(self, 'portainer_resolved', False):
+            return False
+        project, directory, files, image = self.location()
+        if not directory.startswith('/data/compose/'):
+            return False
+        containers = command(['docker', 'ps', '--format', '{{json .}}'], 20)
+        for line in containers.splitlines():
+            row = json.loads(line)
+            if not str(row.get('Image', '')).startswith(('portainer/portainer-ce:', 'portainer/portainer-ee:')):
+                continue
+            container = row.get('ID', '')
+            if not re.fullmatch(r'[0-9a-f]{12,64}', container):
+                continue
+            mounts = json.loads(command(['docker', 'inspect', '--format', '{{json .Mounts}}', container], 20))
+            for mount in mounts:
+                if mount.get('Destination') != '/data' or not str(mount.get('Source', '')).startswith('/'):
+                    continue
+                source = mount['Source'].rstrip('/')
+                if ',' in source or '..' in pathlib.PurePosixPath(source).parts or any(ord(char) < 32 for char in source) or not all(file.startswith('/data/') for file in files):
+                    continue
+                self.compose_location = (project, source + directory[5:], [source + file[5:] for file in files], image)
+                self.portainer_resolved = True
+                return True
+        return False
+
+    def location(self):
+        if self.compose_location is not None:
+            return self.compose_location
+        labels = json.loads(command(["docker", "inspect", "--format", "{{json .Config.Labels}}", "meridian-web"], 20))
+        project = labels.get('com.docker.compose.project', '')
+        directory = labels.get('com.docker.compose.project.working_dir', '')
+        files = labels.get('com.docker.compose.project.config_files', '').split(',')
+        # Compose persists the temporary image override in its labels. Ignore only
+        # overrides generated in our private directory when discovering a new stack.
+        generated = re.compile(re.escape(str(self.private).rstrip('/')) + r'/tmp[A-Za-z0-9_-]+/images\.json')
+        files = [file for file in files if not generated.fullmatch(file)]
+        if not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,62}', project) or not files:
+            raise RuntimeError('compose metadata missing')
+        for value in [directory, *files]:
+            path = pathlib.PurePosixPath(value)
+            if not value.startswith('/') or str(path) == '/' or '..' in path.parts or ',' in value or any(ord(char) < 32 for char in value) or path.parts[1] in ('proc', 'sys', 'dev'):
+                raise RuntimeError('invalid compose metadata')
+        image = command(["docker", "inspect", "--format", "{{.Image}}", "meridian-updater"], 20)
+        if not re.fullmatch(r'sha256:[0-9a-f]{64}', image):
+            raise RuntimeError('invalid updater image')
+        self.compose_location = (project, directory, files, image)
+        return self.compose_location
 
     def current(self):
         if self.mode == "docker":
@@ -161,12 +228,13 @@ class Updater:
         return directory
 
     def docker_install(self, revision):
-        if not pathlib.Path(self.compose_file).is_file():
+        if self.compose_file and not pathlib.Path(self.compose_file).is_file():
             raise RuntimeError("compose missing")
+        project = 'meridian' if self.compose_file else self.location()[0]
         # Check deployment identity before touching any container.
         for service in SERVICES:
             actual = command(["docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.project"}}', "meridian-" + service])
-            if actual != "meridian":
+            if actual != project:
                 raise RuntimeError("unexpected stack")
         images = {service: "ghcr.io/exploid1/" + ("meridian-sandbox" if service == "sandbox" else "meridian") + ":sha-" + revision for service in SERVICES}
         self.publish("downloading", "Update wird heruntergeladen.")

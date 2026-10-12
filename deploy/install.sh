@@ -15,7 +15,7 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-for command in php composer rsync sudo systemctl /usr/local/bin/frankenphp; do
+for command in php composer rsync sudo systemctl python3 git npm /usr/local/bin/frankenphp; do
   command -v "$command" >/dev/null || { echo "Voraussetzung fehlt: $command" >&2; exit 1; }
 done
 php -r 'exit(PHP_VERSION_ID >= 80300 ? 0 : 1);' || { echo "PHP 8.3 oder neuer wird benötigt." >&2; exit 1; }
@@ -108,6 +108,9 @@ else
 fi
 
 systemctl is-active --quiet meridian-web meridian-scheduler meridian-worker-http
+
+# Bei jeder Installation mit einrichten; enable --now unterbricht einen bereits laufenden Updater nicht.
+bash "$APP/deploy/enable-updater.sh"
 
 echo "Meridian ist installiert und läuft."
 
