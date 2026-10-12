@@ -1057,6 +1057,7 @@ export const EN: Record<string, string> = {
   "Vorgang fehlgeschlagen. Update-Dienst und Sicherungen prüfen; vor einem neuen Versuch erneut nach Updates suchen.": "Operation failed. Check the update service and backups; check for updates again before retrying.",
   "Testnachricht eingereiht.": "Test notification queued.",
   "Update-Kanal": "Update channel",
+  "Zeitplaner": "Scheduler",
   "Benachrichtigungsziel": "Notification destination",
   "Kontaktadresse des Betreibers": "Operator contact email",
   "Deine erreichbare E-Mail-Adresse als Betreiber, z. B. admin@example.org. Sie wird dem Push-Dienst als Kontakt mitgegeben. Hierhin werden keine Benachrichtigungen verschickt; SMTP und ein E-Mail-Passwort sind dafür nicht erforderlich.": "Your contact email as the operator, for example admin@example.org. It is sent to the push service as contact information. Notifications are not sent to this address; SMTP and an email password are not required.",

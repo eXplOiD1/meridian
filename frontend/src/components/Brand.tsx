@@ -13,7 +13,7 @@ export function Brand({ subtitle = 'Zeitplaner' }: { subtitle?: string }) {
       </svg>
       <div>
         <span className="brand__name">{t('MERIDIAN')}</span>
-        <span className="brand__sub">{subtitle}</span>
+        <span className="brand__sub">{t(subtitle)}</span>
       </div>
     </div>
   );
