@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 4: Shell-Jobs (docs/decisions/0004 §3.2).
 -- Neues gefährliches Recht: Ausführungsorte pflegen. Nur Rolle Admin, ergänzt nur Fehlendes.
 INSERT INTO role_permissions (role_id, permission)

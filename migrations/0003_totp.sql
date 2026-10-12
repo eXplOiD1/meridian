@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Zwei-Faktor-Anmeldung (TOTP). Das Secret selbst liegt verschlüsselt in users.totp_secret_enc (0001).
 
 -- 0 = nur eingerichtet, noch nicht mit einem Code bestätigt (oder aus); 1 = bei der Anmeldung verlangt.

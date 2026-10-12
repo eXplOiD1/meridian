@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Anmeldung: Sitzungen und Fehlversuche.
 
 -- Die Sitzungs-ID steht nur als Hash in der Datenbank, der Klartext existiert nur im Cookie.

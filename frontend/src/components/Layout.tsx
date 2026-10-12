@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { canManageCategories, canManageInternalTargets, canManageSettings, canManageShellTargets, canEditStatusPages, canManageUsers, canSeeUsersArea, canViewJobs, roleNames } from '../lib/permissions';

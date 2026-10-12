@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 # Einstieg im Container. Mit MERIDIAN_AUTO_SETUP=1 (nur beim web-Dienst) bereitet er alles vor:
 # Hauptschlüssel erzeugen (nie überschreiben), Migrationen einspielen, ersten Admin anlegen.
 # Der Scheduler setzt das nicht und startet erst, wenn web gesund ist (depends_on in der compose.yaml).

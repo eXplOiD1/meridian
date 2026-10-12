@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { useId } from 'react';
 import type { AssignmentInput, CategoryRef, RoleCatalog, RoleDef } from '../types';
 import { Alert } from './Alert';

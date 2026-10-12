@@ -1,6 +1,16 @@
+<!-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+     SPDX-License-Identifier: LicenseRef-Meridian-Proprietary -->
 # Meridian
 
 Selbst gehosteter Job-Scheduler für HTTP- und Shell-Jobs, mit Benutzern, Rollen und Rechten pro Kategorie.
+
+## Lizenz
+
+Copyright (c) 2026 Alexander von Pidoll. Alle Rechte vorbehalten.
+
+Meridian ist proprietäre Software. Die [Meridian Proprietary License](LICENSE) erlaubt den unveränderten Betrieb auf eigenen Systemen für persönliche und interne betriebliche Zwecke. Weiterverbreitung, Weiterverkauf, öffentliche abgeleitete Versionen und das Anbieten von Meridian als Dienst für Dritte benötigen eine vorherige schriftliche Erlaubnis. Die vorgesehenen öffentlichen Statusseiten dürfen veröffentlicht werden.
+
+Bei einem öffentlichen GitHub-Repository bleiben die von GitHubs Bedingungen erlaubten Forks innerhalb GitHubs möglich; die Lizenz hebt diese Plattformrechte nicht auf. Fremde Komponenten behalten ihre eigenen Lizenzen, siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 E-Mail-Empfänger lassen sich im SMTP-Kanal, pro Kategorie und pro Job einstellen. Eigene Job-Empfänger ersetzen die Kategorie-Vorgabe; ohne Kategorie-Empfänger gelten die Empfänger des Kanals. Leer bedeutet erben. Die Auswahl gilt für alle gewählten E-Mail-Kanäle. Überwachungen bieten ebenfalls eine Kanalauswahl und übernehmen die Empfänger ihrer Kategorie.
 

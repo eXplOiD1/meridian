@@ -1,3 +1,5 @@
+<!-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+     SPDX-License-Identifier: LicenseRef-Meridian-Proprietary -->
 # Betrieb: Sicherung, Wiederherstellung, Aktualisieren
 
 Gilt für beide Betriebsarten. Befehle laufen mit `docker compose exec web php bin/meridian …` (Docker) bzw.

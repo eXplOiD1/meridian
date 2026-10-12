@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 5: eigene Rollen (docs/decisions/0006-eigene-rollen.md, §3 und §9.1). Ergänzt nur; bestehende Rollen, Rechte und
 -- Zuweisungen bleiben unverändert (einzige Ausnahme: das neue Recht roles.manage für die Admin-Rolle).
 -- Ab hier sprechen Code, CLI und jede spätere Migration die Standardrollen nur über roles.builtin_key an, nie über den Namen.

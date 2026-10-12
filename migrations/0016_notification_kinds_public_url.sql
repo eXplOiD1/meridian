@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 6 (ADR 0007): weitere Kanalarten (webhook, telegram) und die Einstellung app.public_url (Link in Nachrichten).
 -- SQLite ändert kein CHECK: settings und notification_channels werden neu aufgebaut. notification_channels hat Kinder
 -- (job_channels, notification_outbox, ON DELETE CASCADE): erst deren Zeilen sichern und die Kinder entfernen, dann die
