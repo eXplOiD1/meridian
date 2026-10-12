@@ -138,7 +138,7 @@ export function Login({ onLoggedIn }: LoginProps) {
               </button>
             )}
           </div>
-          <p className="hint">{t('Die Anmeldung funktioniert nur über HTTPS (oder im Entwicklungsmodus).')}</p>
+          <p className="hint">{t('Für eine geschützte Anmeldung HTTPS verwenden.')}</p>
         </form>
       </main>
     </div>
