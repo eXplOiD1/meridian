@@ -287,8 +287,8 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
                     {!channel.enabled && <span className="muted"> {t('(aus)')}</span>}
                   </td>
                   <td>{t(TYPE_LABEL[channel.type])}</td>
-                  <td className="mono">{summary(channel)}</td>
-                  <td>
+                  <td className="mono channels__target">{summary(channel)}</td>
+                  <td className="channels__delivery">
                     {channel.last_delivery == null ? (
                       <span className="muted">{t('noch keine')}</span>
                     ) : (
