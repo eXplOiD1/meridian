@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+[Unit]
+Description=Meridian deployment updater
+After=network-online.target meridian-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/meridian/updater.env
+ExecStart=/usr/bin/python3 /usr/local/lib/meridian-updater.py
+Restart=on-failure
+RestartSec=10
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

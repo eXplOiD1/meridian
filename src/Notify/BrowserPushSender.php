@@ -21,17 +21,26 @@ final class BrowserPushSender implements Sender
         $public = $channel->config['public_key'] ?? null;
         $contact = $channel->config['contact'] ?? null;
         if ($private === null || !is_string($public) || !is_string($contact)) { throw new SendFailed(SendFailed::AUTH); }
-        $rows = $this->db->fetchAll('SELECT id, subscription_enc FROM browser_push_subscriptions WHERE channel_id = :channel', ['channel' => $channel->id]);
+        $rows = $this->db->fetchAll('SELECT id, user_id, subscription_enc FROM browser_push_subscriptions WHERE channel_id = :channel', ['channel' => $channel->id]);
         if ($rows === []) { throw new SendFailed(SendFailed::REJECTED); }
         $tag = $message->deliveryId === null ? hash('sha256', $message->kind . $message->jobName . $message->occurredAt) : 'meridian-' . $channel->id . '-' . $message->deliveryId;
         $payload = json_encode(['title' => mb_strcut($message->subject(), 0, 160, 'UTF-8'), 'body' => mb_strcut($message->text(), 0, 1800, 'UTF-8'), 'url' => $message->link, 'tag' => $tag], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         $hash = $message->deliveryId === null ? hash('sha256', $payload) : hash('sha256', $tag . ':' . $message->occurredAt);
         $failed = false;
         $delivered = false;
+        $audience = new BrowserPushAudience($this->db);
+        $eligible = false;
         foreach ($rows as $row) {
+            if (!$audience->allows(Row::int($row, 'user_id'), $message)) { continue; }
+            $eligible = true;
             $id = Row::int($row, 'id');
             if ($this->db->fetchOne('SELECT message_hash FROM browser_push_deliveries WHERE subscription_id = :id AND message_hash = :hash', ['id' => $id, 'hash' => $hash]) !== null) { $delivered = true; continue; }
             try {
+                // A channel can reach many users. Renew the outbox lease before each network call.
+                if ($message->deliveryId !== null) {
+                    $until = \Meridian\Database\Timestamp::format((new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify('+300 seconds'));
+                    $this->db->execute("UPDATE notification_outbox SET next_attempt_at = :until WHERE id = :id AND status = 'pending'", ['until' => $until, 'id' => $message->deliveryId]);
+                }
                 $data = json_decode($this->box->decrypt(Row::string($row, 'subscription_enc')), true, flags: JSON_THROW_ON_ERROR);
                 if (!is_array($data) || !is_string($data['endpoint'] ?? null)) { throw new SendFailed(SendFailed::REJECTED); }
                 $host = BrowserPushEndpoint::host($data['endpoint']);
@@ -49,6 +58,6 @@ final class BrowserPushSender implements Sender
             } catch (\Throwable) { $failed = true; }
         }
         $this->db->execute("DELETE FROM browser_push_deliveries WHERE delivered_at < datetime('now', '-7 days')");
-        if ($failed || !$delivered) { throw new SendFailed(SendFailed::CONNECT); }
+        if ($eligible && ($failed || !$delivered)) { throw new SendFailed(SendFailed::CONNECT); }
     }
 }

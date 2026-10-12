@@ -210,7 +210,12 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
     setNotice(null);
     try {
       if (editing === null) {
-        await request('POST', '/api/notifications/channels', { csrf, body: bodyOf(form) });
+        const created = await request<{ channel: NotificationChannel }>('POST', '/api/notifications/channels', { csrf, body: bodyOf(form) });
+        if (form.type === 'browser') {
+          setEditing(created.channel); setForm(fromChannel(created.channel));
+          setNotice(t('Kanal gespeichert. Jetzt „Diesen Browser verbinden“ wählen und die Freigabe im Browser bestätigen. Weitere Nutzer verbinden ihren Browser unter „Mein Konto“.'));
+          await load(); return;
+        }
         setNotice(t('Kanal angelegt. Mit „Testnachricht“ prüfst du, ob er funktioniert.'));
       } else {
         await request('PUT', '/api/notifications/channels/' + String(editing.id), { csrf, body: bodyOf(form) });
@@ -403,6 +408,8 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
               <FormField label={t(form.type === 'discord' || form.type === 'slack' ? 'Webhook-Adresse' : form.type === 'pushover' ? 'Pushover App-Token' : 'Home Assistant Long-Lived Access Token')} error={errors.token} hint={t('Zugangsdaten werden verschlüsselt gespeichert. Beim Bearbeiten leer lassen, um sie zu behalten.')}>
                 {aria => <input {...aria} className="input" type="password" autoComplete="new-password" disabled={form.clearSecret} value={form.token} onChange={e => set('token', e.target.value)} />}
               </FormField>
+              {form.type === 'discord' && <p className="hint">{t('Discord: Im gewünschten Textkanal unter „Kanal bearbeiten → Integrationen → Webhooks“ einen Webhook erstellen und die vollständige Webhook-URL hier einfügen. Die Adresse enthält den Token und das Ziel; ein zusätzlicher Bot-Token ist nicht erforderlich.')}</p>}
+              {form.type === 'slack' && <p className="hint">{t('Slack: Eine Slack-App mit „Incoming Webhooks“ erstellen, „Add New Webhook to Workspace“ wählen, den Zielkanal freigeben und die vollständige hooks.slack.com/services/-Adresse hier einfügen. Ein zusätzlicher Bot-Token ist nicht erforderlich.')}</p>}
               {form.type === 'pushover' && <>
                 <FormField label={t('Pushover User/Group-Key')} error={errors.user_key} hint={t('Beim Ändern beide Pushover-Schlüssel neu eingeben.')}>
                   {aria => <input {...aria} className="input" type="password" autoComplete="new-password" disabled={form.clearSecret} value={form.userKey} onChange={e => set('userKey', e.target.value)} />}

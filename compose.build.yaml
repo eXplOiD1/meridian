@@ -49,6 +49,8 @@ x-common: &common
 
         WORKDIR /app
         COPY --from=vendor /app/vendor ./vendor
+        ARG MERIDIAN_REVISION=unknown
+        RUN printf '%s\n' "$$MERIDIAN_REVISION" > /app/REVISION
         COPY --from=source /src/bin/ bin/
         COPY --from=source /src/migrations/ migrations/
         COPY --from=source /src/public/ public/

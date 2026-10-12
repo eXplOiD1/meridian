@@ -7,6 +7,7 @@ import type { FormEvent, ReactNode } from 'react';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { NotificationChannels } from '../components/NotificationChannels';
+import { SystemUpdates } from '../components/SystemUpdates';
 import { FormField } from '../components/FormField';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
@@ -897,6 +898,7 @@ export function Settings({ profile }: { profile: Profile }) {
     groups.push({ id: 'shell', label: 'Shell-Jobs', panel: <ShellSettings csrf={csrf} /> });
     groups.push({ id: 'editor', label: 'Job-Editor', panel: <EditorSettings csrf={csrf} /> });
     groups.push({ id: 'notify', label: 'Benachrichtigungen', panel: <NotificationChannels csrf={csrf} /> });
+    groups.push({ id: 'updates', label: 'Updates', panel: <SystemUpdates csrf={csrf} /> });
   }
   if (targets) {
     groups.push({ id: 'internal', label: 'Interne Ziele', panel: <InternalTargets csrf={csrf} /> });

@@ -382,13 +382,14 @@ final class Notifier
         $recipients = $this->recipientsFor($job);
         foreach ($ids as $channel) {
             $this->db->execute(
-                'INSERT INTO notification_outbox (kind, channel_id, job_id, job_name, run_id, run_status, occurred_at, detail, failures, status, next_attempt_at, created_at, recipients)
-                 VALUES (:kind, :channel, :job, :name, :run, :status, :at, :detail, :failures, \'pending\', :now, :now, :recipients)',
+                'INSERT INTO notification_outbox (kind, channel_id, job_id, job_name, run_id, run_status, occurred_at, detail, failures, status, next_attempt_at, created_at, recipients, browser_monitor_id)
+                 VALUES (:kind, :channel, :job, :name, :run, :status, :at, :detail, :failures, \'pending\', :now, :now, :recipients, :monitor)',
                 [
                     'kind' => $kind,
                     'recipients' => $recipients === [] ? null : json_encode($recipients, JSON_THROW_ON_ERROR),
                     'channel' => Row::int($channel, 'id'),
                     'job' => $jobId,
+                    'monitor' => Row::intOrNull($job, 'monitor_id'),
                     'name' => Row::string($job, 'name'),
                     'run' => $runId,
                     'status' => $runStatus,
@@ -437,7 +438,7 @@ final class Notifier
         $result = ['sent' => 0, 'retry' => 0, 'failed' => 0];
         $nowText = Timestamp::format($this->clock->now());
         $due = $this->db->fetchAll(
-            "SELECT id, kind, channel_id, job_id, job_name, run_status, occurred_at, detail, failures, recipients FROM notification_outbox
+            "SELECT id, kind, channel_id, job_id, job_name, run_status, occurred_at, detail, failures, recipients, browser_monitor_id, browser_user_id FROM notification_outbox
               WHERE status = 'pending' AND next_attempt_at <= :now ORDER BY id LIMIT :limit",
             ['now' => $nowText, 'limit' => self::BATCH],
         );
@@ -531,6 +532,9 @@ final class Notifier
             $this->link($row),
             $this->channels->languageFor($channel),
             Row::int($row, 'id'),
+            Row::intOrNull($row, 'job_id'),
+            Row::intOrNull($row, 'browser_monitor_id'),
+            Row::intOrNull($row, 'browser_user_id'),
         );
         try {
             $secret = $this->channels->secret($channel->id);

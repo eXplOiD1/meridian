@@ -19,6 +19,8 @@ final class BrowserPushController
     public function register(Kernel $kernel): void
     {
         $ids = ['id' => '[1-9][0-9]{0,17}', 'device' => '[1-9][0-9]{0,17}'];
+        $kernel->get('browser_push_personal', '/api/account/browser-channels', $this->personal(...));
+        $kernel->post('browser_push_personal_test', '/api/notifications/channels/{id}/browser/test', $this->test(...), $ids);
         $kernel->get('browser_push_devices', '/api/notifications/channels/{id}/browser', $this->devices(...), $ids);
         $kernel->post('browser_push_subscribe', '/api/notifications/channels/{id}/browser', $this->subscribe(...), $ids);
         $kernel->delete('browser_push_remove', '/api/notifications/channels/{id}/browser/{device}', $this->remove(...), $ids);
@@ -29,10 +31,46 @@ final class BrowserPushController
         $session = $this->auth->authenticate($request);
         if ($session === null) { return JsonReply::error(401, 'Nicht angemeldet.'); }
         if ($mutating && !$this->csrf->check($request, $session->token)) { return JsonReply::csrfFailed(); }
-        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageSettings);
         $channel = $this->channels->find((int) $request->attributes->getString('id'));
-        if ($channel === null || $channel->type !== ChannelType::Browser) { return JsonReply::error(404, 'Browser-Kanal nicht gefunden.'); }
+        if ($channel === null || $channel->type !== ChannelType::Browser || (!$channel->isEnabled && $mutating && $request->getMethod() !== 'DELETE')) { return JsonReply::error(404, 'Browser-Kanal nicht gefunden.'); }
+        $own = in_array($request->getMethod(), ['GET', 'DELETE'], true) && $this->hasDevices($session->userId, $channel->id);
+        if (!$own && !$this->eligible($session->userId, $channel->id)) { return JsonReply::error(403, 'Keine Berechtigung für diesen Browser-Kanal.'); }
         return $session->userId;
+    }
+
+    private function hasDevices(int $user, int $channel): bool
+    {
+        return $this->db->fetchOne('SELECT id FROM browser_push_subscriptions WHERE user_id = :user AND channel_id = :channel LIMIT 1', ['user' => $user, 'channel' => $channel]) !== null;
+    }
+
+    private function eligible(int $user, int $channel): bool
+    {
+        $grants = $this->users->grantsFor($user);
+        if ($this->access->can($grants, Permission::ManageSettings)) { return true; }
+        $scope = $this->access->scope($grants, Permission::ViewJobs);
+        $params = $scope->sqlParameters() + ['channel' => $channel];
+        return $this->db->fetchOne("SELECT j.id FROM jobs j LEFT JOIN categories c ON c.id = j.category_id WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names))) AND (j.notify_channels = 'all' OR (j.notify_channels = 'selected' AND EXISTS (SELECT 1 FROM job_channels jc WHERE jc.job_id = j.id AND jc.channel_id = :channel))) LIMIT 1", $params) !== null
+            || $this->db->fetchOne("SELECT m.id FROM monitors m LEFT JOIN categories c ON c.id = m.category_id WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names))) AND m.notify_channels = 'all' AND (m.notify_channel_ids IS NULL OR EXISTS (SELECT 1 FROM monitor_channels mc WHERE mc.monitor_id = m.id AND mc.channel_id = :channel)) LIMIT 1", $params) !== null;
+    }
+
+    public function personal(#[\SensitiveParameter] Request $request): Response
+    {
+        $session = $this->auth->authenticate($request);
+        if ($session === null) { return JsonReply::error(401, 'Nicht angemeldet.'); }
+        $rows = array_values(array_filter($this->db->fetchAll("SELECT id, name, is_enabled FROM notification_channels WHERE type = 'browser' ORDER BY id"), fn (array $row): bool => $this->hasDevices($session->userId, Row::int($row, 'id')) || (Row::bool($row, 'is_enabled') && $this->eligible($session->userId, Row::int($row, 'id')))));
+        return JsonReply::json(['channels' => $rows]);
+    }
+
+    public function test(#[\SensitiveParameter] Request $request): Response
+    {
+        $user = $this->guard($request, true);
+        if ($user instanceof Response) { return $user; }
+        $channel = (int) $request->attributes->getString('id');
+        if ($this->db->fetchOne('SELECT id FROM browser_push_subscriptions WHERE channel_id = :channel AND user_id = :user', ['channel' => $channel, 'user' => $user]) === null) { return JsonReply::error(422, 'Zuerst diesen Browser verbinden.'); }
+        $now = Timestamp::format($this->clock->now());
+        $this->db->execute("INSERT INTO notification_outbox (kind, channel_id, job_name, occurred_at, status, next_attempt_at, created_at, browser_user_id) VALUES ('test', :channel, 'Testnachricht', :now, 'pending', :now, :now, :user)", ['channel' => $channel, 'now' => $now, 'user' => $user]);
+        $this->audit->record($user, 'notification.browser_tested', 'channel:' . $channel);
+        return JsonReply::json(['queued' => true], 202);
     }
 
     public function devices(#[\SensitiveParameter] Request $request): Response
@@ -69,7 +107,7 @@ final class BrowserPushController
             $existing = $this->db->fetchOne('SELECT id, user_id FROM browser_push_subscriptions WHERE channel_id = :channel AND endpoint_hash = :hash', ['channel' => $id, 'hash' => $hash]);
             if ($existing !== null && Row::int($existing, 'user_id') !== $user) { return JsonReply::error(409, 'Dieses Browser-Abonnement gehört bereits zu einem anderen Konto.'); }
             if ($existing === null) {
-                $count = $this->db->fetchOne('SELECT COUNT(*) AS n FROM browser_push_subscriptions WHERE channel_id = :channel', ['channel' => $id]);
+                $count = $this->db->fetchOne('SELECT COUNT(*) AS n FROM browser_push_subscriptions WHERE channel_id = :channel AND user_id = :user', ['channel' => $id, 'user' => $user]);
                 if ($count !== null && Row::int($count, 'n') >= 10) { return JsonReply::error(422, 'Höchstens zehn Browser-Geräte pro Kanal.'); }
                 $this->db->execute('INSERT INTO browser_push_subscriptions (channel_id, user_id, endpoint_hash, subscription_enc, label, created_at) VALUES (:channel, :user, :hash, :secret, :label, :now)', ['channel' => $id, 'user' => $user, 'hash' => $hash, 'secret' => $this->box->encrypt($json), 'label' => $label, 'now' => Timestamp::format($this->clock->now())]);
             } else {

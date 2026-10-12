@@ -23,6 +23,9 @@ final readonly class Message
         public ?string $link = null,
         public string $language = 'de',
         public ?int $deliveryId = null,
+        public ?int $jobId = null,
+        public ?int $monitorId = null,
+        public ?int $browserUserId = null,
     ) {
     }
 

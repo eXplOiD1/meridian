@@ -32,7 +32,9 @@ Unter **Einstellungen → Benachrichtigungen** einen Kanal anlegen und anschlie�
 | Home Assistant | Basisadresse, Long-Lived Access Token und Zielaktion eintragen. `persistent_notification.create` erzeugt Dashboard-Meldungen; `notify.mobile_app_name` sendet über die Companion-App. Der HTTP-Worker muss Home Assistant erreichen können; HTTPS-Zertifikate werden geprüft. |
 | Browser (Chrome / Firefox) | Kontakt-E-Mail eintragen und den Kanal speichern. Danach **Bearbeiten → Diesen Browser verbinden**, einen Gerätenamen vergeben und die Benachrichtigungen im Browser erlauben. |
 
-Direktes Browser-Push benötigt HTTPS und das Recht zum Verwalten der Einstellungen. Jeder Browser bzw. jedes Gerät muss einzeln verbunden werden. Geräte werden dem angemeldeten Konto zugeordnet; nur die eigenen Geräte sind in der Liste sichtbar. Bis zu zehn Geräte pro Kanal sind möglich. Auf Desktop muss Chrome bzw. Firefox weiter laufen, der Meridian-Tab darf geschlossen sein. Betriebssystem- oder Browser-Einstellungen können Benachrichtigungen blockieren. Abgelaufene Push-Abonnements entfernt Meridian beim Versand automatisch. Die Browser-Geräte und deren Schlüssel bleiben bei Updates zusammen mit dem Hauptschlüssel erhalten.
+Direktes Browser-Push benötigt HTTPS. Ein Admin legt den Kanal an; danach verbindet jeder Nutzer seinen Browser unter **Mein Konto → Meine Browser-Benachrichtigungen** und bestätigt die Browser-Abfrage. Nach dem Anlegen bleibt das Kanalformular direkt beim Verbindungsschritt. Jeder Browser bzw. jedes Gerät benötigt eine eigene Freigabe. Nutzer erhalten nur Meldungen zu Jobs und Überwachungen, die sie aktuell sehen dürfen und für die dieser Browser-Kanal aktiviert ist. Entzogene Rechte werden auch vor dem Versand erneut geprüft. Die persönlichen Testnachrichten gehen nur an Geräte des eigenen Kontos.
+
+Bei abgelehnter Freigabe die Website-Einstellungen über das Symbol neben der Browser-Adresse öffnen, Benachrichtigungen erlauben und erneut **Diesen Browser verbinden** wählen. Eine zuvor blockierte Berechtigungsabfrage darf Meridian nicht automatisch erneut anzeigen. Über **Entfernen** lässt sich ein Gerät später abmelden. Nur eigene Geräte sind sichtbar; bis zu zehn Geräte pro Konto und Kanal sind möglich. Auf Desktop muss Chrome bzw. Firefox weiter laufen, der Meridian-Tab darf geschlossen sein. Betriebssystem-Einstellungen können Benachrichtigungen zusätzlich blockieren. Abgelaufene Abonnements entfernt Meridian beim Versand. Geräte und Schlüssel bleiben bei Updates erhalten.
 
 Zugangsdaten werden verschlüsselt gespeichert und beim Bearbeiten nicht wieder angezeigt. Bei Discord und Slack ist die Webhook-Adresse selbst ein Zugangsschlüssel. Nach der Einrichtung am Kanal **Testnachricht** auslösen und die letzte Zustellung prüfen. E-Mail-Empfänger pro Kategorie bzw. Job betreffen nur SMTP; die anderen Kanäle verwenden ihre jeweils konfigurierten Ziele oder verbundenen Geräte.
 
@@ -76,6 +78,38 @@ Vor dem ersten Start den Benutzernamen nach Wunsch und das Beispielpasswort unbe
 `MERIDIAN_TRUSTED_PROXIES` legt fest, von welchen Reverse-Proxys Meridian die weitergeleitete Client-IP übernimmt. Standardmäßig ist das Netz `172.19.0.0/16` eingetragen; dadurch wird dieses Netz nicht automatisch für Docker eingerichtet. Liegt dein Proxy in einem anderen Netz, den Wert durch seine IP oder sein tatsächliches Netz ersetzen. Mehrere Einträge mit Komma trennen. Nur vertrauenswürdige Proxy-Adressen eintragen, möglichst eine einzelne IP. Ohne Reverse-Proxy den Wert auf `""` setzen.
 
 ### Aktualisieren
+
+#### Updates über die Admin-Oberfläche
+
+Unter **Einstellungen → Updates** können Administratoren nach Updates suchen und eine Aktualisierung bestätigen. Derselbe Ablauf unterstützt Docker Compose und systemd. Der getrennte Update-Dienst prüft `main` automatisch alle sechs Stunden; die Installation beginnt ausschließlich nach einer Admin-Bestätigung. Bei Docker wird erst ein Update angeboten, wenn die Images für den konkreten Commit veröffentlicht sind. Der Dienst lädt sie vor der Unterbrechung herunter, beendet die Worker, sichert Datenbank und Hauptschlüssel, startet die neue Version und prüft ihre Dienste. Bei einem Installations- oder Startfehler versucht er, die vorherige Version mit ihrer Datenbank wiederherzustellen. Bei Stromausfall oder Abbruch des Update-Dienstes kann eine manuelle Wiederherstellung nötig sein.
+
+**Einmalige Einrichtung für Docker/UGOS/Portainer:**
+
+1. Die aktuelle `compose.yaml` übernehmen. Den Dienst `updater` aktivieren: Im Stack-Editor seine Zeile `profiles: [updater]` entfernen, oder bei der CLI `--profile updater` verwenden.
+2. Im Updater-Volume `${MERIDIAN_STACK_DIR:-.}:/stack:ro` den tatsächlichen **absoluten Host-Pfad** des Ordners mit der eingesetzten `compose.yaml` und gegebenenfalls `.env` eintragen, beispielsweise `/volume1/docker/meridian:/stack:ro`. Heißt die Datei `docker-compose.yaml`, zusätzlich `MERIDIAN_UPDATE_COMPOSE: /stack/docker-compose.yaml` in der Umgebung des Updaters setzen. Der Dienst verwendet den Projektnamen `meridian` und die mitgelieferten Containernamen. Eigene Bind-Mounts in der Compose-Datei benötigen absolute Host-Pfade.
+3. Das Updater-Image wird im bestehenden GHCR-Package `meridian` als `updater-latest` veröffentlicht. Es verwendet dieselbe Package-Sichtbarkeit wie das Anwendungs-Image. Bei privaten Images benötigt der Updater zusätzlich die Docker-Zugangskonfiguration für GHCR; öffentlich verfügbare Images brauchen keine Anmeldung.
+4. Den Stack einmal neu bereitstellen. Danach erfolgt das Prüfen und Installieren über Meridian. Der Updater bekommt als einziger zusätzlicher Dienst den direkten Docker-Socket; die Weboberfläche bekommt ihn nicht. Dieser optionale Dienst besitzt dadurch Rechte zum Verwalten von Docker-Containern und darf nur aus einer vertrauenswürdigen Quelle betrieben werden.
+
+Mit der CLI, im Stack-Ordner:
+
+```bash
+MERIDIAN_STACK_DIR="$(pwd)" docker compose --profile updater up -d
+```
+
+**Einmalige Einrichtung für systemd:** Auf dem bereits installierten Host werden Python 3, Git, Node.js 22+ mit npm, Composer und rsync benötigt. Aus dem aktuellen Meridian-Quellordner:
+
+```bash
+sudo apt install python3 git rsync
+sudo bash deploy/enable-updater.sh
+```
+
+Der root-Dienst `meridian-updater.service` verwendet ausschließlich das feste Meridian-Repository und den Branch `main`. Er baut die neue Oberfläche vor dem Stoppen der Dienste und installiert über den mitgelieferten Installer. Einstellungen, Hauptschlüssel und aktivierte Shell-Jobs bleiben erhalten. Die Oberfläche führt selbst keine Shell-Befehle aus und kann keine eigenen Update-Adressen oder Commits übergeben.
+
+Sicherungen dieses Dienstes liegen bei systemd geschützt unter `/var/lib/meridian-updater/backup-*`, bei Docker im Volume `meridian-updater-data`. Sie enthalten den Hauptschlüssel und müssen vertraulich behandelt werden. Sie werden nicht automatisch gelöscht; ausreichend Speicher vorhalten und ältere Sicherungen erst nach Prüfung entfernen. Die bestehenden Volumes nicht löschen. Nach abgebrochener Installation oder fehlgeschlagener Wiederherstellung bleibt die API im Wartungsmodus. Erst nach manueller Wiederherstellung den Updater stoppen, `/var/lib/meridian/updates/status.json` und eine eventuell wartende `request.json` entfernen und den Updater erneut starten. Die normalen Sicherungs- und Wiederherstellungsschritte stehen in `docs/BETRIEB.md`.
+
+Der Update-Dienst selbst wird durch erneutes Bereitstellen des Docker-Stacks bzw. erneutes Ausführen von `enable-updater.sh` aktualisiert. Strukturänderungen an der Compose-Datei oder neue Systemvoraussetzungen können weiterhin einen manuellen Installationsschritt erfordern.
+
+Die bisherigen manuellen Update-Befehle bleiben verfügbar:
 
 In der Docker-Verwaltung den bestehenden Stack erneut bereitstellen und dabei das erneute Abrufen der Images aktivieren. Die vorhandenen Volumes beibehalten. Über die Kommandozeile:
 

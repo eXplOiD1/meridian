@@ -8,6 +8,7 @@ import { canManageCategories, canManageUsers, canSeeUsersArea } from './lib/perm
 import type { Route } from './lib/useHashRoute';
 import { navigate, useHashRoute } from './lib/useHashRoute';
 import { Account } from './screens/Account';
+import { BrowserPushInvitation } from './components/BrowserPushInvitation';
 import { Audit } from './screens/Audit';
 import { Categories } from './screens/Categories';
 import { JobDetail } from './screens/JobDetail';
@@ -189,6 +190,7 @@ export function App() {
 
   return (
     <Layout profile={profile} route={effective} kicker={heading.kicker} title={heading.title} onLogout={() => void logout(profile)}>
+      {effective.name !== 'konto' && <BrowserPushInvitation userId={profile.user.id} />}
       {effective.name === 'home' && <Overview profile={profile} />}
       {effective.name === 'konto' && <Account profile={profile} onChanged={refresh} onCsrfToken={adoptCsrf} />}
       {effective.name === 'settings' && <Settings profile={profile} />}
