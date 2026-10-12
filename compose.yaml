@@ -26,17 +26,15 @@ x-common: &common
     - ALL
 
 services:
-  # Optional: einmal den tatsächlichen Stack-Ordner setzen, dann Updates über die UI starten.
+  # Der Updater erkennt die eingesetzte Compose-Datei über die Container-Metadaten.
   updater:
     image: ${MERIDIAN_UPDATER_IMAGE:-ghcr.io/exploid1/meridian:updater-latest}
-    profiles: [updater]
     container_name: meridian-updater
     restart: unless-stopped
     environment:
       MERIDIAN_UPDATE_MODE: docker
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${MERIDIAN_STACK_DIR:-.}:/stack:ro
       - meridian-data:/var/lib/meridian
       - meridian-updater-data:/var/lib/meridian-updater
     read_only: true

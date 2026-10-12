@@ -83,25 +83,17 @@ Vor dem ersten Start den Benutzernamen nach Wunsch und das Beispielpasswort unbe
 
 Unter **Einstellungen → Updates** können Administratoren nach Updates suchen und eine Aktualisierung bestätigen. Derselbe Ablauf unterstützt Docker Compose und systemd. Der getrennte Update-Dienst prüft `main` automatisch alle sechs Stunden; die Installation beginnt ausschließlich nach einer Admin-Bestätigung. Bei Docker wird erst ein Update angeboten, wenn die Images für den konkreten Commit veröffentlicht sind. Der Dienst lädt sie vor der Unterbrechung herunter, beendet die Worker, sichert Datenbank und Hauptschlüssel, startet die neue Version und prüft ihre Dienste. Bei einem Installations- oder Startfehler versucht er, die vorherige Version mit ihrer Datenbank wiederherzustellen. Bei Stromausfall oder Abbruch des Update-Dienstes kann eine manuelle Wiederherstellung nötig sein.
 
-**Einmalige Einrichtung für Docker/UGOS/Portainer:**
+**Docker/UGOS/Portainer:** Der Update-Dienst startet mit dem Stack automatisch. Beide Compose-Dateien enthalten ihn ohne optionales Profil. Projektname und Compose-Dateien werden aus den Container-Metadaten ermittelt; Portainer-Pfade werden bei Bedarf auf dessen Host-Daten-Volume abgebildet. Bei fehlenden oder ungültigen Metadaten wird das Update nicht begonnen.
 
-1. Die aktuelle `compose.yaml` übernehmen. Den Dienst `updater` aktivieren: Im Stack-Editor seine Zeile `profiles: [updater]` entfernen, oder bei der CLI `--profile updater` verwenden.
-2. Im Updater-Volume `${MERIDIAN_STACK_DIR:-.}:/stack:ro` den tatsächlichen **absoluten Host-Pfad** des Ordners mit der eingesetzten `compose.yaml` und gegebenenfalls `.env` eintragen, beispielsweise `/volume1/docker/meridian:/stack:ro`. Heißt die Datei `docker-compose.yaml`, zusätzlich `MERIDIAN_UPDATE_COMPOSE: /stack/docker-compose.yaml` in der Umgebung des Updaters setzen. Der Dienst verwendet den Projektnamen `meridian` und die mitgelieferten Containernamen. Eigene Bind-Mounts in der Compose-Datei benötigen absolute Host-Pfade.
-3. Das Updater-Image wird im bestehenden GHCR-Package `meridian` als `updater-latest` veröffentlicht. Es verwendet dieselbe Package-Sichtbarkeit wie das Anwendungs-Image. Bei privaten Images benötigt der Updater zusätzlich die Docker-Zugangskonfiguration für GHCR; öffentlich verfügbare Images brauchen keine Anmeldung.
-4. Den Stack einmal neu bereitstellen. Danach erfolgt das Prüfen und Installieren über Meridian. Der Updater bekommt als einziger zusätzlicher Dienst den direkten Docker-Socket; die Weboberfläche bekommt ihn nicht. Dieser optionale Dienst besitzt dadurch Rechte zum Verwalten von Docker-Containern und darf nur aus einer vertrauenswürdigen Quelle betrieben werden.
-
-Mit der CLI, im Stack-Ordner:
+Bestehende Installationen: die aktuelle Compose-Datei übernehmen und den Stack einmal neu bereitstellen. Ein Image-Pull allein fügt den neuen Dienst nicht hinzu. Mit der CLI im Stack-Ordner:
 
 ```bash
-MERIDIAN_STACK_DIR="$(pwd)" docker compose --profile updater up -d
+docker compose up -d
 ```
 
-**Einmalige Einrichtung für systemd:** Auf dem bereits installierten Host werden Python 3, Git, Node.js 22+ mit npm, Composer und rsync benötigt. Aus dem aktuellen Meridian-Quellordner:
+Das Image liegt unter `ghcr.io/exploid1/meridian:updater-latest`. Private Images benötigen eine Docker-Zugangskonfiguration für GHCR. Nur der Updater erhält den direkten Docker-Socket und damit Rechte zur Container-Verwaltung. Die vorhandenen Volumes beibehalten. Ein manuell eingetragener Stack-Pfad ist für die mitgelieferte Compose-Datei nicht erforderlich.
 
-```bash
-sudo apt install python3 git rsync
-sudo bash deploy/enable-updater.sh
-```
+**systemd:** `deploy/install.sh` richtet `meridian-updater.service` automatisch ein und aktiviert ihn. Python 3, Git, Node.js 22+ mit npm sowie die bisherigen Voraussetzungen müssen installiert sein. Bei bestehenden Installationen den aktuellen Installer mit den bisherigen Installationsparametern erneut ausführen. Der zusätzliche manuelle Aufruf von `enable-updater.sh` entfällt.
 
 Der root-Dienst `meridian-updater.service` verwendet ausschließlich das feste Meridian-Repository und den Branch `main`. Er baut die neue Oberfläche vor dem Stoppen der Dienste und installiert über den mitgelieferten Installer. Einstellungen, Hauptschlüssel und aktivierte Shell-Jobs bleiben erhalten. Die Oberfläche führt selbst keine Shell-Befehle aus und kann keine eigenen Update-Adressen oder Commits übergeben.
 
