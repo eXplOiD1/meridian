@@ -47,7 +47,7 @@ final class StatusPageRepository
     public function list(CategoryScope $scope): array
     {
         $rows = $this->db->fetchAll(
-            'SELECT p.id, p.slug, p.title, p.category_id, c.name AS category_name, p.is_enabled, p.created_at
+            'SELECT p.id, p.slug, p.title, p.category_id, c.name AS category_name, p.is_enabled, p.created_at, p.language
              FROM status_pages p LEFT JOIN categories c ON c.id = p.category_id
              WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))
              ORDER BY p.title COLLATE NOCASE, p.id',
@@ -60,7 +60,7 @@ final class StatusPageRepository
     public function findVisible(int $id, CategoryScope $scope): ?StatusPageRecord
     {
         $row = $this->db->fetchOne(
-            'SELECT p.id, p.slug, p.title, p.category_id, c.name AS category_name, p.is_enabled, p.created_at
+            'SELECT p.id, p.slug, p.title, p.category_id, c.name AS category_name, p.is_enabled, p.created_at, p.language
              FROM status_pages p LEFT JOIN categories c ON c.id = p.category_id
              WHERE p.id = :id AND (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))',
             $scope->sqlParameters() + ['id' => $id],
@@ -72,8 +72,8 @@ final class StatusPageRepository
     public function insert(StatusPageDraft $draft, int $userId, string $slug, string $now): int
     {
         $this->db->execute(
-            'INSERT INTO status_pages (slug, title, category_id, is_enabled, created_by, created_at, updated_at) VALUES (:slug, :title, :category, :enabled, :user, :now, :now)',
-            ['slug' => $slug, 'title' => $draft->title, 'category' => $draft->categoryId, 'enabled' => $draft->isEnabled ? 1 : 0, 'user' => $userId, 'now' => $now],
+            'INSERT INTO status_pages (slug, title, category_id, is_enabled, created_by, created_at, updated_at, language) VALUES (:slug, :title, :category, :enabled, :user, :now, :now, :language)',
+            ['slug' => $slug, 'title' => $draft->title, 'category' => $draft->categoryId, 'enabled' => $draft->isEnabled ? 1 : 0, 'language' => $draft->language, 'user' => $userId, 'now' => $now],
         );
         $id = $this->db->lastInsertId();
         $this->replaceItems($id, $draft->items);
@@ -84,8 +84,8 @@ final class StatusPageRepository
     public function update(int $id, StatusPageDraft $draft, string $now): void
     {
         $this->db->execute(
-            'UPDATE status_pages SET title = :title, category_id = :category, is_enabled = :enabled, updated_at = :now WHERE id = :id',
-            ['title' => $draft->title, 'category' => $draft->categoryId, 'enabled' => $draft->isEnabled ? 1 : 0, 'now' => $now, 'id' => $id],
+            'UPDATE status_pages SET title = :title, category_id = :category, is_enabled = :enabled, language = :language, updated_at = :now WHERE id = :id',
+            ['title' => $draft->title, 'category' => $draft->categoryId, 'enabled' => $draft->isEnabled ? 1 : 0, 'language' => $draft->language, 'now' => $now, 'id' => $id],
         );
         $this->replaceItems($id, $draft->items);
     }
@@ -103,11 +103,11 @@ final class StatusPageRepository
     /**
      * Öffentliche Sicht: nur eine aktive Seite, nur Titel und die Einträge mit Anzeigename und Zustand.
      *
-     * @return array{title: string, items: list<array{label: string, state: string, since: string|null}>}|null
+     * @return array{title: string, language: string, items: list<array{label: string, state: string, since: string|null}>}|null
      */
     public function publicView(string $slug): ?array
     {
-        $page = $this->db->fetchOne('SELECT id, title FROM status_pages WHERE slug = :slug AND is_enabled = 1', ['slug' => $slug]);
+        $page = $this->db->fetchOne('SELECT id, title, language FROM status_pages WHERE slug = :slug AND is_enabled = 1', ['slug' => $slug]);
         if ($page === null) {
             return null;
         }
@@ -122,7 +122,7 @@ final class StatusPageRepository
             $items[] = ['label' => Row::string($row, 'label'), 'state' => $state, 'since' => $since];
         }
 
-        return ['title' => Row::string($page, 'title'), 'items' => $items];
+        return ['title' => Row::string($page, 'title'), 'language' => Row::string($page, 'language'), 'items' => $items];
     }
 
     /**
@@ -218,6 +218,7 @@ final class StatusPageRepository
             Row::bool($row, 'is_enabled'),
             $items,
             Row::string($row, 'created_at'),
+            Row::string($row, 'language'),
         );
     }
 }

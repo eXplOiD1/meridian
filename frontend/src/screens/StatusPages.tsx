@@ -8,7 +8,7 @@ import { FormField } from '../components/FormField';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import type { CategoryRef, Monitor, Profile, StatusPage, StatusPageItem } from '../types';
-import { t } from '../i18n';
+import { getLang, t } from '../i18n';
 
 interface Candidate {
   type: 'job' | 'monitor';
@@ -20,17 +20,19 @@ interface Draft {
   title: string;
   categoryId: string;
   enabled: boolean;
+  language: 'de' | 'en';
   items: Array<{ key: number; type: 'job' | 'monitor'; id: number; label: string; name: string }>;
 }
 
 let nextKey = 1;
 
 function draftOf(page: StatusPage | null, categoryId: string): Draft {
-  if (page === null) return { title: '', categoryId, enabled: true, items: [] };
+  if (page === null) return { title: '', categoryId, enabled: true, language: getLang(), items: [] };
   return {
     title: page.title,
     categoryId: page.category_id === null ? '' : String(page.category_id),
     enabled: page.enabled,
+    language: page.language ?? 'de',
     items: page.items.map((i: StatusPageItem) => ({ key: nextKey++, type: i.type, id: i.id, label: i.label, name: i.name ?? '' })),
   };
 }
@@ -81,6 +83,12 @@ function PageForm({ draft, setDraft, categories, candidates, errors, busy, submi
           )}
         </FormField>
       </div>
+      <FormField label={t('Sprache der Statusseite')} error={errors.language} hint={t('Neue Seiten übernehmen deine UI-Sprache. Besucher können auf der öffentlichen Seite zwischen Deutsch und Englisch wechseln.')} >
+        {(aria) => <select {...aria} className="input" name="page-language" value={draft.language} onChange={(e) => setDraft({ ...draft, language: e.target.value === 'en' ? 'en' : 'de' })}>
+          <option value="de">{t('Deutsch')}</option>
+          <option value="en">{t('Englisch')}</option>
+        </select>}
+      </FormField>
       <label className="check">
         <input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />
         <span>{t('Seite ist erreichbar (ausgeschaltet antwortet der Link wie ein unbekannter)')}</span>
@@ -193,6 +201,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
           title: d.title.trim(),
           category_id: d.categoryId === '' ? null : Number.parseInt(d.categoryId, 10),
           is_enabled: d.enabled,
+          language: d.language,
           items: d.items.map((i) => ({ type: i.type, id: i.id, label: i.label.trim() })),
         },
       });

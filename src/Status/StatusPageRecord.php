@@ -21,6 +21,7 @@ final readonly class StatusPageRecord
         public bool $isEnabled,
         public array $items,
         public string $createdAt,
+        public string $language = 'de',
     ) {
     }
 }

@@ -18,6 +18,7 @@ final readonly class StatusPageDraft
         public ?string $categoryName,
         public bool $isEnabled,
         public array $items,
+        public string $language = 'de',
     ) {
     }
 }

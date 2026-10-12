@@ -22,7 +22,7 @@ final class StatusPageValidator
 {
     public const MAX_ITEMS = 50;
 
-    private const KEYS = ['title', 'category_id', 'is_enabled', 'items'];
+    private const KEYS = ['title', 'category_id', 'is_enabled', 'items', 'language'];
     private const ITEM_KEYS = ['type', 'id', 'label'];
     private const LABEL = '/^[^\x00-\x1F\x7F]{1,80}$/Du';
 
@@ -57,6 +57,12 @@ final class StatusPageValidator
             $errors['is_enabled'] = 'Muss true oder false sein.';
         }
 
+        /** @var mixed $language */
+        $language = array_key_exists('language', $input) ? $input['language'] : ($existing->language ?? 'de');
+        if ($language !== 'de' && $language !== 'en') {
+            $errors['language'] = 'Sprache: de oder en.';
+        }
+
         /** @var mixed $category */
         $category = array_key_exists('category_id', $input) ? $input['category_id'] : $existing?->categoryId;
         $categoryId = null;
@@ -80,11 +86,11 @@ final class StatusPageValidator
             $items = $this->items($input['items'], $viewScope, $errors);
         }
 
-        if ($errors !== [] || !is_string($title) || !is_bool($enabled)) {
+        if ($errors !== [] || !is_string($title) || !is_bool($enabled) || !is_string($language)) {
             throw new ValidationFailed($errors);
         }
 
-        return new StatusPageDraft(trim($title), $categoryId, $categoryName, $enabled, $items);
+        return new StatusPageDraft(trim($title), $categoryId, $categoryName, $enabled, $items, $language);
     }
 
     /**

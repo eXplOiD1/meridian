@@ -466,6 +466,7 @@ export interface StatusPageItem {
 }
 
 export interface StatusPage {
+  language: 'de' | 'en';
   id: number;
   title: string;
   slug: string;

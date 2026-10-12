@@ -3,7 +3,7 @@
 name: Container images
 on:
   push:
-    branches: [main, claude/great-clarke-ubr0vc]
+    branches: [main, beta]
   workflow_dispatch:
 permissions:
   contents: read

@@ -43,16 +43,20 @@ final class PublicStatusController
         if ($view === null) {
             return self::notFound();
         }
+        $requestedLanguage = $request->query->all()['lang'] ?? null;
+        $language = $requestedLanguage === 'de' || $requestedLanguage === 'en' ? $requestedLanguage : $view['language'];
         $html = $this->renderer->render(
             $view['title'],
             $view['items'],
             new \DateTimeZone($this->config->timezone === '' ? 'UTC' : $this->config->timezone),
             $this->clock->now(),
             fn (string $text): string => $this->masker->mask($text),
+            $language,
         );
 
         return new Response($html, 200, [
             'Content-Type' => 'text/html; charset=utf-8',
+            'Content-Language' => $language,
             'Cache-Control' => 'public, max-age=30',
             'X-Robots-Tag' => 'noindex, nofollow, noarchive',
         ]);

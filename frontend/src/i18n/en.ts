@@ -984,4 +984,7 @@ export const EN: Record<string, string> = {
   Benutzername: 'Username',
   Passwort: 'Password',
   Anmelden: 'Sign in',
+  'Sprache der Statusseite': 'Status page language',
+  'Neue Seiten übernehmen deine UI-Sprache. Besucher können auf der öffentlichen Seite zwischen Deutsch und Englisch wechseln.': 'New pages use your UI language. Visitors can switch between German and English on the public page.',
+  'Sprache: de oder en.': 'Language: de or en.',
 };

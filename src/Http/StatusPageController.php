@@ -126,6 +126,7 @@ final class StatusPageController
             'category_id' => $page->categoryId,
             'category' => $page->categoryName === null ? null : $this->masker->mask($page->categoryName),
             'enabled' => $page->isEnabled,
+            'language' => $page->language,
             'items' => array_map(fn (StatusItem $i): array => [
                 'type' => $i->type,
                 'id' => $i->refId,
