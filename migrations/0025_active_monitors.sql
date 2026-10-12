@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- ADR 0018: aktive Prüfungen (Web-Adresse, TCP-Port, Ping) zusätzlich zum Herzschlag.
 -- Neue Spalten statt Neuaufbau (status_page_items verweist auf monitors). Das Ziel steht nur verschlüsselt (`target_enc`),
 -- `display_target` ist der Ursprung ohne Pfad und Query. Aktive Prüfungen bekommen ein nie ausgegebenes Zufalls-Token,

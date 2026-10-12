@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Migrator applies this entire file in one transaction and rolls back on any error.
 -- Copy all existing messages before replacing the table; no live data is removed.
 ALTER TABLE jobs ADD COLUMN runtime_warn_percent INTEGER CHECK (runtime_warn_percent IS NULL OR runtime_warn_percent BETWEEN 110 AND 1000);

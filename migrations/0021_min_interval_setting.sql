@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 7 (ADR 0013): feste Intervalle in Sekunden (`@every <n>s`) mit einer vom Admin einstellbaren Untergrenze
 -- `jobs.min_interval_seconds` (SQLite ändert kein CHECK: settings neu aufbauen, alle bisherigen Schlüssel + der neue).
 

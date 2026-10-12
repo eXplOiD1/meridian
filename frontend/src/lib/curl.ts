@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import type { HttpMethod } from '../types';
 
 /** Ergebnis von `parseCurl`: genau das, was ein HTTP-Job aus einem curl-Befehl übernehmen kann. */

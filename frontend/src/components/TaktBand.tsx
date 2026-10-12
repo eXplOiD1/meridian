@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { hrefOf } from '../lib/useHashRoute';
 import type { Overview } from '../types';
 import { t } from '../i18n';

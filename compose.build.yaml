@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 # Meridian: docker compose up -d --build
 # Updates: docker compose build --pull --no-cache && docker compose up -d
 # Quelle: main; MERIDIAN_REPO_REF erlaubt einen anderen Branch, Tag oder Commit.
@@ -52,6 +54,8 @@ x-common: &common
         COPY --from=source /src/public/ public/
         COPY --from=source /src/src/ src/
         COPY --from=ui /ui/dist /app/ui
+        COPY --from=source /src/LICENSE /src/THIRD_PARTY_NOTICES.md /app/
+        COPY --from=source /src/licenses/ /app/licenses/
         COPY --from=source --chmod=0755 /src/docker/entrypoint.sh /usr/local/bin/meridian-entrypoint
 
         ENV MERIDIAN_DATA_DIR=/var/lib/meridian \

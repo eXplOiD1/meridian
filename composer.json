@@ -22,5 +22,8 @@
     "config": {
         "sort-packages": true,
         "optimize-autoloader": true
+    },
+    "extra": {
+        "copyright": "Copyright (c) 2026 Alexander von Pidoll. All rights reserved."
     }
 }

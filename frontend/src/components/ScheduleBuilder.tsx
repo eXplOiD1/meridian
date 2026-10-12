@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { useEffect, useState } from 'react';
 import { CRON_PRESETS } from '../lib/jobs';
 import { t } from '../i18n';

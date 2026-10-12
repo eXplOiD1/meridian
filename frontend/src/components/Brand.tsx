@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { t } from '../i18n';
 /** Wortmarke mit der Uhr aus dem Klickdummy (nur CSS/SVG, keine Bilddatei). */
 export function Brand({ subtitle = 'Zeitplaner' }: { subtitle?: string }) {

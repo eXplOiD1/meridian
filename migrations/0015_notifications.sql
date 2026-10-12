@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 6 (ADR 0007): Benachrichtigungskanäle, Einstellungen je Job, Zusteller-Zustand und Ausgang.
 
 CREATE TABLE notification_channels (

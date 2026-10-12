@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 7 (ADR 0011/0012): Herzschlag-Überwachung (eingehende Pings) und öffentliche Statusseiten.
 -- Die Ausgangstabelle bekommt die Arten 'monitor_down' und 'monitor_up' (ohne Kinder, Neuaufbau gefahrlos).
 

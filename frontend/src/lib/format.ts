@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { locale, t } from '../i18n';
 
 const ACTIONS: Record<string, { label: string; tone: 'ok' | 'warn' | 'err' | 'info' }> = {

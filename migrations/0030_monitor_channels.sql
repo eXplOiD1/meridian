@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 CREATE TABLE monitor_channels (
     monitor_id INTEGER NOT NULL REFERENCES monitors (id) ON DELETE CASCADE,
     channel_id INTEGER NOT NULL REFERENCES notification_channels (id) ON DELETE CASCADE,

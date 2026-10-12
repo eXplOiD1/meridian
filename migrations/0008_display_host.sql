@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Neue Einstellung http.display_host (docs/decisions/0003, E10, Entscheidung Alex 09.10.2026).
 -- SQLite kann ein CHECK nicht ändern: Tabelle neu anlegen, Zeilen übernehmen, alte ersetzen.
 -- Nur bekannte Schlüssel; fehlt eine Zeile, gilt der Standard aus dem Code. Nie Geheimnisse.

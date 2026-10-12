@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 /**
  * Übergabe „soeben ausgelöster Lauf“ vom Editor („Speichern und testen“) an die Job-Ansicht.
  * Nur eine Zahl im Arbeitsspeicher, nichts im Browser-Speicher und nichts in der URL.

@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 #
 # Sandbox für Shell-Jobs. Die compose.yaml enthält denselben Inhalt inline
 # (Dienst "sandbox"); bei Änderungen beide anpassen. Erweitern: eigenes Image und eigener Dienst.

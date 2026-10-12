@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 [Unit]
 Description=Meridian Host-Agent (Socket, eine Verbindung = ein Shell-Lauf)
 

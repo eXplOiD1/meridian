@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 6 (ADR 0010): Überwachung je Job — automatisches Deaktivieren nach Fehlschlägen, TLS-Ablauf-Warnung.
 -- Die Ausgangstabelle bekommt die Arten 'disabled' und 'tls_expiry'. Sie hat keine Kinder, ein Neuaufbau ist daher gefahrlos.
 

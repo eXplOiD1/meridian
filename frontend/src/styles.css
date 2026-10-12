@@ -1,3 +1,6 @@
+/*! Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 /* Meridian „Material Aurora“: zentrale Design-Tokens, dunkle Standardansicht und gleichwertige helle Ansicht.
    Farben und Schriften nur über diese Variablen; Status immer zusätzlich durch Text oder Symbol. */
 :root, :root[data-theme='dark'] {

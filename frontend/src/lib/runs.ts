@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+ */
 import { request } from './api';
 
 /** Manuellen Lauf oder Testlauf einreihen (202 {run_id}); das Ergebnis wird über /api/runs/{id} abgefragt. */

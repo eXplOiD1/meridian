@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- Phase 4 (docs/decisions/0004 §3.1): getrennte Worker-Prozesse, Abbruch durch Benutzer, Live-Log.
 
 -- Abbruch: angefordert von einem Benutzer; der Worker sieht es über den Herzschlag.

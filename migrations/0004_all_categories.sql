@@ -1,3 +1,5 @@
+-- Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+-- SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 -- „Alle Kategorien“ ist eine ausdrückliche Eigenschaft der Zuweisung (Sicherheitsregel).
 -- Bisher hieß eine Zuweisung ohne Kategorien „alle“: wurde die letzte Kategorie gelöscht,
 -- wurde ein beschränkter Benutzer dadurch uneingeschränkt. Jetzt gilt: ohne Flag und ohne
