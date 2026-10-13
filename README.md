@@ -16,6 +16,8 @@ For time filters, clickable timelines, monitor alarms and public status history,
 
 For shell jobs on the Linux Docker host, see [Enable Docker host access](docs/DOCKER_HOST.md#english). This optional bridge requires explicit activation and a configured host user.
 
+For explicitly approved host-root access, the complete [Docker host-root stack](compose.host-root.yaml) works in a NAS Compose editor without a second file or UID/GID variables.
+
 ### License
 
 Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
@@ -346,6 +348,8 @@ Bei Statusseiten lässt sich die Standardsprache beim Anlegen und Bearbeiten auf
 Zeitfilter, anklickbare Tagesansichten, Überwachungsalarme und die Historie der Statusseite erklärt [Verlauf und Überwachung](docs/HISTORY.md#deutsch) ([English](docs/HISTORY.md#english)).
 
 Shell-Jobs auf dem Linux-Docker-Host: [Docker-Host-Zugriff aktivieren](docs/DOCKER_HOST.md#deutsch). Die optionale Bridge benötigt eine ausdrückliche Aktivierung und einen konfigurierten Host-Benutzer.
+
+Für ausdrücklich freigegebenen Host-root-Zugriff gibt es den vollständigen [Docker-Stack mit Host-root](compose.host-root.yaml): im NAS-Editor ohne zweite Datei und ohne UID/GID-Variablen verwendbar.
 
 ### Benachrichtigungskanäle
 
