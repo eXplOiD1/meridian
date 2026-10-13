@@ -348,7 +348,8 @@ final class JobController
         if ($scope->isEmpty()) {
             throw new AccessDenied(Permission::ViewJobs);
         }
-        $records = $this->runs->recent($scope, $limit, $before, $status, $jobId);
+        [$from, $to] = HistoryRange::parse($request);
+        $records = $this->runs->recent($scope, $limit, $before, $status, $jobId, $from, $to);
         $more = count($records) > $limit;
         $page = array_slice($records, 0, $limit);
         $display = $this->settings->httpDisplay();

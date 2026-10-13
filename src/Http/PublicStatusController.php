@@ -39,7 +39,13 @@ final class PublicStatusController
 
     public function show(#[\SensitiveParameter] Request $request): Response
     {
-        $view = $this->pages->publicView($request->attributes->getString('slug'));
+        $params = $request->query->all();
+        $rawDay = $params['day'] ?? null;
+        $date = is_string($rawDay) && preg_match('/^\d{4}-\d{2}-\d{2}$/D', $rawDay) === 1 ? \DateTimeImmutable::createFromFormat('!Y-m-d', $rawDay, new \DateTimeZone('UTC')) : false;
+        $day = $date !== false && $date->format('Y-m-d') === $rawDay && $date <= $this->clock->now() && $date >= $this->clock->now()->setTime(0, 0)->modify('-89 days') ? $rawDay : null;
+        $item = $params['item'] ?? '';
+        $position = is_string($item) && preg_match('/^(?:0|[1-9][0-9]?)$/D', $item) === 1 ? (int) $item : -1;
+        $view = $this->pages->publicView($request->attributes->getString('slug'), $this->clock->now(), $day, $position);
         if ($view === null) {
             return self::notFound();
         }

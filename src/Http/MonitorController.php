@@ -48,10 +48,47 @@ final class MonitorController
     {
         $id = ['id' => '[1-9][0-9]{0,17}'];
         $kernel->get('monitors_list', '/api/monitors', $this->list(...));
+        $kernel->get('monitor_history', '/api/monitors/history', $this->history(...));
         $kernel->post('monitors_create', '/api/monitors', $this->create(...));
         $kernel->put('monitors_update', '/api/monitors/{id}', $this->update(...), $id);
         $kernel->delete('monitors_delete', '/api/monitors/{id}', $this->delete(...), $id);
         $kernel->post('monitors_token', '/api/monitors/{id}/token', $this->renewToken(...), $id);
+    }
+
+    public function history(#[\SensitiveParameter] Request $request): Response
+    {
+        $auth = $this->authenticate($request, false);
+        if ($auth instanceof Response) { return $auth; }
+        [, $grants] = $auth;
+        $scope = $this->access->scope($grants, Permission::ViewJobs);
+        if ($scope->isEmpty()) { throw new AccessDenied(Permission::ViewJobs); }
+        [$from, $to] = HistoryRange::parse($request);
+        $params = $request->query->all();
+        $ids = [];
+        foreach (['monitor_id', 'before_id'] as $name) {
+            $raw = $params[$name] ?? null;
+            if ($raw !== null && (!is_string($raw) || preg_match('/^[1-9][0-9]{0,17}$/D', $raw) !== 1)) {
+                throw ValidationFailed::field($name, 'Positive ganze Zahl.');
+            }
+            $ids[] = $raw === null ? null : (int) $raw;
+        }
+        $rows = $this->monitors->history($scope, $from, $to, $ids[0], $ids[1], 50);
+        $more = count($rows) > 50;
+        $events = [];
+        foreach (array_slice($rows, 0, 50) as $row) {
+            $events[] = [
+                'id' => \Meridian\Job\Row::int($row, 'id'), 'monitor_id' => \Meridian\Job\Row::int($row, 'monitor_id'),
+                'name' => $this->masker->mask(\Meridian\Job\Row::string($row, 'name')),
+                'category' => \Meridian\Job\Row::stringOrNull($row, 'category'),
+                'occurred_at' => \Meridian\Job\Row::string($row, 'occurred_at'),
+                'kind' => \Meridian\Job\Row::string($row, 'kind'), 'state' => \Meridian\Job\Row::string($row, 'state'),
+                'ok' => $row['ok'] === null ? null : \Meridian\Job\Row::bool($row, 'ok'),
+                'latency_ms' => \Meridian\Job\Row::intOrNull($row, 'latency_ms'),
+                'note' => $this->masker->mask(\Meridian\Job\Row::stringOrNull($row, 'note') ?? ''),
+                'notifications' => ['pending' => \Meridian\Job\Row::int($row, 'pending'), 'sent' => \Meridian\Job\Row::int($row, 'sent'), 'failed' => \Meridian\Job\Row::int($row, 'failed')],
+            ];
+        }
+        return JsonReply::json(['events' => $events, 'next_before_id' => $more && $events !== [] ? $events[count($events) - 1]['id'] : null]);
     }
 
     public function list(#[\SensitiveParameter] Request $request): Response
@@ -154,6 +191,7 @@ final class MonitorController
             'enabled' => $m->isEnabled,
             'state' => $m->isEnabled ? $m->state : 'paused',
             'state_since' => $m->stateSince,
+            'max_response_ms' => $m->maxResponseMs,
             'last_ping_at' => $m->lastPingAt,
             'notify_on_down' => $m->notifyOnDown,
             'notify_on_up' => $m->notifyOnUp,

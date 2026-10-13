@@ -30,7 +30,7 @@ const PAGE_SIZE = 50;
 const STATUS_ORDER: RunStatus[] = ['queued', 'running', 'ok', 'failed', 'timeout', 'aborted', 'skipped'];
 
 /** Verlauf über alle Jobs, die der Benutzer sehen darf (der Server kappt auf die erlaubten Kategorien). */
-export function History({ profile }: { profile: Profile }) {
+export function History({ profile, from = '', to = '', jobId = '' }: { profile: Profile; from?: string; to?: string; jobId?: string }) {
   const [runs, setRuns] = useState<HistoryRun[]>([]);
   const [nextBefore, setNextBefore] = useState<number | null>(null);
   const [status, setStatus] = useState<'' | RunStatus>('');
@@ -41,6 +41,9 @@ export function History({ profile }: { profile: Profile }) {
   const load = useCallback(
     async (before: number | null, append: boolean): Promise<void> => {
       const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      if (from) query.set('from', from);
+      if (to) query.set('to', to);
+      if (jobId) query.set('job_id', jobId);
       if (status !== '') {
         query.set('status', status);
       }
@@ -50,6 +53,7 @@ export function History({ profile }: { profile: Profile }) {
       try {
         const page = await request<HistoryPage>('GET', '/api/runs?' + query.toString());
         setRuns((current) => (append ? [...current, ...page.runs] : page.runs));
+        if (!append && jobId && from && to && page.runs.length === 1) void select(page.runs[0]!);
         setNextBefore(page.next_before_id);
         setError(null);
       } catch (caught) {
@@ -58,14 +62,14 @@ export function History({ profile }: { profile: Profile }) {
         setLoaded(true);
       }
     },
-    [status],
+    [status, from, to, jobId],
   );
 
   async function select(run: HistoryRun): Promise<void> {
     setSelected(run);
     try {
       const detail = (await request<{ run: Run }>('GET', '/api/runs/' + String(run.id))).run;
-      setSelected({ ...run, ...detail });
+      setSelected(current => current?.id === run.id ? { ...run, ...detail } : current);
     } catch (caught) {
       setError(errorMessage(caught));
     }
@@ -77,6 +81,9 @@ export function History({ profile }: { profile: Profile }) {
   }
 
   useEffect(() => {
+    setRuns([]);
+    setSelected(null);
+    setNextBefore(null);
     setLoaded(false);
     void load(null, false);
   }, [load]);

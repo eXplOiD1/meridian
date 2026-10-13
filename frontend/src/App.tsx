@@ -14,7 +14,7 @@ import { Audit } from './screens/Audit';
 import { Categories } from './screens/Categories';
 import { JobDetail } from './screens/JobDetail';
 import { JobEdit } from './screens/JobEdit';
-import { History } from './screens/History';
+import { HistoryExplorer as History } from './screens/HistoryExplorer';
 import { setLang } from './i18n';
 import { setTheme } from './theme';
 import { Statistics } from './screens/Statistics';
@@ -198,7 +198,7 @@ export function App() {
       {effective.name === 'settings' && <Settings profile={profile} />}
       {effective.name === 'audit' && <Audit profile={profile} />}
       {effective.name === 'jobs' && <Jobs profile={profile} />}
-      {effective.name === 'history' && <History profile={profile} />}
+      {effective.name === 'history' && <History key={window.location.hash} profile={profile} />}
       {effective.name === 'stats' && <Statistics profile={profile} />}
       {effective.name === 'monitors' && <Monitors profile={profile} />}
       {effective.name === 'status-pages' && <StatusPages profile={profile} />}

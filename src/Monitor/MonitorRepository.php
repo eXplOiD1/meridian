@@ -30,7 +30,7 @@ final class MonitorRepository
         $rows = $this->db->fetchAll(
             'SELECT m.id, m.name, m.category_id, c.name AS category_name, m.interval_seconds, m.grace_seconds, m.is_enabled, m.state, m.state_since,
                     m.last_ping_at, m.notify_on_down, m.notify_on_up, m.notify_channels, m.notify_channel_ids, (SELECT json_group_array(mc.channel_id) FROM monitor_channels mc WHERE mc.monitor_id = m.id) AS channel_ids, m.created_at,
-                    m.kind, m.display_target, m.expected_status, m.fail_after, m.consecutive_failures, m.last_check_at, m.last_check_ok, m.last_latency_ms, m.last_check_note
+                    m.kind, m.display_target, m.expected_status, m.fail_after, m.consecutive_failures, m.last_check_at, m.last_check_ok, m.last_latency_ms, m.last_check_note, m.max_response_ms
              FROM monitors m LEFT JOIN categories c ON c.id = m.category_id
              WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))
              ORDER BY m.name COLLATE NOCASE, m.id',
@@ -45,13 +45,28 @@ final class MonitorRepository
         $row = $this->db->fetchOne(
             'SELECT m.id, m.name, m.category_id, c.name AS category_name, m.interval_seconds, m.grace_seconds, m.is_enabled, m.state, m.state_since,
                     m.last_ping_at, m.notify_on_down, m.notify_on_up, m.notify_channels, m.notify_channel_ids, (SELECT json_group_array(mc.channel_id) FROM monitor_channels mc WHERE mc.monitor_id = m.id) AS channel_ids, m.created_at,
-                    m.kind, m.display_target, m.expected_status, m.fail_after, m.consecutive_failures, m.last_check_at, m.last_check_ok, m.last_latency_ms, m.last_check_note
+                    m.kind, m.display_target, m.expected_status, m.fail_after, m.consecutive_failures, m.last_check_at, m.last_check_ok, m.last_latency_ms, m.last_check_note, m.max_response_ms
              FROM monitors m LEFT JOIN categories c ON c.id = m.category_id
              WHERE m.id = :id AND (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))',
             $scope->sqlParameters() + ['id' => $id],
         );
 
         return $row === null ? null : self::record($row);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function history(CategoryScope $scope, ?string $from, ?string $to, ?int $monitorId, ?int $before, int $limit): array
+    {
+        return $this->db->fetchAll(
+            'SELECT e.id, e.occurred_at, e.kind, e.state, e.ok, e.latency_ms, e.note, m.id AS monitor_id, m.name, c.name AS category,
+                e.alerts_queued - e.alerts_sent - e.alerts_failed AS pending, e.alerts_sent AS sent, e.alerts_failed AS failed
+             FROM monitor_events e JOIN monitors m ON m.id = e.monitor_id LEFT JOIN categories c ON c.id = m.category_id
+             WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))
+             AND (:from IS NULL OR e.occurred_at >= :from) AND (:to IS NULL OR e.occurred_at < :to)
+             AND (:monitor IS NULL OR m.id = :monitor) AND (:before IS NULL OR e.id < :before)
+             ORDER BY e.id DESC LIMIT :limit',
+            $scope->sqlParameters() + ['from' => $from, 'to' => $to, 'monitor' => $monitorId, 'before' => $before, 'limit' => min(100, max(1, $limit)) + 1],
+        );
     }
 
     private function writeChannels(int $id, MonitorDraft $draft): void
@@ -88,9 +103,9 @@ final class MonitorRepository
         $this->validateChannels($draft);
         $this->db->execute(
             "INSERT INTO monitors (name, category_id, token_hash, interval_seconds, grace_seconds, is_enabled, state, state_since, armed_at, notify_on_down, notify_on_up, notify_channels, created_by, created_at, updated_at,
-                kind, target_enc, display_target, expected_status, fail_after, notify_channel_ids)
+                kind, target_enc, display_target, expected_status, fail_after, notify_channel_ids, max_response_ms)
              VALUES (:name, :category, :hash, :interval, :grace, :enabled, 'waiting', :now, :now, :down, :up, :channels, :user, :now, :now,
-                :kind, :target, :display, :expected, :fail_after, :channel_ids)",
+                :kind, :target, :display, :expected, :fail_after, :channel_ids, :max_response)",
             [
                 'name' => $draft->name,
                 'category' => $draft->categoryId,
@@ -109,6 +124,7 @@ final class MonitorRepository
                 'display' => $draft->displayTarget,
                 'expected' => $draft->expectedStatus,
                 'fail_after' => $draft->failAfter,
+                'max_response' => $draft->maxResponseMs,
             ],
         );
 
@@ -125,7 +141,7 @@ final class MonitorRepository
         $this->validateChannels($draft);
         $this->db->execute(
             'UPDATE monitors SET name = :name, category_id = :category, interval_seconds = :interval, grace_seconds = :grace, is_enabled = :enabled,
-                notify_on_down = :down, notify_on_up = :up, notify_channels = :channels, notify_channel_ids = :channel_ids, expected_status = :expected, fail_after = :fail_after, updated_at = :now WHERE id = :id',
+                notify_on_down = :down, notify_on_up = :up, notify_channels = :channels, notify_channel_ids = :channel_ids, expected_status = :expected, fail_after = :fail_after, max_response_ms = :max_response, updated_at = :now WHERE id = :id',
             [
                 'name' => $draft->name,
                 'category' => $draft->categoryId,
@@ -138,6 +154,7 @@ final class MonitorRepository
                 'channel_ids' => $draft->notifyChannels === 'selected' ? json_encode($draft->channelIds, JSON_THROW_ON_ERROR) : null,
                 'expected' => $draft->expectedStatus,
                 'fail_after' => $draft->failAfter,
+                'max_response' => $draft->maxResponseMs,
                 'now' => $now,
                 'id' => $id,
             ],
@@ -208,12 +225,12 @@ final class MonitorRepository
     /**
      * Aktive Prüfungen, die laufen: aktiv, mit Ziel. Wer fällig ist, entscheidet der Aufrufer (letzte Prüfung + Intervall).
      *
-     * @return list<array{id: int, kind: MonitorKind, category_id: int|null, target_enc: string, expected_status: string, interval_seconds: int, last_check_at: string|null}>
+     * @return list<array{id: int, kind: MonitorKind, category_id: int|null, target_enc: string, expected_status: string, interval_seconds: int, last_check_at: string|null, max_response_ms: int}>
      */
     public function activeForChecks(): array
     {
         $rows = $this->db->fetchAll(
-            "SELECT id, kind, category_id, target_enc, expected_status, interval_seconds, last_check_at FROM monitors
+            "SELECT id, kind, category_id, target_enc, expected_status, interval_seconds, last_check_at, max_response_ms FROM monitors
               WHERE is_enabled = 1 AND kind <> 'heartbeat' AND target_enc IS NOT NULL ORDER BY id",
         );
         $result = [];
@@ -224,6 +241,7 @@ final class MonitorRepository
                 'category_id' => Row::intOrNull($row, 'category_id'),
                 'target_enc' => Row::string($row, 'target_enc'),
                 'expected_status' => Row::string($row, 'expected_status'),
+                'max_response_ms' => Row::int($row, 'max_response_ms'),
                 'interval_seconds' => Row::int($row, 'interval_seconds'),
                 'last_check_at' => Row::stringOrNull($row, 'last_check_at'),
             ];
@@ -313,6 +331,7 @@ final class MonitorRepository
             Row::intOrNull($row, 'last_latency_ms'),
             Row::stringOrNull($row, 'last_check_note'),
             \Meridian\Notify\ChannelIds::decode(Row::string($row, 'channel_ids')),
+            Row::int($row, 'max_response_ms'),
         );
     }
 }

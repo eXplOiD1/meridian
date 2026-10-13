@@ -103,9 +103,9 @@ final class StatusPageRepository
     /**
      * Öffentliche Sicht: nur eine aktive Seite, nur Titel und die Einträge mit Anzeigename und Zustand.
      *
-     * @return array{title: string, language: string, items: list<array{label: string, state: string, since: string|null}>}|null
+     * @return array{title: string, language: string, items: list<array{label: string, state: string, since: string|null, history: list<array{day: string, ok: int, bad: int}>, events: list<array{time: string, state: string}>, selected_day: string|null}>}|null
      */
-    public function publicView(string $slug): ?array
+    public function publicView(string $slug, ?\DateTimeImmutable $now = null, ?string $day = null, int $selectedItem = -1): ?array
     {
         $page = $this->db->fetchOne('SELECT id, title, language FROM status_pages WHERE slug = :slug AND is_enabled = 1', ['slug' => $slug]);
         if ($page === null) {
@@ -116,13 +116,58 @@ final class StatusPageRepository
             'SELECT label, job_id, monitor_id FROM status_page_items WHERE page_id = :page ORDER BY position, id',
             ['page' => Row::int($page, 'id')],
         );
-        foreach ($rows as $row) {
+        $now = ($now ?? new \DateTimeImmutable())->setTimezone(new \DateTimeZone('UTC'));
+        foreach ($rows as $position => $row) {
             $jobId = Row::intOrNull($row, 'job_id');
             [$state, $since] = $jobId !== null ? $this->jobState($jobId) : $this->monitorState(Row::int($row, 'monitor_id'));
-            $items[] = ['label' => Row::string($row, 'label'), 'state' => $state, 'since' => $since];
+            $id = $jobId ?? Row::int($row, 'monitor_id');
+            $items[] = ['label' => Row::string($row, 'label'), 'state' => $state, 'since' => $since,
+                'history' => $this->dailyHistory($id, $jobId !== null, $now),
+                'events' => $position === $selectedItem && $day !== null ? $this->publicEvents($id, $jobId !== null, $day) : [],
+                'selected_day' => $position === $selectedItem ? $day : null];
         }
 
         return ['title' => Row::string($page, 'title'), 'language' => Row::string($page, 'language'), 'items' => $items];
+    }
+
+    /** @return list<array{day: string, ok: int, bad: int}> */
+    private function dailyHistory(int $id, bool $job, \DateTimeImmutable $now): array
+    {
+        $start = $now->setTime(0, 0)->modify('-89 days');
+        $cutoff = \Meridian\Database\Timestamp::format($start);
+        $rows = $job ? $this->db->fetchAll(
+            "SELECT substr(COALESCE(started_at, finished_at), 1, 10) AS day, SUM(status = 'ok') AS ok, SUM(status IN ('failed', 'timeout', 'aborted')) AS bad
+             FROM runs WHERE job_id = :id AND trigger <> 'test' AND COALESCE(started_at, finished_at) >= :cutoff
+             AND status IN ('ok', 'failed', 'timeout', 'aborted') GROUP BY day", ['id' => $id, 'cutoff' => $cutoff])
+            : $this->db->fetchAll(
+            "SELECT substr(occurred_at, 1, 10) AS day, SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS ok, SUM(CASE WHEN ok = 0 OR (kind IN ('state', 'alarm') AND state = 'down') THEN 1 ELSE 0 END) AS bad
+             FROM monitor_events WHERE monitor_id = :id AND occurred_at >= :cutoff GROUP BY day", ['id' => $id, 'cutoff' => $cutoff]);
+        $byDay = [];
+        foreach ($rows as $row) { $byDay[Row::string($row, 'day')] = [Row::int($row, 'ok'), Row::int($row, 'bad')]; }
+        $out = [];
+        for ($offset = 0; $offset < 90; ++$offset) {
+            $date = $start->modify('+' . $offset . ' days')->format('Y-m-d');
+            [$ok, $bad] = $byDay[$date] ?? [0, 0];
+            $out[] = ['day' => $date, 'ok' => $ok, 'bad' => $bad];
+        }
+        return $out;
+    }
+
+    /** Public events deliberately exclude internal IDs, names, targets, outputs and notification channels.
+     * @return list<array{time: string, state: string}>
+     */
+    private function publicEvents(int $id, bool $job, string $day): array
+    {
+        $from = $day . 'T00:00:00+00:00';
+        $to = \Meridian\Database\Timestamp::format((new \DateTimeImmutable($from))->modify('+1 day'));
+        $rows = $job ? $this->db->fetchAll(
+            "SELECT COALESCE(started_at, finished_at) AS time, CASE WHEN status = 'ok' THEN 'ok' ELSE 'down' END AS state FROM runs
+             WHERE job_id = :id AND trigger <> 'test' AND status IN ('ok', 'failed', 'timeout', 'aborted')
+             AND COALESCE(started_at, finished_at) >= :from AND COALESCE(started_at, finished_at) < :to ORDER BY id DESC LIMIT 100", ['id' => $id, 'from' => $from, 'to' => $to])
+            : $this->db->fetchAll(
+            "SELECT occurred_at AS time, CASE WHEN ok = 0 THEN 'down' WHEN ok = 1 THEN 'ok' WHEN state = 'up' THEN 'ok' WHEN state = 'down' THEN 'down' WHEN state = 'paused' THEN 'paused' ELSE 'unknown' END AS state FROM monitor_events
+             WHERE monitor_id = :id AND occurred_at >= :from AND occurred_at < :to ORDER BY id DESC LIMIT 100", ['id' => $id, 'from' => $from, 'to' => $to]);
+        return array_map(static fn (array $row): array => ['time' => Row::string($row, 'time'), 'state' => Row::string($row, 'state')], $rows);
     }
 
     /**
@@ -154,12 +199,15 @@ final class StatusPageRepository
      */
     private function monitorState(int $monitorId): array
     {
-        $monitor = $this->db->fetchOne('SELECT is_enabled, state, state_since FROM monitors WHERE id = :id', ['id' => $monitorId]);
+        $monitor = $this->db->fetchOne('SELECT is_enabled, state, state_since, last_check_ok, last_check_at FROM monitors WHERE id = :id', ['id' => $monitorId]);
         if ($monitor === null) {
             return ['unknown', null];
         }
         if (!Row::bool($monitor, 'is_enabled')) {
             return ['paused', null];
+        }
+        if ($monitor['last_check_ok'] !== null && !Row::bool($monitor, 'last_check_ok') && Row::string($monitor, 'state') !== 'down') {
+            return ['degraded', Row::stringOrNull($monitor, 'last_check_at')];
         }
 
         return match (Row::string($monitor, 'state')) {

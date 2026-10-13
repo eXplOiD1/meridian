@@ -106,6 +106,7 @@ function TestResultAlert({ result }: { result: TestResult }) {
 }
 
 interface Draft {
+  maxResponse: string;
   kind: MonitorKind;
   target: string;
   expectedStatus: string;
@@ -123,13 +124,13 @@ interface Draft {
 }
 
 function emptyDraft(categoryId: string): Draft {
-  return { kind: 'heartbeat', target: '', expectedStatus: '200-399', failAfter: '3', name: '', value: '1', unit: 'days', graceValue: '15', graceUnit: 'minutes', categoryId, notifyDown: true, notifyUp: true, notifyChannels: 'all', channelIds: [] };
+  return { maxResponse: '5', kind: 'heartbeat', target: '', expectedStatus: '200-399', failAfter: '3', name: '', value: '1', unit: 'days', graceValue: '15', graceUnit: 'minutes', categoryId, notifyDown: true, notifyUp: true, notifyChannels: 'all', channelIds: [] };
 }
 
 function draftOf(m: Monitor): Draft {
   const interval = split(m.interval_seconds);
   const grace = split(m.grace_seconds);
-  return { kind: m.kind, target: '', expectedStatus: m.expected_status ?? '200-399', failAfter: String(m.fail_after ?? 3), name: m.name, value: interval.value, unit: interval.unit, graceValue: m.grace_seconds === 0 ? '0' : grace.value, graceUnit: grace.unit, categoryId: m.category_id === null ? '' : String(m.category_id), notifyDown: m.notify_on_down, notifyUp: m.notify_on_up, notifyChannels: m.notify_channels, channelIds: m.channel_ids ?? [] };
+  return { maxResponse: String((m.max_response_ms ?? 5000) / 1000), kind: m.kind, target: '', expectedStatus: m.expected_status ?? '200-399', failAfter: String(m.fail_after ?? 3), name: m.name, value: interval.value, unit: interval.unit, graceValue: m.grace_seconds === 0 ? '0' : grace.value, graceUnit: grace.unit, categoryId: m.category_id === null ? '' : String(m.category_id), notifyDown: m.notify_on_down, notifyUp: m.notify_on_up, notifyChannels: m.notify_channels, channelIds: m.channel_ids ?? [] };
 }
 
 function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, editing, onSubmit, onCancel, onTest, testing, testResult }: {
@@ -255,6 +256,11 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
         )}
       </div>
       {draft.kind === 'http' && (
+        <FormField label={t('Maximale Antwortzeit (Sekunden)')} error={errors.max_response_ms} hint={t('Standard: 5 Sekunden. Prüft die eingetragene Adresse einschließlich Weiterleitungen, aber kein JavaScript oder nachgeladene Inhalte. Für wichtige Funktionen deren genaue URL verwenden.')}>
+          {(aria) => <input {...aria} className="input input--short" type="number" min="0.1" max="10" step="0.1" value={draft.maxResponse} onChange={e => setDraft({ ...draft, maxResponse: e.target.value })} />}
+        </FormField>
+      )}
+      {draft.kind === 'http' && (
         <FormField label={t('Erwartete Statuscodes')} error={errors.expected_status} hint={t('z. B. 200-299 oder 200,204,301-302')}>
           {(aria) => <input {...aria} className="input input--short input--mono-plain" name="monitor-expected" autoComplete="off" value={draft.expectedStatus} onChange={(e) => setDraft({ ...draft, expectedStatus: e.target.value })} />}
         </FormField>
@@ -329,7 +335,7 @@ function payload(draft: Draft, editing: boolean): { body: Record<string, unknown
   if (active) {
     body.fail_after = failAfter;
     if (draft.target.trim() !== '') body.target = draft.target.trim();
-    if (draft.kind === 'http') body.expected_status = draft.expectedStatus.trim();
+    if (draft.kind === 'http') { body.expected_status = draft.expectedStatus.trim(); body.max_response_ms = Math.round(Number(draft.maxResponse) * 1000); }
   } else {
     body.grace_seconds = grace;
   }
@@ -440,7 +446,7 @@ export function Monitors({ profile }: { profile: Profile }) {
   function testBody(d: Draft): Record<string, unknown> {
     const body: Record<string, unknown> = {};
     if (d.target.trim() !== '') body.target = d.target.trim();
-    if (d.kind === 'http') body.expected_status = d.expectedStatus.trim();
+    if (d.kind === 'http') { body.expected_status = d.expectedStatus.trim(); body.max_response_ms = Math.round(Number(d.maxResponse) * 1000); }
     return body;
   }
 
@@ -485,7 +491,9 @@ export function Monitors({ profile }: { profile: Profile }) {
               <tbody>
                 {monitors.map((m) => {
                   const active = m.kind !== 'heartbeat';
-                  const state = (active ? ACTIVE_STATE : STATE)[m.state];
+                  const state = active && m.last_check_ok === false && m.state !== 'down'
+                    ? { label: 'Prüfung fehlgeschlagen; Alarmschwelle noch nicht erreicht', dot: 'warn' }
+                    : (active ? ACTIVE_STATE : STATE)[m.state];
                   return (
                     <tr key={m.id}>
                       <td data-label={t('Name')}>
