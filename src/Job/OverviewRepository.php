@@ -24,6 +24,24 @@ final class OverviewRepository
     {
     }
 
+    /** @return array<int, list<array{int, int, int}>> */
+    public function monitorBuckets(CategoryScope $scope, int $from, int $to, int $size): array
+    {
+        $rows = $this->db->fetchAll(
+            "SELECT e.monitor_id, (CAST(strftime('%s', e.occurred_at) AS INTEGER) - :from) / :size AS bucket,
+                SUM(CASE WHEN e.ok = 1 THEN 1 ELSE 0 END) AS ok,
+                SUM(CASE WHEN e.ok = 0 OR (e.kind IN ('state', 'alarm') AND e.state = 'down') THEN 1 ELSE 0 END) AS bad
+             FROM monitor_events e JOIN monitors m ON m.id = e.monitor_id LEFT JOIN categories c ON c.id = m.category_id
+             WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))
+             AND CAST(strftime('%s', e.occurred_at) AS INTEGER) >= :from AND CAST(strftime('%s', e.occurred_at) AS INTEGER) < :to
+             GROUP BY e.monitor_id, bucket",
+            $scope->sqlParameters() + ['from' => $from, 'to' => $to, 'size' => $size],
+        );
+        $out = [];
+        foreach ($rows as $row) { $out[Row::int($row, 'monitor_id')][] = [Row::int($row, 'bucket'), Row::int($row, 'ok'), Row::int($row, 'bad')]; }
+        return $out;
+    }
+
     /**
      * @return list<array{job_id: int, bucket: int, ok: int, bad: int}>
      */

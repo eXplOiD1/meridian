@@ -114,9 +114,6 @@ final class OverviewController
                 ];
             }
             $buckets = $byJob[$job->id] ?? [];
-            if (!$job->isEnabled && $buckets === []) {
-                continue;
-            }
             $rows[] = [
                 'id' => $job->id,
                 'name' => $this->masker->mask($job->name),
@@ -132,7 +129,13 @@ final class OverviewController
         }
 
         // Überwachungen ohne Lebenszeichen (ADR 0011) in derselben Kappung wie die Jobs.
+        $monitorRows = [];
+        $monitorBuckets = $this->overview->monitorBuckets($scope, $from, $to, self::BUCKET_SECONDS);
         foreach ($this->monitors?->list($scope) ?? [] as $monitor) {
+            if (count($monitorRows) < self::MAX_JOBS) {
+                $monitorRows[] = ['id' => $monitor->id, 'name' => $this->masker->mask($monitor->name), 'enabled' => $monitor->isEnabled,
+                    'buckets' => $monitorBuckets[$monitor->id] ?? [], 'planned' => [], 'type' => 'http', 'kind' => 'monitor'];
+            }
             if ($monitor->isEnabled && $monitor->state === 'down') {
                 $attention[] = [
                     'job' => ['id' => $monitor->id, 'name' => $this->masker->mask($monitor->name)],
@@ -154,6 +157,7 @@ final class OverviewController
                 'now_bucket' => $nowBucket,
             ],
             'jobs' => $rows,
+            'monitors' => $monitorRows,
             'totals' => $this->overview->totals($scope, $from, $to),
             'attention' => array_slice($attention, 0, 10),
         ]);

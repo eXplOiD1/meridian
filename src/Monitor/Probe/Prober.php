@@ -14,5 +14,5 @@ interface Prober
     /**
      * Prüft ein Ziel einmal. Wirft nie; jedes Problem steht als fester Text im Ergebnis.
      */
-    public function probe(MonitorKind $kind, #[\SensitiveParameter] string $target, ?int $categoryId, string $expectedStatus): ProbeResult;
+    public function probe(MonitorKind $kind, #[\SensitiveParameter] string $target, ?int $categoryId, string $expectedStatus, int $maxResponseMs = 5000): ProbeResult;
 }

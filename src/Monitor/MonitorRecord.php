@@ -38,6 +38,7 @@ final readonly class MonitorRecord
         public ?int $lastLatencyMs = null,
         public ?string $lastCheckNote = null,
         public array $channelIds = [],
+        public int $maxResponseMs = 5000,
     ) {
     }
 }

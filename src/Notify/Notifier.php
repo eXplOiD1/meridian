@@ -382,8 +382,10 @@ final class Notifier
         $recipients = $this->recipientsFor($job);
         foreach ($ids as $channel) {
             $this->db->execute(
-                'INSERT INTO notification_outbox (kind, channel_id, job_id, job_name, run_id, run_status, occurred_at, detail, failures, status, next_attempt_at, created_at, recipients, browser_monitor_id)
-                 VALUES (:kind, :channel, :job, :name, :run, :status, :at, :detail, :failures, \'pending\', :now, :now, :recipients, :monitor)',
+                'INSERT INTO notification_outbox (kind, channel_id, job_id, job_name, run_id, run_status, occurred_at, detail, failures, status, next_attempt_at, created_at, recipients, browser_monitor_id, monitor_event_id)
+                 VALUES (:kind, :channel, :job, :name, :run, :status, :at, :detail, :failures, \'pending\', :now, :now, :recipients, :monitor,
+                    (SELECT id FROM monitor_events WHERE monitor_id = :monitor AND kind = \'state\'
+                     AND state = CASE WHEN :kind = \'monitor_down\' THEN \'down\' ELSE \'up\' END ORDER BY id DESC LIMIT 1))',
                 [
                     'kind' => $kind,
                     'recipients' => $recipients === [] ? null : json_encode($recipients, JSON_THROW_ON_ERROR),
@@ -562,6 +564,7 @@ final class Notifier
 
     public function prune(): void
     {
+        $this->db->execute('DELETE FROM monitor_events WHERE occurred_at < :cutoff', ['cutoff' => Timestamp::format($this->clock->now()->modify('-90 days'))]);
         $this->db->execute(
             "DELETE FROM notification_outbox WHERE status <> 'pending' AND created_at < :cutoff",
             ['cutoff' => Timestamp::format($this->clock->now()->modify('-' . self::KEEP_DAYS . ' days'))],

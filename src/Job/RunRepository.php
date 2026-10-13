@@ -38,7 +38,10 @@ FROM runs r JOIN jobs j ON j.id = r.job_id LEFT JOIN categories c ON c.id = j.ca
 LEFT JOIN users u ON u.id = r.started_by LEFT JOIN users cu ON cu.id = r.cancel_requested_by
 WHERE (:scope_all = 1 OR c.name IN (SELECT value FROM json_each(:scope_names)))
 AND (:run IS NULL OR r.id = :run) AND (:job IS NULL OR r.job_id = :job) AND (:before IS NULL OR r.id < :before)
-AND (:status IS NULL OR r.status = :status) ORDER BY r.id DESC LIMIT :limit';
+AND (:status IS NULL OR r.status = :status)
+AND (:from IS NULL OR COALESCE(r.started_at, r.scheduled_for) >= :from)
+AND (:to IS NULL OR COALESCE(r.started_at, r.scheduled_for) < :to)
+ORDER BY r.id DESC LIMIT :limit';
 
     public function __construct(private readonly Connection $db)
     {
@@ -55,6 +58,7 @@ AND (:status IS NULL OR r.status = :status) ORDER BY r.id DESC LIMIT :limit';
         $limit = max(1, min($limit, self::MAX_LIMIT));
         $rows = $this->db->fetchAll(self::QUERY, $scope->sqlParameters() + [
             'with_output' => 0,
+            'from' => null, 'to' => null,
             'run' => null,
             'job' => $jobId,
             'before' => $beforeId,
@@ -71,11 +75,12 @@ AND (:status IS NULL OR r.status = :status) ORDER BY r.id DESC LIMIT :limit';
      *
      * @return list<RunRecord>
      */
-    public function recent(CategoryScope $scope, int $limit, ?int $beforeId, ?RunStatus $status, ?int $jobId = null): array
+    public function recent(CategoryScope $scope, int $limit, ?int $beforeId, ?RunStatus $status, ?int $jobId = null, ?string $from = null, ?string $to = null): array
     {
         $limit = max(1, min($limit, self::MAX_LIMIT));
         $rows = $this->db->fetchAll(self::QUERY, $scope->sqlParameters() + [
             'with_output' => 0,
+            'from' => $from, 'to' => $to,
             'run' => null,
             'job' => $jobId,
             'before' => $beforeId,
@@ -91,6 +96,7 @@ AND (:status IS NULL OR r.status = :status) ORDER BY r.id DESC LIMIT :limit';
     {
         $rows = $this->db->fetchAll(self::QUERY, $scope->sqlParameters() + [
             'with_output' => $withOutput ? 1 : 0,
+            'from' => null, 'to' => null,
             'run' => $runId,
             'job' => null,
             'before' => null,

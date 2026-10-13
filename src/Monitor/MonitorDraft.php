@@ -27,6 +27,7 @@ final readonly class MonitorDraft
         public string $expectedStatus = '200-399',
         public int $failAfter = 3,
         public array $channelIds = [],
+        public int $maxResponseMs = 5000,
     ) {
     }
 }

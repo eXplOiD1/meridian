@@ -25,7 +25,7 @@ final class MonitorValidator
     public const MAX_GRACE = 86_400;
     public const DEFAULT_GRACE = 300;
 
-    private const KEYS = ['name', 'category_id', 'interval_seconds', 'grace_seconds', 'is_enabled', 'notify_on_down', 'notify_on_up', 'notify_channels', 'channel_ids', 'kind', 'target', 'expected_status', 'fail_after'];
+    private const KEYS = ['name', 'category_id', 'interval_seconds', 'grace_seconds', 'is_enabled', 'notify_on_down', 'notify_on_up', 'notify_channels', 'channel_ids', 'kind', 'target', 'expected_status', 'fail_after', 'max_response_ms'];
 
     public function __construct(private readonly CategoryRepository $categories, private readonly UrlPolicy $urls = new UrlPolicy())
     {
@@ -39,6 +39,12 @@ final class MonitorValidator
     public function validate(array $input, CategoryScope $editScope, ?MonitorRecord $existing): MonitorDraft
     {
         $errors = [];
+        /** @var mixed $maxResponse */
+        $maxResponse = array_key_exists('max_response_ms', $input) ? $input['max_response_ms'] : ($existing->maxResponseMs ?? 5000);
+        if (!is_int($maxResponse)) { throw ValidationFailed::field('max_response_ms', 'Antwortzeit: ganze Zahl von 100 bis 10000 Millisekunden.'); }
+        if ($maxResponse < 100 || $maxResponse > 10000) {
+            $errors['max_response_ms'] = 'Antwortzeit: ganze Zahl von 100 bis 10000 Millisekunden.';
+        }
         foreach (array_keys($input) as $key) {
             if (!in_array((string) $key, self::KEYS, true)) {
                 $errors[(string) $key] = 'Unbekanntes Feld. Erlaubt sind: ' . implode(', ', self::KEYS) . '.';
@@ -153,6 +159,6 @@ final class MonitorValidator
             throw new ValidationFailed($errors);
         }
 
-        return new MonitorDraft(trim($name), $categoryId, $categoryName, $interval, $kind->isActive() ? 0 : $grace, $flags['is_enabled'] ?? true, $flags['notify_on_down'] ?? true, $flags['notify_on_up'] ?? true, $channels, $kind, $target, $displayTarget, $expectedInput, $failAfter, $channelIds);
+        return new MonitorDraft(trim($name), $categoryId, $categoryName, $interval, $kind->isActive() ? 0 : $grace, $flags['is_enabled'] ?? true, $flags['notify_on_down'] ?? true, $flags['notify_on_up'] ?? true, $channels, $kind, $target, $displayTarget, $expectedInput, $failAfter, $channelIds, $maxResponse);
     }
 }

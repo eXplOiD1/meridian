@@ -65,7 +65,7 @@ final class MonitorChecker
             }
             try {
                 $target = $this->box->decrypt($monitor['target_enc']);
-                $result = $this->prober->probe($monitor['kind'], $target, $monitor['category_id'], $monitor['expected_status']);
+                $result = $this->prober->probe($monitor['kind'], $target, $monitor['category_id'], $monitor['expected_status'], $monitor['max_response_ms']);
             } catch (\Throwable) {
                 // Schlüssel falsch, Wert beschädigt: fester Text, nie der der Ausnahme.
                 $result = \Meridian\Monitor\Probe\ProbeResult::failed(\Meridian\Monitor\Probe\NetworkProbe::NOTE_TARGET_UNREADABLE);

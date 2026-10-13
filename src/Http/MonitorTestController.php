@@ -83,7 +83,7 @@ final class MonitorTestController
             throw ValidationFailed::field('target', 'Ein Herzschlag hat nichts zu testen. Wähle eine Web-Adresse, einen Port oder Ping.');
         }
 
-        return $this->run($session->userId, 'neue Prüfung (' . $draft->kind->value . ')', $draft->kind, $draft->target, $draft->categoryId, $draft->expectedStatus);
+        return $this->run($session->userId, 'neue Prüfung (' . $draft->kind->value . ')', $draft->kind, $draft->target, $draft->categoryId, $draft->expectedStatus, $draft->maxResponseMs);
     }
 
     public function testSaved(#[\SensitiveParameter] Request $request): Response
@@ -118,10 +118,10 @@ final class MonitorTestController
             }
         }
 
-        return $this->run($session->userId, 'monitor:' . $id . ' ' . $existing->name, $existing->kind, $target, $existing->categoryId, $draft->expectedStatus);
+        return $this->run($session->userId, 'monitor:' . $id . ' ' . $existing->name, $existing->kind, $target, $existing->categoryId, $draft->expectedStatus, $draft->maxResponseMs);
     }
 
-    private function run(int $userId, string $auditTarget, MonitorKind $kind, #[\SensitiveParameter] string $target, ?int $categoryId, string $expectedStatus): Response
+    private function run(int $userId, string $auditTarget, MonitorKind $kind, #[\SensitiveParameter] string $target, ?int $categoryId, string $expectedStatus, int $maxResponseMs): Response
     {
         $retryAfter = $this->db->immediate(function () use ($userId, $auditTarget): ?int {
             $retry = $this->retryAfter($userId);
@@ -138,7 +138,7 @@ final class MonitorTestController
             return $response;
         }
 
-        $result = $this->prober->probe($kind, $target, $categoryId, $expectedStatus);
+        $result = $this->prober->probe($kind, $target, $categoryId, $expectedStatus, $maxResponseMs);
 
         return JsonReply::json([
             'ok' => $result->ok,

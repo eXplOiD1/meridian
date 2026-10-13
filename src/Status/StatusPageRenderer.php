@@ -17,18 +17,20 @@ final class StatusPageRenderer
     private const STATES = [
         'ok' => ['In Ordnung', 'ok'],
         'down' => ['Gestört', 'down'],
+        'degraded' => ['Prüfung fehlgeschlagen', 'degraded'],
         'paused' => ['Pausiert', 'paused'],
         'unknown' => ['Noch keine Daten', 'unknown'],
     ];
     private const STATES_EN = [
         'ok' => ['Operational', 'ok'],
         'down' => ['Disrupted', 'down'],
+        'degraded' => ['Check failed', 'degraded'],
         'paused' => ['Paused', 'paused'],
         'unknown' => ['No data yet', 'unknown'],
     ];
 
     /**
-     * @param list<array{label: string, state: string, since: string|null}> $items
+     * @param list<array{label: string, state: string, since: string|null, history?: list<array{day: string, ok: int, bad: int}>, events?: list<array{time: string, state: string}>, selected_day?: string|null}> $items
      * @param \Closure(string): string                                         $mask   SecretMasker::mask
      */
     public function render(string $title, array $items, \DateTimeZone $zone, \DateTimeImmutable $now, \Closure $mask, string $language = 'de'): string
@@ -38,25 +40,46 @@ final class StatusPageRenderer
         $states = $english ? self::STATES_EN : self::STATES;
         $down = 0;
         $unknown = 0;
+        $degraded = 0;
         foreach ($items as $item) {
             $down += $item['state'] === 'down' ? 1 : 0;
             $unknown += $item['state'] === 'unknown' ? 1 : 0;
+            $degraded += $item['state'] === 'degraded' ? 1 : 0;
         }
         [$bannerClass, $banner] = match (true) {
             $items === [] => ['unknown', $english ? 'Nothing to show yet.' : 'Diese Seite zeigt noch nichts an.'],
             $down > 0 => ['down', $english
                 ? ($down === 1 ? 'There is one disruption.' : 'There are ' . $down . ' disruptions.')
                 : ($down === 1 ? 'Es gibt eine Störung.' : 'Es gibt ' . $down . ' Störungen.')],
+            $degraded > 0 => ['degraded', $english ? 'Some checks failed; the outage threshold has not yet been reached.' : 'Einige Prüfungen sind fehlgeschlagen; die Alarmschwelle ist noch nicht erreicht.'],
             $unknown === count($items) => ['unknown', $english ? 'No data yet.' : 'Noch keine Daten.'],
             default => ['ok', $english ? 'All systems operational.' : 'Alles läuft.'],
         };
 
         $rows = '';
-        foreach ($items as $item) {
+        foreach ($items as $position => $item) {
             [$text, $class] = $states[$item['state']] ?? $states['unknown'];
+            $history = '';
+            foreach ($item['history'] ?? [] as $day) {
+                $dayClass = $day['bad'] > 0 ? ($day['ok'] > 0 ? 'mixed' : 'down') : ($day['ok'] > 0 ? 'ok' : 'unknown');
+                $caption = $day['day'] . ' (UTC) · ' . ($english ? 'successful: ' : 'erfolgreich: ') . $day['ok'] . ' · ' . ($english ? 'failed: ' : 'fehlgeschlagen: ') . $day['bad'];
+                $history .= '<a class="history-day history-day--' . $dayClass . '" href="?lang=' . $language . '&amp;item=' . $position . '&amp;day=' . $day['day'] . '#events-' . $position . '" title="' . self::e($caption) . '" aria-label="' . self::e($caption) . '"></a>';
+            }
+            if ($history !== '') {
+                $history = '<div class="history-bars">' . $history . '</div><p class="history-caption">' . ($english ? '90 days · UTC · green: successful, amber: mixed, red: failed, grey: no observations. Click a day for events.' : '90 Tage · UTC · Grün: erfolgreich, Orange: gemischt, Rot: fehlgeschlagen, Grau: keine Beobachtungen. Tag anklicken für Ereignisse.') . '</p>';
+            }
+            $details = '';
+            foreach ($item['events'] ?? [] as $event) {
+                [$eventText] = $states[$event['state']] ?? $states['unknown'];
+                $details .= '<li>' . self::e(self::time($event['time'], $zone, $language)) . ' · ' . self::e($eventText) . '</li>';
+            }
+            if ($details !== '' || ($item['selected_day'] ?? null) !== null) {
+                $date = $item['selected_day'] ?? '';
+                $details = '<div class="public-events" id="events-' . $position . '"><h2>' . ($english ? 'Events for this day' : 'Ereignisse dieses Tages') . ($date === '' ? '' : ' · ' . self::e($date) . ' (UTC)') . '</h2><p>' . ($english ? 'Latest 100 recorded events. Missing periods have no retained observations.' : 'Die letzten 100 gespeicherten Ereignisse. Für fehlende Zeiträume liegen keine Beobachtungen vor.') . '</p>' . ($details === '' ? '<p>' . ($english ? 'No recorded events for this day.' : 'Für diesen Tag sind keine Ereignisse gespeichert.') . '</p>' : '<ol>' . $details . '</ol>') . '</div>';
+            }
             $since = $item['since'] === null ? '' : '<span class="since">' . self::e(self::time($item['since'], $zone, $language)) . '</span>';
             $rows .= '<li class="item item--' . $class . '"><span class="dot" aria-hidden="true"></span><span class="label">' . self::e($mask($item['label']))
-                . '</span><span class="state">' . $text . '</span>' . $since . "</li>\n";
+                . '</span><span class="state">' . $text . '</span>' . $since . $history . $details . "</li>\n";
         }
 
         $switch = '<nav class="languages" aria-label="' . ($english ? 'Language' : 'Sprache') . '">';
@@ -117,6 +140,8 @@ h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); font-weight: 600; margin: 0; letter-
 .item--ok .dot { background: var(--ok); }
 .item--down .dot { background: var(--err); }
 .item--paused .dot { background: var(--warn); }
+.item--degraded .dot { background: #f59e0b; }
+.item--degraded .state, .banner--degraded { color: var(--warn); }
 .label { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
 .state { font-size: .85rem; font-weight: 600; padding: 5px 12px; border-radius: 999px; background: var(--info-bg); color: var(--dim); }
 .item--ok .state { color: var(--ok); background: var(--ok-bg); }
@@ -124,6 +149,15 @@ h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); font-weight: 600; margin: 0; letter-
 .item--paused .state { color: var(--warn); }
 .since { grid-column: 2 / 4; font-size: .8rem; color: var(--dim); overflow-wrap: anywhere; }
 .stamp { margin: 24px 0 0; font-size: .8rem; color: var(--dim); overflow-wrap: anywhere; }
+.history-bars { grid-column: 1 / -1; display: flex; gap: 3px; height: 30px; margin-top: 12px; }
+.history-day { flex: 1; min-width: 0; background: var(--dim); opacity: .35; }
+.history-day--ok { background: var(--ok); opacity: 1; }
+.history-day--down { background: var(--err); opacity: 1; }
+.history-day--mixed { background: #f59e0b; opacity: 1; }
+.history-day:hover, .history-day:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+.history-caption, .public-events { grid-column: 1 / -1; font-size: .8rem; color: var(--dim); }
+.public-events { padding: 16px; border: 1px solid var(--line); border-radius: 12px; max-height: 360px; overflow: auto; }
+@media (max-width: 540px) { .history-bars { gap: 1px; } }
 @media (max-width: 540px) {
   main { padding: 32px 16px; }
   .items { padding: 4px 18px; }
