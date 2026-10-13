@@ -1,6 +1,6 @@
 /* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../lib/api';
 import { t } from '../i18n';
 import { Alert } from './Alert';
@@ -11,8 +11,14 @@ export function SystemUpdates({ csrf }: { csrf: string }) {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const initialCheck = useRef(false);
   const load = useCallback(async () => { try { setStatus(await request<UpdateStatus>('GET', '/api/admin/updates')); setError(null); } catch { setError(t('Update-Dienst vorübergehend nicht erreichbar. Die Seite verbindet sich erneut.')); } }, []);
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 5000); return () => clearInterval(timer); }, [load]);
+  useEffect(() => {
+    if (!status?.configured || initialCheck.current) return;
+    initialCheck.current = true;
+    if (!status.busy && !status.pending) void action('check');
+  }, [status]);
   async function action(kind: 'check' | 'install' | 'channel/main' | 'channel/beta') {
     setSending(true);
     try { await request('POST', '/api/admin/updates/' + kind, { csrf }); setStatus(previous => previous ? { ...previous, pending: true } : previous); }

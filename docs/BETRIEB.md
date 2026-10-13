@@ -2,6 +2,8 @@
      SPDX-License-Identifier: LicenseRef-Meridian-Proprietary -->
 # Betrieb: Sicherung, Wiederherstellung, Aktualisieren
 
+[English](OPERATIONS.md) · [Deutsch](BETRIEB.md) · [README](../README.md#deutsch)
+
 Gilt für beide Betriebsarten. Befehle laufen mit `docker compose exec web php bin/meridian …` (Docker) bzw.
 `sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/meridian …` (systemd).
 
@@ -15,7 +17,7 @@ Gilt für beide Betriebsarten. Befehle laufen mit `docker compose exec web php b
 
 **Ohne Hauptschlüssel sind alle gespeicherten Geheimnisse (URLs mit Parametern, Header, Skripte, Passwörter der
 Benachrichtigungskanäle, 2FA) unlesbar.** Der Schlüssel ist bewusst **nicht** in den Sicherungen. Bewahre ihn getrennt
-von den Sicherungen auf (Passwortmanager, Tresor) und lege ihn sofort nach der Installation einmal ab.
+von den Sicherungen auf (Passwortmanager, Tresor) und lege ihn sofort nach der Installation einmal ab. Das gilt für Sicherungen mit `backup:create`; die geschützten Sicherungen des Update-Dienstes enthalten zusätzlich den Hauptschlüssel.
 
 ## Sicherung
 
@@ -36,7 +38,8 @@ php bin/meridian backup:list
 
   ```bash
   # Docker: Sicherungen in ein lokales Verzeichnis kopieren
-  docker run --rm -v meridian-data:/d:ro -v "$PWD/meridian-backups":/out alpine sh -c 'cp /d/backups/*.sqlite /out/'
+  mkdir -p meridian-backups
+  docker cp meridian-web:/var/lib/meridian/backups/. ./meridian-backups/
   # systemd
   rsync -a /var/lib/meridian/backups/ nas:/pfad/meridian-backups/
   ```
@@ -44,7 +47,7 @@ php bin/meridian backup:list
 ## Wiederherstellung
 
 1. **Meridian anhalten** (`docker compose stop web scheduler worker-http worker-shell` bzw.
-   `systemctl stop meridian-web meridian-scheduler`). Der Befehl lehnt ab, solange der Planer läuft.
+   `systemctl stop meridian-web meridian-scheduler meridian-worker-http meridian-worker-shell`). Den Update-Dienst während manueller Wiederherstellung ebenfalls stoppen (`docker compose stop updater` bzw. `systemctl stop meridian-updater`). Bei systemd nur installierte Dienste stoppen. Der Befehl lehnt ab, solange der Planer läuft.
 2. Den **richtigen Hauptschlüssel** bereitstellen (`MERIDIAN_KEY_FILE`). Eine Sicherung gehört zu dem Schlüssel, mit dem
    sie erstellt wurde; Meridian prüft das **vor dem ersten Schreiben** und ändert bei Abweichung nichts.
 3. Bei Docker einen einmaligen Container mit denselben Volumes starten:
@@ -79,7 +82,9 @@ komplett neu einfügen. Danach die Anmeldung und einen Testlauf prüfen.
 **systemd** (Quelltext der neuen Version holen, dann als root):
 
 ```bash
-systemctl stop meridian-web meridian-scheduler
+systemctl stop meridian-web meridian-scheduler meridian-worker-http
+# Bei aktivierten Shell-Jobs zusätzlich:
+systemctl stop meridian-worker-shell
 sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/meridian backup:create
 cd frontend && npm ci && npm run build && cd ..
 sudo bash deploy/install.sh
@@ -98,7 +103,7 @@ Der Installer richtet Web, Planer und `meridian-worker-http` ein (ohne Worker l�
 sudo env MERIDIAN_ENABLE_SHELL=1 bash deploy/install.sh
 ```
 
-Das legt den Benutzer `meridian-run` an (ohne Zugriff auf Schlüssel und Datenbank), aktiviert `meridian-shell.socket` und `meridian-worker-shell` und trägt `MERIDIAN_SHELL_HOST_SOCKETS` ein. Danach in Meridian unter Einstellungen → Ausführungsorte `host default` freigeben. Jeder Lauf bekommt einen eigenen Prozess als `meridian-run` mit fester Umgebung; Details und Grenzen: `docs/decisions/0014-host-agent.md`.
+Das legt den Benutzer `meridian-run` an (ohne Zugriff auf Schlüssel und Datenbank), aktiviert `meridian-shell.socket` und `meridian-worker-shell` und trägt `MERIDIAN_SHELL_HOST_SOCKETS` ein. Danach in Meridian unter Einstellungen → Ausführungsorte `host default` freigeben. Jeder Lauf bekommt einen eigenen Prozess als `meridian-run` mit fester Umgebung; Installation und Freigaben: [README](../README.md#betrieb-auf-linux-mit-systemd).
 
 ## Prüfliste nach dem Einrichten
 

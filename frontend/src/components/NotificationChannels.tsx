@@ -287,8 +287,8 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
                     {!channel.enabled && <span className="muted"> {t('(aus)')}</span>}
                   </td>
                   <td>{t(TYPE_LABEL[channel.type])}</td>
-                  <td className="mono">{summary(channel)}</td>
-                  <td>
+                  <td className="mono channels__target">{summary(channel)}</td>
+                  <td className="channels__delivery">
                     {channel.last_delivery == null ? (
                       <span className="muted">{t('noch keine')}</span>
                     ) : (
@@ -298,8 +298,8 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
                       </>
                     )}
                   </td>
-                  <td>
-                    <div className="row">
+                  <td className="targets__action-cell">
+                    <div className="row targets__actions">
                       <button
                         type="button"
                         className="btn btn--ghost btn--small"
@@ -394,16 +394,24 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
         ) : ['discord', 'slack', 'pushover', 'homeassistant', 'browser'].includes(form.type) ? (
           <>
             {form.type === 'browser' ? <>
-              <FormField label={t('Kontaktadresse')} error={errors.contact} hint={t('E-Mail-Adresse für die Registrierung beim Browser-Push-Dienst.')}>
+              <FormField label={t('Kontaktadresse des Betreibers')} error={errors.contact} hint={t('Deine erreichbare E-Mail-Adresse als Betreiber, z. B. admin@example.org. Sie wird dem Push-Dienst als Kontakt mitgegeben. Hierhin werden keine Benachrichtigungen verschickt; SMTP und ein E-Mail-Passwort sind dafür nicht erforderlich.')}>
                 {aria => <input {...aria} className="input" type="email" value={form.contact} onChange={e => set('contact', e.target.value)} />}
               </FormField>
               {editing ? <BrowserPushDevices channelId={editing.id} csrf={csrf} /> : <p className="hint">{t('Kanal zuerst speichern, dann bearbeiten und deinen Browser verbinden.')}</p>}
             </> : <>
               {form.type === 'homeassistant' && <>
                 <FormField label={t('Home-Assistant-Adresse')} error={errors.server}>{aria => <input {...aria} className="input" placeholder="http://homeassistant:8123" value={form.server} onChange={e => set('server', e.target.value)} />}</FormField>
-                <FormField label={t('Zielaktion')} error={errors.service} hint={t('persistent_notification.create für das Dashboard oder notify.mobile_app_name für Handy-Push.')}>
-                  {aria => <input {...aria} className="input" value={form.service} onChange={e => set('service', e.target.value)} />}
+                <FormField label={t('Benachrichtigungsziel')} error={errors.service}>
+                  {aria => <select {...aria} className="input" value={['persistent_notification.create', 'notify.notify'].includes(form.service) ? form.service : 'custom'} onChange={e => set('service', e.target.value === 'custom' ? '' : e.target.value)}>
+                    <option value="persistent_notification.create">{t('Home-Assistant-Dashboard')}</option>
+                    <option value="notify.notify">{t('Standard-Benachrichtigungsdienst')}</option>
+                    <option value="custom">{t('Bestimmtes Handy oder eigene Benachrichtigungsgruppe')}</option>
+                  </select>}
                 </FormField>
+                {form.service === 'persistent_notification.create' ? <p className="hint">{t('Erzeugt eine Meldung unter „Benachrichtigungen“ in Home Assistant. Sendet keine Push-Nachricht an dein Handy.')}</p> : form.service === 'notify.notify' ? <p className="hint">{t('Verwendet notify.notify in Home Assistant. Welche Geräte Nachrichten erhalten, bestimmt dein dort eingerichteter Standarddienst. Prüfe diesen Dienst zuerst in Home Assistant unter Einstellungen → Werkzeuge → Aktionen.')}</p> : <FormField label={t('Home-Assistant-Aktionsname')} error={errors.service} hint={t('In Home Assistant unter Einstellungen → Werkzeuge → Aktionen nach notify.mobile_app suchen. Die Aktion deines Handys auswählen, direkt testen und den vollständigen Namen hier kopieren. Für eine bestehende Gruppe ihren notify.-Aktionsnamen verwenden.')}>
+                  {aria => <input {...aria} className="input" placeholder="notify.mobile_app_mein_handy" value={form.service} onChange={e => set('service', e.target.value)} />}
+                </FormField>}
+                <p className="hint">{t('Zum Einrichten: Die Companion-App muss mit diesem Home-Assistant-Server verbunden sein und Benachrichtigungen erlauben. Nach dem Speichern einmal „Testnachricht“ wählen. Eine funktionierende Automation zeigt ihren Aktionsnamen über ⋮ → In YAML bearbeiten.')}</p>
               </>}
               <FormField label={t(form.type === 'discord' || form.type === 'slack' ? 'Webhook-Adresse' : form.type === 'pushover' ? 'Pushover App-Token' : 'Home Assistant Long-Lived Access Token')} error={errors.token} hint={t('Zugangsdaten werden verschlüsselt gespeichert. Beim Bearbeiten leer lassen, um sie zu behalten.')}>
                 {aria => <input {...aria} className="input" type="password" autoComplete="new-password" disabled={form.clearSecret} value={form.token} onChange={e => set('token', e.target.value)} />}

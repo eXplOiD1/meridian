@@ -264,7 +264,7 @@ export function Categories({ profile }: { profile: Profile }) {
           </FormField>
         </form>
         <div className="table-wrap">
-          <table className="table">
+          <table className="table categories-table">
             <thead>
               <tr>
                 <th scope="col">{t('Name')}</th>
