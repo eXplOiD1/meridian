@@ -4,6 +4,8 @@
 
 [English](OPERATIONS.md) · [Deutsch](BETRIEB.md) · [README](../README.md#english)
 
+Optional host commands from Docker: [setup, permissions and bridge updates](DOCKER_HOST.md#english).
+
 Applies to both deployment modes. Run management commands with `docker compose exec web php bin/meridian …` on Docker, or `sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/meridian …` on systemd.
 
 ## Storage locations

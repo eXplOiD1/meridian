@@ -164,7 +164,7 @@ final class ShellJobValidator
             return null;
         }
         if ($target?->kind === ShellTargetKind::Host) {
-            $errors['shell.user'] = 'Bei Host-Ausführungsorten ist der Benutzer fest (meridian-run). „user“ null lassen.';
+            $errors['shell.user'] = 'Bei Host-Ausführungsorten ist der Benutzer im Host-Dienst fest eingestellt. „user“ null lassen.';
 
             return null;
         }

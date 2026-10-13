@@ -14,6 +14,8 @@ Documentation: [Operations manual (English)](docs/OPERATIONS.md), [Betriebshandb
 
 For time filters, clickable timelines, monitor alarms and public status history, see [History and monitoring](docs/HISTORY.md#english) ([Deutsch](docs/HISTORY.md#deutsch)).
 
+For shell jobs on the Linux Docker host, see [Enable Docker host access](docs/DOCKER_HOST.md#english). This optional bridge requires explicit activation and a configured host user.
+
 ### License
 
 Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
@@ -342,6 +344,8 @@ E-Mail-Empfänger lassen sich im SMTP-Kanal, pro Kategorie und pro Job einstelle
 Bei Statusseiten lässt sich die Standardsprache beim Anlegen und Bearbeiten auf Deutsch oder Englisch setzen. Neue Seiten übernehmen zunächst deine UI-Sprache. Besucher können auf der öffentlichen Seite über DE/EN wechseln; dieser Wechsel verändert die gespeicherte Standardsprache nicht. Eigene Titel und Anzeigenamen werden nicht übersetzt.
 
 Zeitfilter, anklickbare Tagesansichten, Überwachungsalarme und die Historie der Statusseite erklärt [Verlauf und Überwachung](docs/HISTORY.md#deutsch) ([English](docs/HISTORY.md#english)).
+
+Shell-Jobs auf dem Linux-Docker-Host: [Docker-Host-Zugriff aktivieren](docs/DOCKER_HOST.md#deutsch). Die optionale Bridge benötigt eine ausdrückliche Aktivierung und einen konfigurierten Host-Benutzer.
 
 ### Benachrichtigungskanäle
 

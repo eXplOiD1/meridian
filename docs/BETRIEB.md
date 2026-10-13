@@ -4,6 +4,8 @@
 
 [English](OPERATIONS.md) · [Deutsch](BETRIEB.md) · [README](../README.md#deutsch)
 
+Optionale Host-Befehle aus Docker: [Einrichtung, Rechte und Bridge-Updates](DOCKER_HOST.md#deutsch).
+
 Gilt für beide Betriebsarten. Befehle laufen mit `docker compose exec web php bin/meridian …` (Docker) bzw.
 `sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/meridian …` (systemd).
 

@@ -12,7 +12,66 @@ concurrency:
   group: images-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  host-bridge-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and exercise opt-in host bridge on Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -f docker/Dockerfile.host -t meridian-host-test .
+          docker volume create meridian-host-test-socket
+          trap 'docker rm -f meridian-host-test >/dev/null 2>&1 || true; docker volume rm meridian-host-test-socket >/dev/null 2>&1 || true' EXIT
+          # The bridge must reject omitted activation and accidental root jobs.
+          if docker run --rm --privileged --pid=host meridian-host-test; then exit 1; fi
+          if docker run --rm --privileged --pid=host -e MERIDIAN_DOCKER_HOST_ENABLE=1 -e MERIDIAN_HOST_UID=0 -e MERIDIAN_HOST_GID=0 meridian-host-test; then exit 1; fi
+          docker run -d --name meridian-host-test --privileged --pid=host --network=none --read-only --security-opt=no-new-privileges:true --tmpfs /tmp -e MERIDIAN_DOCKER_HOST_ENABLE=1 -e MERIDIAN_HOST_UID=65534 -e MERIDIAN_HOST_GID=65534 -e BRIDGE_SECRET=must-not-reach-job -v meridian-host-test-socket:/run/meridian-host meridian-host-test
+          for attempt in $(seq 1 30); do
+            if docker exec meridian-host-test php -r 'exit(file_exists("/run/meridian-host/default.sock") ? 0 : 1);'; then break; fi
+            sleep 1
+          done
+          docker run --rm -i --user=1000:1000 --network=none --read-only -v meridian-host-test-socket:/run/meridian-host:ro --entrypoint=php meridian-host-test <<'PHP'
+          <?php
+          require '/app/vendor/autoload.php';
+          use Meridian\Runner\Shell\{ExecSpec, HostSocketExecutor, HostSockets, ShellInterpreter, ShellTarget, ShellTargetKind};
+          $executor = new HostSocketExecutor(HostSockets::parse('default=/run/meridian-host/default.sock'));
+          $start = static function (string $script) use ($executor) {
+              return $executor->start(new ExecSpec(1, 1, 'test', new ShellTarget(ShellTargetKind::Host, 'default'), ShellInterpreter::Sh, null, null, 'UTC', ExecSpec::newNonce(), $script, []));
+          };
+          $collect = static function ($execution): string {
+              $out = ''; $deadline = microtime(true) + 10;
+              while (!$execution->finished() && microtime(true) < $deadline) {
+                  $block = $execution->read(0.2);
+                  if ($block !== null) { $out .= $block->bytes(); }
+              }
+              if (!$execution->finished()) { $execution->close(); throw new RuntimeException('Execution timed out'); }
+              return $out;
+          };
+          $run = $start('id -u; id -g; pwd; printf "%s" "${BRIDGE_SECRET-unset}"');
+          $out = $collect($run);
+          if ($run->exitCode() !== 0 || !preg_match('#^65534\n65534\n/tmp/meridian-host-[0-9a-f]{32}/run-1-[0-9a-f]{32}\nunset$#D', $out)) { throw new RuntimeException('Wrong host identity, working directory or environment'); }
+          $run->close();
+          foreach (['kill', 'disconnect'] as $mode) {
+              $run = $start('sleep 60 & echo $!; wait');
+              $out = ''; $deadline = microtime(true) + 5;
+              while (!str_contains($out, "\n") && microtime(true) < $deadline) {
+                  $block = $run->read(0.2); if ($block !== null) { $out .= $block->bytes(); }
+              }
+              if (!preg_match('/^[1-9][0-9]*\n$/D', $out)) { throw new RuntimeException('No child PID'); }
+              $pid = (int) trim($out);
+              if ($mode === 'kill') { $run->kill(); $collect($run); }
+              $run->close();
+              usleep(500000);
+              $check = $start('if kill -0 ' . $pid . ' 2>/dev/null; then exit 9; fi');
+              $collect($check);
+              if ($check->exitCode() !== 0) { throw new RuntimeException('Background process survived cancellation'); }
+              $check->close();
+          }
+          echo "Host identity, private directory, environment and process-group cleanup passed.\n";
+          PHP
   build:
+    needs: host-bridge-test
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,6 +83,9 @@ jobs:
           - image: meridian
             dockerfile: docker/Dockerfile.updater
             variant: updater-
+          - image: meridian
+            dockerfile: docker/Dockerfile.host
+            variant: host-
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
