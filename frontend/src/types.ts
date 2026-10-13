@@ -339,6 +339,7 @@ export interface LogPage {
 
 /** Antwort von `GET /api/overview` („Heute im Takt“). Abschnitte sind `[Index, erfolgreich, Fehler]`. */
 export interface OverviewJob {
+  kind?: 'job' | 'monitor';
   id: number;
   name: string;
   type: 'http' | 'shell';
@@ -349,6 +350,7 @@ export interface OverviewJob {
 }
 
 export interface Overview {
+  monitors?: OverviewJob[];
   window: { from: string; to: string; bucket_seconds: number; buckets: number; now_bucket: number };
   jobs: OverviewJob[];
   totals: { runs: number; failed: number; avg_duration_ms: number | null };
@@ -431,6 +433,7 @@ export type MonitorState = 'waiting' | 'up' | 'down' | 'paused';
 export type MonitorKind = 'heartbeat' | 'http' | 'tcp' | 'ping';
 
 export interface Monitor {
+  max_response_ms?: number;
   id: number;
   kind: MonitorKind;
   /** Aktive Prüfung: Ursprung bzw. Host:Port (nie Pfad oder Query); bei verborgenem Host ein Platzhalter. */

@@ -12,6 +12,8 @@ Self-hosted scheduler for HTTP and shell jobs, with users, roles and permissions
 
 Documentation: [Operations manual (English)](docs/OPERATIONS.md), [Betriebshandbuch (Deutsch)](docs/BETRIEB.md), [License](LICENSE), [Third-party notices](THIRD_PARTY_NOTICES.md).
 
+For time filters, clickable timelines, monitor alarms and public status history, see [History and monitoring](docs/HISTORY.md#english) ([Deutsch](docs/HISTORY.md#deutsch)).
+
 ### License
 
 Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
@@ -338,6 +340,8 @@ Bei einem öffentlichen GitHub-Repository bleiben die von GitHubs Bedingungen er
 E-Mail-Empfänger lassen sich im SMTP-Kanal, pro Kategorie und pro Job einstellen. Eigene Job-Empfänger ersetzen die Kategorie-Vorgabe; ohne Kategorie-Empfänger gelten die Empfänger des Kanals. Leer bedeutet erben. Die Auswahl gilt für alle gewählten E-Mail-Kanäle. Überwachungen bieten ebenfalls eine Kanalauswahl und übernehmen die Empfänger ihrer Kategorie.
 
 Bei Statusseiten lässt sich die Standardsprache beim Anlegen und Bearbeiten auf Deutsch oder Englisch setzen. Neue Seiten übernehmen zunächst deine UI-Sprache. Besucher können auf der öffentlichen Seite über DE/EN wechseln; dieser Wechsel verändert die gespeicherte Standardsprache nicht. Eigene Titel und Anzeigenamen werden nicht übersetzt.
+
+Zeitfilter, anklickbare Tagesansichten, Überwachungsalarme und die Historie der Statusseite erklärt [Verlauf und Überwachung](docs/HISTORY.md#deutsch) ([English](docs/HISTORY.md#english)).
 
 ### Benachrichtigungskanäle
 
