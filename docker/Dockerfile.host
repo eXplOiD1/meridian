@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader --ignore-platform-reqs
+COPY src/ src/
+RUN composer dump-autoload --no-dev --classmap-authoritative --ignore-platform-reqs
+
+FROM php:8.4-cli-alpine
+RUN apk add --no-cache util-linux \
+ && docker-php-ext-install pcntl \
+ && test -x /usr/bin/nsenter && test -x /usr/bin/setsid \
+ && php -r 'exit(function_exists("posix_kill") && function_exists("pcntl_fork") ? 0 : 1);'
+WORKDIR /app
+COPY --from=vendor /app/vendor ./vendor
+COPY src/ src/
+COPY bin/meridian-docker-host bin/meridian-docker-host
+COPY LICENSE THIRD_PARTY_NOTICES.md /app/
+COPY licenses/ /app/licenses/
+USER root
+CMD ["php", "bin/meridian-docker-host"]

@@ -156,7 +156,7 @@ if (is_dir($config->dataDir)) {
             ));
         }
         // Shell (ADR 0004 §5.3): nie ein lokaler Prozess im Worker (E2) — nur Docker-Exec über den Socket-Proxy
-        // (nur unix://, sonst Start abgelehnt), Host-Agent folgt mit S11 (bis dahin endet ein Host-Lauf sofort).
+        // Only Unix sockets are allowed. Host profiles use the separately configured agent/bridge transport.
         if ($type === JobType::Shell) {
             $proxy = DockerProxyClient::fromEnvironment($env['MERIDIAN_DOCKER_PROXY'] ?? null);
             // Host-Ausführung nur über den Agent-Socket eines freigegebenen Profils (ADR 0014); ohne Angabe gibt es sie nicht.

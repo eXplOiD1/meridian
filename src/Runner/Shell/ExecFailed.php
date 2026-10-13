@@ -19,7 +19,7 @@ final class ExecFailed extends \RuntimeException
     public const CONTAINER_MISSING = 'Container nicht gefunden oder läuft nicht: Der Container muss laufen und der Name muss exakt stimmen (docker ps).';
     public const CONNECTION_LOST = 'Verbindung zum Docker-Proxy abgebrochen.';
     public const PROTOCOL = 'Protokollfehler bei der Ausführung im Container: Lauf beendet. Hat der Container /bin/sh, head und cut?';
-    public const HOST_NOT_SET_UP = 'Host-Ausführung nicht eingerichtet: meridian-shell.socket prüfen.';
+    public const HOST_NOT_SET_UP = 'Host-Ausführung nicht eingerichtet: Host-Profil, MERIDIAN_SHELL_HOST_SOCKETS und Docker-Host-Bridge bzw. meridian-shell.socket prüfen.';
     public const HOST_LOST = 'Verbindung zum Host-Agenten abgebrochen: Lauf beendet. Dienst meridian-shell.socket prüfen (journalctl -u "meridian-shell@*").';
     public const HOST_PROTOCOL = 'Protokollfehler beim Host-Agenten: Lauf beendet. Versionen von Meridian und Agent prüfen.';
     public const HOST_ISOLATION = 'Der Host-Agent verweigert die Ausführung: Er darf nicht als root, im Container oder mit Zugriff auf Schlüssel und Datenbank laufen (Benutzer meridian-run, Units aus deploy/systemd).';

@@ -1,0 +1,46 @@
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+# Explicit opt-in: read docs/DOCKER_HOST.md before enabling.
+# docker compose -f compose.yaml -f compose.host.yaml up -d
+services:
+  host-bridge:
+    image: ${MERIDIAN_HOST_IMAGE:-ghcr.io/exploid1/meridian:host-latest}
+    pull_policy: always
+    container_name: meridian-host-bridge
+    restart: unless-stopped
+    user: "0:0"
+    privileged: true
+    pid: host
+    network_mode: none
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MERIDIAN_DOCKER_HOST_ENABLE: "1"
+      MERIDIAN_HOST_UID: ${MERIDIAN_HOST_UID:?Set the Linux host user ID first}
+      MERIDIAN_HOST_GID: ${MERIDIAN_HOST_GID:?Set the Linux host group ID first}
+      MERIDIAN_HOST_ALLOW_ROOT: ${MERIDIAN_HOST_ALLOW_ROOT:-0}
+    volumes:
+      - meridian-host-socket:/run/meridian-host
+    tmpfs:
+      - /tmp:size=16m,mode=0700
+    stop_grace_period: 15s
+    mem_limit: 256m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$socket = @stream_socket_client('unix:///run/meridian-host/default.sock', $$errno, $$error, 1); if ($$socket === false) { exit(1); } fclose($$socket);"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  worker-shell:
+    environment:
+      MERIDIAN_SHELL_HOST_SOCKETS: ${MERIDIAN_HOST_PROFILE:-default}=/run/meridian-host/default.sock
+    volumes:
+      - meridian-host-socket:/run/meridian-host:ro
+    depends_on:
+      host-bridge:
+        condition: service_healthy
+
+volumes:
+  meridian-host-socket:

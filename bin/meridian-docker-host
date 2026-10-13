@@ -1,0 +1,113 @@
+#!/usr/bin/env php
+<?php
+
+// Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+// SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+
+declare(strict_types=1);
+
+use Meridian\Runner\Shell\Agent\AgentSession;
+use Meridian\Runner\Shell\DockerHostExecutor;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+ini_set('display_errors', '0');
+ini_set('log_errors', '0');
+set_exception_handler(static function (Throwable $error): void {
+    fwrite(STDERR, 'meridian-docker-host: operation failed (' . $error::class . ").\n");
+    fwrite(STDERR, "Check explicit activation, host PID mode, privileges, fixed UID/GID and root approval; see docs/DOCKER_HOST.md.\n");
+    exit(70);
+});
+
+if (getenv('MERIDIAN_DOCKER_HOST_ENABLE') !== '1' || !function_exists('posix_geteuid') || posix_geteuid() !== 0
+    || !is_file('/.dockerenv') || is_file('/proc/1/root/.dockerenv')
+    || readlink('/proc/self/ns/pid') !== readlink('/proc/1/ns/pid')) {
+    throw new RuntimeException('Host bridge must be explicitly enabled in Docker with pid: host.');
+}
+$identity = static function (string $name): int {
+    $value = getenv($name);
+    if (!is_string($value) || preg_match('/^(0|[1-9][0-9]{0,9})$/D', $value) !== 1 || (int) $value > 2147483647) {
+        throw new RuntimeException('A numeric host UID and GID must be configured.');
+    }
+    return (int) $value;
+};
+$uid = $identity('MERIDIAN_HOST_UID');
+$gid = $identity('MERIDIAN_HOST_GID');
+$workRoot = '/proc/1/root/tmp/meridian-host-' . bin2hex(random_bytes(16));
+$executor = new DockerHostExecutor($uid, $gid, $workRoot, getenv('MERIDIAN_HOST_ALLOW_ROOT') === '1');
+$directory = '/run/meridian-host';
+if ((!is_dir($directory) && !mkdir($directory, 0750)) || is_link($directory)
+    || !chmod($directory, 0750) || !chown($directory, 0) || !chgrp($directory, 1000)) {
+    throw new RuntimeException('Cannot prepare socket directory.');
+}
+$lock = fopen($directory . '/bridge.lock', 'c');
+if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+    throw new RuntimeException('Only one bridge may own the socket.');
+}
+$socketPath = $directory . '/default.sock';
+if (file_exists($socketPath) && !unlink($socketPath)) {
+    throw new RuntimeException('Cannot remove stale socket.');
+}
+$server = stream_socket_server('unix://' . $socketPath, $errno, $error);
+if ($server === false || !chmod($socketPath, 0600) || !chown($socketPath, 1000)
+    || !mkdir($workRoot, 0711)) {
+    throw new RuntimeException('Cannot prepare host bridge.');
+}
+stream_set_blocking($server, false);
+$stopping = false;
+pcntl_async_signals(true);
+pcntl_signal(SIGTERM, static function () use (&$stopping): void { $stopping = true; });
+pcntl_signal(SIGINT, static function () use (&$stopping): void { $stopping = true; });
+/** @var array<int, true> $children */
+$children = [];
+fwrite(STDERR, "meridian-docker-host: ready.\n");
+try {
+    while (!$stopping) {
+        foreach (array_keys($children) as $pid) {
+            if (pcntl_waitpid($pid, $status, WNOHANG) === $pid) {
+                unset($children[$pid]);
+            }
+        }
+        $read = [$server];
+        $write = $except = null;
+        if (@stream_select($read, $write, $except, 0, 200000) !== 1) {
+            continue;
+        }
+        $connection = @stream_socket_accept($server, 0);
+        if ($connection === false) {
+            continue;
+        }
+        if (count($children) >= 8) {
+            fclose($connection);
+            continue;
+        }
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            fclose($connection);
+            continue;
+        }
+        if ($pid === 0) {
+            fclose($server);
+            fclose($lock);
+            // exit triggers LocalExecution's destructor, which kills and reaps the entire run group.
+            pcntl_signal(SIGTERM, static function (): never { exit(0); });
+            pcntl_signal(SIGINT, static function (): never { exit(0); });
+            $session = new AgentSession($executor);
+            $code = $session->run($connection, $connection);
+            fclose($connection);
+            exit($code);
+        }
+        $children[$pid] = true;
+        fclose($connection);
+    }
+} finally {
+    fclose($server);
+    foreach (array_keys($children) as $pid) {
+        posix_kill($pid, SIGTERM);
+    }
+    foreach (array_keys($children) as $pid) {
+        pcntl_waitpid($pid, $status);
+    }
+    @unlink($socketPath);
+    @rmdir($workRoot);
+    fclose($lock);
+}

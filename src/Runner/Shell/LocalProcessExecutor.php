@@ -53,12 +53,23 @@ final class LocalProcessExecutor implements Executor
             throw new ExecFailed(ExecFailed::START_FAILED, true);
         }
 
+        return self::spawn([$this->setsid, $interpreter, '-s'], $workdir, self::environment($spec, $workdir), $spec->script());
+    }
+
+    /**
+     * Shared process-group lifecycle for the systemd agent and the opt-in Docker host bridge.
+     * The caller must establish isolation and create its private work directory before calling this.
+     * @param list<string> $command
+     * @param array<string, string> $environment
+     */
+    public static function spawn(array $command, string $workdir, array $environment, #[\SensitiveParameter] string $script): LocalExecution
+    {
         $process = proc_open(
-            [$this->setsid, $interpreter, '-s'],
+            $command,
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $workdir,
-            self::environment($spec, $workdir),
+            $environment,
         );
         if (!is_resource($process)) {
             LocalExecution::removeTree($workdir);
@@ -82,7 +93,7 @@ final class LocalProcessExecutor implements Executor
             usleep(500);
         } while (microtime(true) < $deadline);
 
-        $execution = new LocalExecution($process, $pipes, $grouped ? $pid : null, $workdir, $spec->script());
+        $execution = new LocalExecution($process, $pipes, $grouped ? $pid : null, $workdir, $script);
         if (!$grouped && $execution->stillRunning()) {
             // Nie die Gruppe des Workers treffen: nur die PID beenden.
             posix_kill($pid, SIGKILL);

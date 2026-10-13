@@ -728,9 +728,9 @@ function ShellTargets({ csrf }: { csrf: string }) {
       <p className="card__lead">
         {t('Shell-Jobs laufen nie in Meridian selbst, sondern nur an einem hier freigegebenen Ort: in einem Docker-Container oder als Host-Profil. Eine Freigabe gilt global oder für genau eine Kategorie.')}</p>
       <Alert tone="warn">
-        {t('Eine Freigabe erlaubt Administratoren mit dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle an diesem Ort. Diese Freigabe ist die einzige nötige Einstellung: Der Container muss laufen und der Name muss exakt stimmen. Meridians eigene Container (meridian-…, außer meridian-sandbox) sind gesperrt. Gib nur Orte frei, die dafür gedacht sind, und wähle möglichst eine Kategorie.')}</Alert>
+        {t('Eine Freigabe erlaubt Administratoren mit dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle an diesem Ort. Bei Containern muss der Container laufen und der Name exakt stimmen. Host-Profile benötigen zusätzlich einen eingerichteten Host-Dienst. Meridians eigene Container (meridian-…, außer meridian-sandbox) sind gesperrt. Gib nur Orte frei, die dafür gedacht sind, und wähle möglichst eine Kategorie.')}</Alert>
       <p className="hint">
-        <strong>{t('root nur ausdrücklich:')}</strong> {t('Trage root (oder die Benutzer-ID 0) nur ein, wenn es unbedingt nötig ist. Ohne diesen Eintrag kann kein Job als root laufen. Wird eine Kategorie gelöscht, entfallen ihre Freigaben, sie werden nie global.')}
+        <strong>{t('root nur ausdrücklich:')}</strong> {t('Trage root (oder die Benutzer-ID 0) nur ein, wenn es unbedingt nötig ist. Bei Container-Jobs kann ohne diesen Eintrag kein Job als root laufen. Bei Host-Profilen legt der Host-Dienst den Benutzer fest. Wird eine Kategorie gelöscht, entfallen ihre Freigaben, sie werden nie global.')}
       </p>
 
       {loadError !== null && <Alert tone="err">{loadError}</Alert>}
@@ -763,7 +763,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
                   <td data-label="Gilt für">{shellScopeLabel(target)}</td>
                   <td data-label="Benutzer">
                     {target.kind === 'host' ? (
-                      <span className="hint">{t('fest (meridian-run)')}</span>
+                      <span className="hint">{t('fest (Host-Dienst)')}</span>
                     ) : (
                       <>
                         <span className="mono">{target.users.join(', ')}</span>
@@ -851,7 +851,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
           ) : (
             <div className="field">
               <span className="field__label">{t('Benutzer')}</span>
-              <span className="hint">{t('Host-Profile haben keine Benutzerliste; sie laufen als fester Benutzer meridian-run.')}</span>
+              <span className="hint">{t('Host-Profile verwenden den fest eingestellten Benutzer des Host-Dienstes. Unter Docker muss der Host-Zugriff zusätzlich mit compose.host.yaml aktiviert werden.')}</span>
             </div>
           )}
         </div>

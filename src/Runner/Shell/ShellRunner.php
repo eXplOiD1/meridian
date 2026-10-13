@@ -49,8 +49,8 @@ final class ShellRunner implements Runner
     public const NOTE_ABORTED = 'Abgebrochen: Der Lauf wurde beendet.';
     public const NOTE_FLOOD = 'Ausgabe über 64 MiB: Prozess beendet.';
     public const NOTE_NO_INTERPRETER = 'Interpreter im Container nicht gefunden.';
-    /** Ort `host` ohne Host-Agent (bis S11): sofort beenden, nie still warten oder wiederholen. */
-    public const NOTE_HOST_UNAVAILABLE = 'Host-Ausführung ist in dieser Version noch nicht verfügbar (kommt mit der systemd-Unterstützung). Ausführungsort vom Typ Container verwenden.';
+    /** Host profile without configured transport: fail immediately without retry. */
+    public const NOTE_HOST_UNAVAILABLE = 'Host-Ausführung nicht eingerichtet: Docker-Host-Zugriff aktivieren oder meridian-shell.socket einrichten und MERIDIAN_SHELL_HOST_SOCKETS im Shell-Worker setzen.';
     public const NOTE_NO_DOCKER = 'Docker-Proxy nicht eingerichtet: MERIDIAN_DOCKER_PROXY auf unix:///… setzen (docs/decisions/0004 E10).';
 
     /**
