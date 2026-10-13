@@ -4,7 +4,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
 import { ApiError, PASSWORD_CHANGE_EVENT, request, SESSION_ENDED_EVENT, setCsrfRefresher } from './lib/api';
-import { canManageCategories, canManageUsers, canSeeUsersArea } from './lib/permissions';
+import { canManageCategories, canManageSettings, canManageUsers, canSeeUsersArea } from './lib/permissions';
+import { UpdateAvailabilityProvider } from './components/UpdateAvailability';
 import type { Route } from './lib/useHashRoute';
 import { navigate, useHashRoute } from './lib/useHashRoute';
 import { Account } from './screens/Account';
@@ -189,6 +190,7 @@ export function App() {
   const heading = HEADINGS[effective.name];
 
   return (
+    <UpdateAvailabilityProvider key={profile.user.id} enabled={canManageSettings(profile)}>
     <Layout profile={profile} route={effective} kicker={heading.kicker} title={heading.title} onLogout={() => void logout(profile)}>
       {effective.name !== 'konto' && <BrowserPushInvitation userId={profile.user.id} />}
       {effective.name === 'home' && <Overview profile={profile} />}
@@ -211,5 +213,6 @@ export function App() {
       {effective.name === 'categories' && <Categories profile={profile} />}
       {effective.name === 'job-edit' && <JobEdit key={effective.id} profile={profile} id={effective.id} onEditorModeChange={adoptEditorMode} />}
     </Layout>
+    </UpdateAvailabilityProvider>
   );
 }
