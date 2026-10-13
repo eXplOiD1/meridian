@@ -146,7 +146,7 @@ final class AppFactory
         // Freigaben interner Ziele (network.internal_targets, nur Admin).
         (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock, $infrastructure), $masker))->register($kernel);
         // Ausführungsorte für Shell-Jobs (shell.targets, nur Admin) und die Auswahl im Job-Editor (jobs.edit_shell).
-        (new ShellTargetController($sessionAuth, $csrf, $users, $access, $audit, new ShellTargetStore($db, $clock), $masker))->register($kernel);
+        (new ShellTargetController($sessionAuth, $csrf, $users, $access, $audit, new ShellTargetStore($db, $clock), $masker, $auth, $config))->register($kernel);
         // Herzschlag-Überwachung (ADR 0011): Verwaltung mit Sitzung, Ping ohne Sitzung (Token ist die Berechtigung).
         $monitors = new \Meridian\Monitor\MonitorRepository($db);
         (new MonitorController($sessionAuth, $csrf, $users, $access, $monitors, new \Meridian\Monitor\MonitorService($db, $monitors, new \Meridian\Monitor\MonitorValidator($categories), $access, $audit, $clock, $box), $masker, new \Meridian\Settings\Settings($db, $clock)))->register($kernel);

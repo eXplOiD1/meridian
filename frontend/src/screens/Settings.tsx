@@ -606,6 +606,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<ShellTargetEntry | null>(null);
+  const [password, setPassword] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -637,9 +638,11 @@ function ShellTargets({ csrf }: { csrf: string }) {
 
   const docker = form.kind === 'docker';
   const users = splitUsers(form.users);
-  const rootChosen = docker && (users.some((user) => user === 'root' || /^0(:|$)/.test(user)) || form.defaultUser.trim() === 'root' || /^0(:|$)/.test(form.defaultUser.trim()));
+  const rootChosen = docker && (users.some((user) => /^(root|0+)(:|$)/.test(user)) || /^(root|0+)(:|$)/.test(form.defaultUser.trim()));
+  const needsPassword = !docker || rootChosen || editing?.allows_root === true;
 
   function startEdit(target: ShellTargetEntry): void {
+    setPassword('');
     setEditing(target);
     setErrors({});
     setFormError(null);
@@ -655,6 +658,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
   }
 
   function cancelEdit(): void {
+    setPassword('');
     setEditing(null);
     setErrors({});
     setFormError(null);
@@ -674,6 +678,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       users: docker ? users : [],
       default_user: docker && form.defaultUser.trim() !== '' ? form.defaultUser.trim() : null,
       note: form.note.trim(),
+      ...(needsPassword ? { current_password: password } : {}),
     };
     try {
       if (editing !== null) {
@@ -700,6 +705,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
         setFormError(errorMessage(caught));
       }
     } finally {
+      setPassword('');
       setBusy(false);
     }
   }
@@ -851,7 +857,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
           ) : (
             <div className="field">
               <span className="field__label">{t('Benutzer')}</span>
-              <span className="hint">{t('Host-Profile verwenden den fest eingestellten Benutzer des Host-Dienstes. Unter Docker muss der Host-Zugriff zusätzlich mit compose.host.yaml aktiviert werden.')}</span>
+              <span className="hint">{t('Host-Profile verwenden den fest eingestellten Benutzer des Host-Dienstes. Unter Docker muss die Host-Bridge im Stack enthalten sein; der vollständige Host-Root-Stack bringt sie bereits mit.')}</span>
             </div>
           )}
         </div>
@@ -869,6 +875,11 @@ function ShellTargets({ csrf }: { csrf: string }) {
           {(aria) => <input {...aria} className="input" name="shell-note" maxLength={200} autoComplete="off" value={form.note} onChange={(e) => set('note', e.target.value)} />}
         </FormField>
         {errors.body !== undefined && <Alert tone="err">{errors.body}</Alert>}
+        {needsPassword && (
+          <FormField label={t('Aktuelles Passwort')} error={errors.current_password} hint={t('Host-Profile und Root-Freigaben nur nach Bestätigung mit deinem Meridian-Passwort. Geplante Jobs laufen danach ohne erneute Passwortabfrage.')}>
+            {(aria) => <input {...aria} className="input" type="password" autoComplete="current-password" maxLength={1024} value={password} required onChange={(event) => setPassword(event.target.value)} />}
+          </FormField>
+        )}
         <div className="row">
           <button type="submit" className="btn btn--solid" disabled={busy || form.name.trim() === ''}>
             {busy ? t('Speichert …') : editing === null ? t('Ausführungsort anlegen') : t('Änderung speichern')}
