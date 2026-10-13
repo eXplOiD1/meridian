@@ -36,13 +36,13 @@ def latest_revision(channel='main'):
     if channel not in ('main', 'beta'):
         raise ValueError('invalid update channel')
     url = REPO.rsplit('/', 1)[0] + '/' + channel
-    request = urllib.request.Request(url, headers={"User-Agent": "Meridian-Updater", "Accept": "application/vnd.github+json"})
+    # Request only the SHA: commit JSON includes patches and can exceed the read limit.
+    request = urllib.request.Request(url, headers={"User-Agent": "Meridian-Updater", "Accept": "application/vnd.github.sha"})
     with urllib.request.urlopen(request, timeout=20) as response:
         if response.geturl() != url:
             raise RuntimeError("unexpected redirect")
-        data = json.loads(response.read(65536))
-    revision = data.get("sha", "")
-    if not isinstance(revision, str) or not SHA.fullmatch(revision):
+        revision = response.read(128).decode('ascii').strip()
+    if not SHA.fullmatch(revision):
         raise RuntimeError("invalid revision")
     return revision
 
