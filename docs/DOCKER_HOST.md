@@ -4,6 +4,12 @@
 
 ## English
 
+### One file for the NAS editor: host commands as root
+
+If you explicitly want full host privileges, use the complete [compose.host-root.yaml](../compose.host-root.yaml) instead of the override file. In the **existing `meridian` project**, replace the whole Compose configuration with that file and redeploy. It contains every service, preserves the standard project/volume names, uses beta images and enables host execution as root. No `.env`, UID/GID lookup or second file is needed. Existing accounts and passwords remain unchanged. Preserve any custom ports, proxy settings or volume paths from your original stack.
+
+Select the existing **Host · web** target in its permitted category and test `id; hostname`. **Host · default** works as well; both names reach the same root bridge. The root bridge intentionally gives every job using either approved profile full host permissions. For restricted host users, use the configurable setup below instead.
+
 Meridian can execute shell jobs on its Linux Docker host through an explicitly enabled **host bridge container**. No PHP installation, systemd service or SSH account is needed on the host. The host must provide `/bin/sh`; Bash jobs additionally require `/bin/bash` on the host. This is for native, rootful Linux Docker, including compatible NAS systems. Docker Desktop addresses its Linux VM, not the Windows/macOS desktop. Rootless Docker and user-namespace remapping are not supported.
 
 **Access:** the bridge runs privileged with the host PID namespace and enters the host filesystem and network. It has effective host administration privileges. A job runs as the fixed UID/GID you configure, with supplementary groups removed and privilege elevation through setuid binaries disabled. Choose a dedicated non-root host account with only the required file permissions. The bridge has no Meridian database, key volume, Docker socket or public network port. Only the shell worker receives its private Unix socket. These boundaries do not make a privileged bridge safe for untrusted administrators: approve only intended host jobs and categories.
@@ -58,6 +64,12 @@ Check `docker compose -f compose.yaml -f compose.host.yaml logs host-bridge` if 
 To disable access, disable affected jobs, stop/remove `host-bridge`, remove the override and recreate `worker-shell` with the base file. Remove the host-profile approvals if no longer needed. Keep Meridian data and key volumes.
 
 ## Deutsch
+
+### Eine Datei für den NAS-Editor: Host-Befehle als Root
+
+Wenn ausdrücklich volle Host-Rechte gewünscht sind, die vollständige [compose.host-root.yaml](../compose.host-root.yaml) statt der Erweiterungsdatei verwenden. Im **bestehenden Projekt `meridian`** die gesamte Compose-Konfiguration durch diese Datei ersetzen und neu bereitstellen. Alle Dienste sind enthalten, die üblichen Projekt- und Volume-Namen bleiben erhalten, Beta-Images werden verwendet und Host-Ausführung als Root ist aktiviert. Keine `.env`, keine Suche nach UID/GID und keine zweite Datei nötig. Vorhandene Konten und Passwörter bleiben bestehen. Individuelle Ports, Proxy-Einstellungen oder Volume-Pfade aus dem bisherigen Stack übernehmen.
+
+Den vorhandenen Ort **Host · web** in seiner freigegebenen Kategorie auswählen und mit `id; hostname` testen. **Host · default** funktioniert ebenfalls; beide Namen erreichen dieselbe Root-Bridge. Jeder Job mit einem dieser freigegebenen Profile erhält dabei ausdrücklich volle Host-Rechte. Für eingeschränkte Benutzer die nachfolgende konfigurierbare Einrichtung verwenden.
 
 Meridian kann Shell-Jobs über einen ausdrücklich aktivierten **Host-Bridge-Container** auf dem Linux-Docker-Host ausführen. Auf dem Host sind weder PHP noch ein systemd-Dienst oder SSH-Zugang nötig. Der Host benötigt `/bin/sh`, für Bash-Jobs zusätzlich `/bin/bash`. Unterstützt wird natives Linux-Docker mit Root-Daemon, einschließlich kompatibler NAS-Systeme. Bei Docker Desktop ist das Ziel die Linux-VM, nicht Windows/macOS. Rootless Docker und Benutzer-Namespace-Remapping werden nicht unterstützt.
 
