@@ -72,6 +72,27 @@ jobs:
           }
           echo "Host identity, private directory, environment and process-group cleanup passed.\n";
           PHP
+          docker stop meridian-host-test
+          docker rm meridian-host-test
+          docker run -d --name meridian-host-test --privileged --pid=host --network=none --read-only --security-opt=no-new-privileges:true --tmpfs /tmp -e MERIDIAN_DOCKER_HOST_ENABLE=1 -e MERIDIAN_HOST_UID=0 -e MERIDIAN_HOST_GID=0 -e MERIDIAN_HOST_ALLOW_ROOT=1 -v meridian-host-test-socket:/run/meridian-host meridian-host-test
+          for attempt in $(seq 1 30); do
+            if docker exec meridian-host-test php -r 'exit(file_exists("/run/meridian-host/default.sock") ? 0 : 1);'; then break; fi
+            sleep 1
+          done
+          docker run --rm -i --user=1000:1000 --network=none --read-only -v meridian-host-test-socket:/run/meridian-host:ro --entrypoint=php meridian-host-test <<'PHP'
+          <?php
+          require '/app/vendor/autoload.php';
+          use Meridian\Runner\Shell\{ExecSpec, HostSocketExecutor, HostSockets, ShellInterpreter, ShellTarget, ShellTargetKind};
+          $executor = new HostSocketExecutor(HostSockets::parse('web=/run/meridian-host/default.sock'));
+          $run = $executor->start(new ExecSpec(1, 1, 'test', new ShellTarget(ShellTargetKind::Host, 'web'), ShellInterpreter::Sh, null, null, 'UTC', ExecSpec::newNonce(), 'id -u; id -g', []));
+          $out = ''; $deadline = microtime(true) + 10;
+          while (!$run->finished() && microtime(true) < $deadline) {
+              $block = $run->read(0.2); if ($block !== null) { $out .= $block->bytes(); }
+          }
+          if (!$run->finished() || $run->exitCode() !== 0 || $out !== "0\n0\n") { $run->close(); throw new RuntimeException('Explicit host-root execution failed'); }
+          $run->close();
+          echo "Explicit host-root execution through the web profile passed.\n";
+          PHP
   build:
     needs: host-bridge-test
     runs-on: ubuntu-latest

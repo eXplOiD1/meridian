@@ -14,6 +14,8 @@ Meridian can execute shell jobs on its Linux Docker host through an explicitly e
 
 **Access:** the bridge runs privileged with the host PID namespace and enters the host filesystem and network. It has effective host administration privileges. A job runs as the fixed UID/GID you configure, with supplementary groups removed and privilege elevation through setuid binaries disabled. Choose a dedicated non-root host account with only the required file permissions. The bridge has no Meridian database, key volume, Docker socket or public network port. Only the shell worker receives its private Unix socket. These boundaries do not make a privileged bridge safe for untrusted administrators: approve only intended host jobs and categories.
 
+Host-profile approvals and container-root approvals require the acting administrator's current Meridian password when created or edited. Failed confirmations count toward the login account/IP lockout. Passwords are not stored in targets or audit entries. Existing approved profiles and scheduled jobs continue running; revoking a target does not require a password. Category and shell-job editing permissions remain enforced on each run.
+
 ### Enable
 
 1. Put `compose.host.yaml` next to your existing `compose.yaml`. Keep the original project name and data volumes. The override also works with `compose.build.yaml`; it still pulls a separately published bridge image.
@@ -74,6 +76,8 @@ Den vorhandenen Ort **Host · web** in seiner freigegebenen Kategorie auswählen
 Meridian kann Shell-Jobs über einen ausdrücklich aktivierten **Host-Bridge-Container** auf dem Linux-Docker-Host ausführen. Auf dem Host sind weder PHP noch ein systemd-Dienst oder SSH-Zugang nötig. Der Host benötigt `/bin/sh`, für Bash-Jobs zusätzlich `/bin/bash`. Unterstützt wird natives Linux-Docker mit Root-Daemon, einschließlich kompatibler NAS-Systeme. Bei Docker Desktop ist das Ziel die Linux-VM, nicht Windows/macOS. Rootless Docker und Benutzer-Namespace-Remapping werden nicht unterstützt.
 
 **Zugriff:** Die Bridge läuft privilegiert im PID-Namespace des Hosts und wechselt in dessen Dateisystem und Netzwerk. Sie hat damit weitreichende Host-Rechte. Jobs laufen mit der fest eingestellten UID/GID; zusätzliche Gruppen werden entfernt, eine Rechteerhöhung über setuid-Programme ist gesperrt. Verwende möglichst einen eigenen Host-Benutzer mit den benötigten Dateirechten. Die Bridge bekommt weder Meridian-Datenbank noch Schlüssel-Volume, Docker-Socket oder öffentlichen Netzwerk-Port. Nur der Shell-Worker erhält ihren Unix-Socket. Ein privilegierter Container setzt trotzdem vertrauenswürdige Administratoren voraus: Gib nur dafür vorgesehene Host-Jobs und Kategorien frei.
+
+Host-Freigaben und Container-Root-Freigaben verlangen beim Anlegen oder Bearbeiten das aktuelle Meridian-Passwort des handelnden Administrators. Fehlversuche zählen zur Konto-/IP-Sperre der Anmeldung. Passwörter werden weder am Ausführungsort noch im Audit gespeichert. Vorhandene Freigaben und geplante Jobs laufen weiter; Entfernen einer Freigabe verlangt kein Passwort. Kategorie- und Shell-Job-Rechte werden bei jedem Lauf weiterhin geprüft.
 
 ### Aktivieren
 

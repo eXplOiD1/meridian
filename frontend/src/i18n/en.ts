@@ -3,6 +3,9 @@
  */
 /** Englische Fassungen; Schlüssel ist der deutsche Quelltext. Fehlt ein Eintrag, bleibt die Oberfläche deutsch. */
 export const EN: Record<string, string> = {
+  "Host-Profile verwenden den fest eingestellten Benutzer des Host-Dienstes. Unter Docker muss die Host-Bridge im Stack enthalten sein; der vollständige Host-Root-Stack bringt sie bereits mit.": "Host profiles use the fixed host service account. Docker requires the host bridge in the stack; the complete host-root stack already includes it.",
+  "Host-Profile und Root-Freigaben nur nach Bestätigung mit deinem Meridian-Passwort. Geplante Jobs laufen danach ohne erneute Passwortabfrage.": "Confirm host profiles and root approvals with your current Meridian password. Scheduled jobs then run without asking for the password again.",
+
   "fest (Host-Dienst)": "fixed (host service)",
   "Host-Profile verwenden den fest eingestellten Benutzer des Host-Dienstes. Unter Docker muss der Host-Zugriff zusätzlich mit compose.host.yaml aktiviert werden.": "Host profiles use the fixed user configured in the host service. Docker host access must additionally be enabled with compose.host.yaml.",
   "Eine Freigabe erlaubt Administratoren mit dem Recht „Shell-Jobs bearbeiten“ beliebige Befehle an diesem Ort. Bei Containern muss der Container laufen und der Name exakt stimmen. Host-Profile benötigen zusätzlich einen eingerichteten Host-Dienst. Meridians eigene Container (meridian-…, außer meridian-sandbox) sind gesperrt. Gib nur Orte frei, die dafür gedacht sind, und wähle möglichst eine Kategorie.": "An approval allows administrators with shell-job editing permission to run arbitrary commands at this target. Containers must be running and their names must match exactly. Host profiles additionally require a configured host service. Meridian infrastructure containers (meridian-…, except meridian-sandbox) are blocked. Approve only intended targets, preferably for one category.",

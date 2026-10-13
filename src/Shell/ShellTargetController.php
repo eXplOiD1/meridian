@@ -8,7 +8,11 @@ declare(strict_types=1);
 namespace Meridian\Shell;
 
 use Meridian\Auth\AuditLog;
+use Meridian\Auth\AuthService;
 use Meridian\Auth\CsrfGuard;
+use Meridian\Config;
+use Meridian\Runner\Shell\ShellRules;
+use Meridian\Http\ClientIp;
 use Meridian\Http\JsonBody;
 use Meridian\Http\JsonReply;
 use Meridian\Http\Kernel;
@@ -25,8 +29,8 @@ use Symfony\Component\HttpFoundation\Response;
  * Ausführungsorte für Shell-Jobs (docs/decisions/0004 E4, §4.1):
  *
  *   GET    /api/settings/shell-targets
- *   POST   /api/settings/shell-targets          {kind, name, category_id, users, default_user, note}
- *   PUT    /api/settings/shell-targets/{id}     {kind (unveränderlich), name, category_id, users, default_user, note}
+ *   POST   /api/settings/shell-targets          {kind, name, category_id, users, default_user, note, current_password?}
+ *   PUT    /api/settings/shell-targets/{id}     {kind (unveränderlich), name, category_id, users, default_user, note, current_password?}
  *   DELETE /api/settings/shell-targets/{id}
  *   GET    /api/shell/targets?category_id=      (Auswahl im Job-Editor)
  *
@@ -39,7 +43,7 @@ final class ShellTargetController
 {
     private const MAX_BODY = 4096;
 
-    private const FIELDS = ['category_id', 'default_user', 'kind', 'name', 'note', 'users'];
+    private const FIELDS = ['category_id', 'default_user', 'kind', 'name', 'note', 'users', 'current_password'];
 
     public function __construct(
         private readonly SessionAuth $sessionAuth,
@@ -49,6 +53,8 @@ final class ShellTargetController
         private readonly AuditLog $audit,
         private readonly ShellTargetStore $store,
         private readonly SecretMasker $masker,
+        private readonly AuthService $auth,
+        private readonly Config $config,
     ) {
     }
 
@@ -83,9 +89,13 @@ final class ShellTargetController
         }
         $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
-        [$kind, $name, $categoryId, $users, $default, $note] = self::input($request);
+        [$kind, $name, $categoryId, $users, $default, $note, $password] = self::input($request);
         try {
             $input = $this->store->validate($kind, $name, $categoryId, $users, $default, $note);
+            $confirmation = $this->confirm($request, $session->userId, $input, $password);
+            if ($confirmation !== null) {
+                return $confirmation;
+            }
             $record = $this->store->add($input, $session->userId, $this->audit);
         } catch (InvalidShellTarget $e) {
             throw ValidationFailed::field($e->field, $e->getMessage());
@@ -105,10 +115,18 @@ final class ShellTargetController
         }
         $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
-        [$kind, $name, $categoryId, $users, $default, $note] = self::input($request);
+        [$kind, $name, $categoryId, $users, $default, $note, $password] = self::input($request);
         $id = $request->attributes->getString('id');
         try {
             $input = $this->store->validate($kind, $name, $categoryId, $users, $default, $note);
+            $old = preg_match('/^[1-9][0-9]{0,17}$/D', $id) === 1 ? $this->store->find((int) $id) : null;
+            if ($old === null) {
+                return JsonReply::error(404, 'Ausführungsort nicht gefunden.');
+            }
+            $confirmation = $this->confirm($request, $session->userId, $input, $password, $old);
+            if ($confirmation !== null) {
+                return $confirmation;
+            }
             $result = preg_match('/^[1-9][0-9]{0,17}$/D', $id) === 1 ? $this->store->update((int) $id, $input, $session->userId, $this->audit) : null;
         } catch (InvalidShellTarget $e) {
             throw ValidationFailed::field($e->field, $e->getMessage());
@@ -197,7 +215,7 @@ final class ShellTargetController
     /**
      * Strenge Typen, nur bekannte Felder; nichts wird umgedeutet.
      *
-     * @return array{0: string, 1: string, 2: int|null, 3: array<mixed>, 4: string|null, 5: string}
+     * @return array{0: string, 1: string, 2: int|null, 3: array<mixed>, 4: string|null, 5: string, 6: ?string}
      *
      * @throws ValidationFailed
      */
@@ -214,7 +232,7 @@ final class ShellTargetController
         $errors = [];
         foreach (array_keys($data) as $key) {
             if (!in_array($key, self::FIELDS, true)) {
-                $errors['body'] = 'Unbekanntes Feld. Erlaubt sind kind, name, category_id, users, default_user und note.';
+                $errors['body'] = 'Unbekanntes Feld. Erlaubt sind kind, name, category_id, users, default_user, note und current_password.';
             }
         }
         $kind = $data['kind'] ?? null;
@@ -246,7 +264,38 @@ final class ShellTargetController
             throw new ValidationFailed($errors);
         }
 
-        return [$kind, $name, $category, $users, $default, $note];
+        $password = $data['current_password'] ?? null;
+        if ($password !== null && (!is_string($password) || strlen($password) > AuthService::MAX_PASSWORD)) {
+            throw ValidationFailed::field('current_password', 'Das Passwort muss ein Text mit höchstens 1024 Byte sein.');
+        }
+        return [$kind, $name, $category, $users, $default, $note, $password];
+    }
+
+    /** Confirmation is server-side and uses the same account/IP lockout as login. Revoking a grant stays possible without it. */
+    private function confirm(Request $request, int $userId, ShellTargetInput $input, #[\SensitiveParameter] ?string $password, ?ShellTargetRecord $old = null): ?Response
+    {
+        $root = $old?->allowsRoot() ?? false;
+        foreach ($input->users as $allowedUser) {
+            $root = $root || ShellRules::isRootUser($allowedUser);
+        }
+        if ($input->target->kind->value !== 'host' && !$root) {
+            return null;
+        }
+        if ($password === null || $password === '') {
+            throw ValidationFailed::field('current_password', 'Zur Freigabe dieses Ausführungsorts das eigene aktuelle Passwort bestätigen.');
+        }
+        $user = $this->users->findById($userId);
+        if ($user === null || !$user->isActive) {
+            return JsonReply::error(401, 'Nicht angemeldet.');
+        }
+        $ip = ClientIp::forThrottle($request, $this->config);
+        if ($ip instanceof Response) {
+            return $ip;
+        }
+        if (!$this->auth->confirmPassword($user, $password, $ip)) {
+            return JsonReply::error(403, 'Das aktuelle Passwort ist falsch.');
+        }
+        return null;
     }
 
     /**
