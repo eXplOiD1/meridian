@@ -114,6 +114,7 @@ code { font-family: var(--schrift-mono); font-size: 0.92em; background: var(--so
 }
 .nav__item > span:first-child { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .nav__icon { width: 18px; height: 18px; flex: none; }
+.update-available-dot { display: inline-block; width: 9px; height: 9px; flex: none; border-radius: 50%; background: #f59e0b; margin-left: 10px; vertical-align: middle; }
 .nav__item:hover { background: var(--soft); color: var(--text); }
 .nav__item[aria-current='page'] { background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 30%, var(--panel)), var(--soft)); color: var(--text); font-weight: 600; }
 .nav__item[aria-current='page'] .nav__icon { color: var(--accent); }

@@ -12,6 +12,7 @@ import { InsecureWarning } from './InsecureWarning';
 import { LanguageSwitch } from './LanguageSwitch';
 import { ThemeSwitch } from './ThemeSwitch';
 import { t, useLang } from '../i18n';
+import { UpdateAvailableDot, useUpdateAvailability } from './UpdateAvailability';
 
 interface LayoutProps {
   profile: Profile;
@@ -108,6 +109,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input, select, textarea, [ta
 
 export function Layout({ profile, route, kicker, title, onLogout, children }: LayoutProps) {
   useLang();
+  const { available: updateAvailable } = useUpdateAvailability();
   const [open, setOpen] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
@@ -222,6 +224,7 @@ export function Layout({ profile, route, kicker, title, onLogout, children }: La
                     }}
                   >
                     <span><Icon name={entry.icon} />{t(entry.label)}</span>
+                    {entry.path === 'einstellungen' && updateAvailable && <UpdateAvailableDot />}
                   </a>
                 ),
               )}

@@ -5,14 +5,16 @@ import { request } from '../lib/api';
 import { t } from '../i18n';
 import { Alert } from './Alert';
 import { Confirm } from './Confirm';
+import { useUpdateAvailability } from './UpdateAvailability';
 
 interface UpdateStatus { configured: boolean; channel?: 'main' | 'beta'; mode?: string; current?: string; latest?: string; checked_at?: string; available?: boolean; busy?: boolean; pending?: boolean; phase?: string; message?: string }
 export function SystemUpdates({ csrf }: { csrf: string }) {
+  const { report } = useUpdateAvailability();
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const initialCheck = useRef(false);
-  const load = useCallback(async () => { try { setStatus(await request<UpdateStatus>('GET', '/api/admin/updates')); setError(null); } catch { setError(t('Update-Dienst vorübergehend nicht erreichbar. Die Seite verbindet sich erneut.')); } }, []);
+  const load = useCallback(async () => { try { const next = await request<UpdateStatus>('GET', '/api/admin/updates'); setStatus(next); report(next); setError(null); } catch { setError(t('Update-Dienst vorübergehend nicht erreichbar. Die Seite verbindet sich erneut.')); } }, [report]);
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 5000); return () => clearInterval(timer); }, [load]);
   useEffect(() => {
     if (!status?.configured || initialCheck.current) return;
@@ -21,7 +23,7 @@ export function SystemUpdates({ csrf }: { csrf: string }) {
   }, [status]);
   async function action(kind: 'check' | 'install' | 'channel/main' | 'channel/beta') {
     setSending(true);
-    try { await request('POST', '/api/admin/updates/' + kind, { csrf }); setStatus(previous => previous ? { ...previous, pending: true } : previous); }
+    try { await request('POST', '/api/admin/updates/' + kind, { csrf }); setStatus(previous => previous ? { ...previous, pending: true } : previous); report({ configured: true, pending: true }); }
     catch (caught) { setError(caught instanceof Error ? caught.message : t('Update fehlgeschlagen.')); }
     finally { setSending(false); }
   }

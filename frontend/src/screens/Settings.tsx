@@ -8,6 +8,7 @@ import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { NotificationChannels } from '../components/NotificationChannels';
 import { SystemUpdates } from '../components/SystemUpdates';
+import { UpdateAvailableDot, useUpdateAvailability } from '../components/UpdateAvailability';
 import { FormField } from '../components/FormField';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
@@ -911,6 +912,7 @@ export function Settings({ profile }: { profile: Profile }) {
 
 /** Gruppen-Menü wie im Klickdummy: ein Bereich zugleich, Pfeiltasten wechseln, die Wahl bleibt im Browser (nur eine Kennung). */
 function SettingsTabs({ groups }: { groups: Array<{ id: string; label: string; panel: ReactNode }> }) {
+  const { available: updateAvailable } = useUpdateAvailability();
   const [chosen, setChosen] = useState<string>(() => {
     try {
       return window.localStorage.getItem('meridian.settings.group') ?? '';
@@ -959,6 +961,7 @@ function SettingsTabs({ groups }: { groups: Array<{ id: string; label: string; p
             onKeyDown={(e) => onKey(e, index)}
           >
             {t(g.label)}
+            {g.id === 'updates' && updateAvailable && <UpdateAvailableDot />}
           </button>
         ))}
       </div>
