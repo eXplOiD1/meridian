@@ -105,7 +105,7 @@ final class Engine
             elseif ($matched) {
                 $runner=new RunService($this->db,new JobRepository($this->db,$this->box,$this->clock),new AccessControl(),$this->audit,$this->clock);
                 foreach ($rule->actions as $action) {
-                    if ($action['kind'] === 'job') {
+                    if ($action['kind'] !== 'notify') {
                         $run=$runner->enqueue($owner,$grants,$action['id'],RunTrigger::Manual,$id,[...$chain,$id]);
                         if ($run === null) throw new \RuntimeException('Target unavailable.');
                         $results[]=['kind'=>'job','id'=>$action['id'],'run_id'=>$run];

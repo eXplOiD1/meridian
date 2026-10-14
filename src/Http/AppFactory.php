@@ -115,6 +115,7 @@ final class AppFactory
         (new RoleController($config, $sessionAuth, $csrf, $users, $access, $roleAdmin, new RoleValidator(), $userPresenter))->register($kernel);
         (new AdminController($sessionAuth, $csrf, $users, $access, $audit, $throttle, $masker))->register($kernel);
         $runs = new RunRepository($db);
+        $jobService = new JobService($db, $jobs, $validator, $access, $audit, $planner);
         (new JobController(
             $sessionAuth,
             $csrf,
@@ -126,7 +127,7 @@ final class AppFactory
             $settings,
             $clock,
             new JobPresenter($access, $masker),
-            new JobService($db, $jobs, $validator, $access, $audit, $planner),
+            $jobService,
             new RunService($db, $jobs, $access, $audit, $clock),
             new RunCancelService($db, $runs, $access, $audit, $clock),
         ))->register($kernel);
@@ -145,7 +146,7 @@ final class AppFactory
         (new RunLiveController($sessionAuth, $users, $access, $runs, new LiveStreamSlots($db, $clock, $config->liveStreams), $clock, $sse ?? new PhpSseChannel()))->register($kernel);
         // Freigaben interner Ziele (network.internal_targets, nur Admin).
         (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock, $infrastructure), $masker))->register($kernel);
-        (new \Meridian\Automation\Controller($db, $sessionAuth, $csrf, $users, $auth, $access, $audit, $clock, $config, $box, $masker))->register($kernel);
+        (new \Meridian\Automation\Controller($db, $sessionAuth, $csrf, $users, $auth, $access, $audit, $clock, $config, $box, $masker, $jobService))->register($kernel);
         // Ausführungsorte für Shell-Jobs (shell.targets, nur Admin) und die Auswahl im Job-Editor (jobs.edit_shell).
         (new ShellTargetController($sessionAuth, $csrf, $users, $access, $audit, new ShellTargetStore($db, $clock), $masker, $auth, $config))->register($kernel);
         // Herzschlag-Überwachung (ADR 0011): Verwaltung mit Sitzung, Ping ohne Sitzung (Token ist die Berechtigung).

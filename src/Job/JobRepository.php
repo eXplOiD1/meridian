@@ -37,7 +37,7 @@ final class JobRepository
      * `payload_enc` wird nie ausgewählt.
      */
     private const QUERY = 'SELECT j.id, j.name, j.type, j.category_id, c.name AS category_name, j.owner_id, u.display_name AS owner_name,
-            j.cron, j.timezone, j.expires_at, j.config_json, j.overlap_policy, j.retry_count, j.retry_delay_seconds, j.catch_up, j.is_enabled,
+            j.cron, j.timezone, j.expires_at, j.config_json, j.overlap_policy, j.retry_count, j.retry_delay_seconds, j.catch_up, j.is_enabled, j.automation_only,
             j.next_run_at, j.created_at, j.updated_at
        FROM jobs j
        LEFT JOIN categories c ON c.id = j.category_id
@@ -311,6 +311,7 @@ final class JobRepository
                 Row::string($row, 'updated_at'),
                 Row::stringOrNull($row, 'expires_at'),
                 $notify[$id] ?? null,
+                Row::bool($row, 'automation_only'),
             );
         }
 

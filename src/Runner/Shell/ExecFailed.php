@@ -13,7 +13,7 @@ namespace Meridian\Runner\Shell;
  */
 final class ExecFailed extends \RuntimeException
 {
-    public const PROXY_UNREACHABLE = 'Docker-Proxy nicht erreichbar: Dienst docker-proxy prüfen (docker compose ps).';
+    public const PROXY_UNREACHABLE = 'Docker-Socket-Proxy nicht erreichbar. Unter Docker: Updater-Image, Dienst updater und Socket-Volume prüfen.';
     public const PROXY_DENIED = 'Der Docker-Proxy hat die Anfrage abgelehnt: Container-Name und Docker-Proxy-Einstellungen prüfen (docker compose logs docker-proxy).';
     public const PROXY_ERROR = 'Der Docker-Proxy hat einen unerwarteten Fehler gemeldet: Dienste docker-proxy und Docker prüfen.';
     public const CONTAINER_MISSING = 'Container nicht gefunden oder läuft nicht: Der Container muss laufen und der Name muss exakt stimmen (docker ps).';
