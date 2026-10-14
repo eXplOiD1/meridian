@@ -78,6 +78,7 @@ export const RUN_STATUS: Record<RunStatus, { label: string; tone: 'ok' | 'warn' 
 };
 
 export const TRIGGER_LABEL: Record<RunTrigger, string> = {
+  get automation() { return t('Automation'); },
   get schedule() { return t('Zeitplan'); },
   get manual() { return t('manuell'); },
   get retry() { return t('Wiederholung'); },

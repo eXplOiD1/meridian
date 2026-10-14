@@ -3,7 +3,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { canManageCategories, canManageInternalTargets, canManageSettings, canManageShellTargets, canEditStatusPages, canManageUsers, canSeeUsersArea, canViewJobs, roleNames } from '../lib/permissions';
+import { canManageAutomations, canManageCategories, canManageInternalTargets, canManageSettings, canManageShellTargets, canEditStatusPages, canManageUsers, canSeeUsersArea, canViewJobs, roleNames } from '../lib/permissions';
 import type { Route } from '../lib/useHashRoute';
 import { hrefOf, navigate } from '../lib/useHashRoute';
 import type { Profile } from '../types';
@@ -59,6 +59,7 @@ function groups(profile: Profile): NavGroup[] {
     jobs
       ? { path: 'jobs', label: t('Jobs'), icon: 'jobs', current: (r) => r.name === 'jobs' || r.name === 'job-new' || r.name === 'job' || r.name === 'job-edit' }
       : { path: null, label: t('Jobs'), icon: 'jobs', hint: t('Kein Zugriff') },
+    ...(canManageAutomations(profile) ? [{ path: 'automationen', label: t('Automationen'), icon: 'jobs', current: (r: Route) => r.name === 'automations' }] : []),
     jobs ? { path: 'verlauf', label: t('Verlauf'), icon: 'history', current: (r) => r.name === 'history' } : { path: null, label: t('Verlauf'), icon: 'history', hint: t('Kein Zugriff') },
   ];
   const observe: NavEntry[] = [

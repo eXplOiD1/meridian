@@ -642,3 +642,7 @@ code, pre, kbd, samp, .mono, .cron, .input--mono, .input--mono-plain, .input--ar
 .takt__axislabels { width: 100%; overflow: visible; fill: var(--dim); }
 .takt__axislabels text { font-size: 11px; }
 @media (max-width: 767.98px) { .takt__axislabels text.takt__axislabel--compact-hidden { visibility: hidden; } }
+
+.automation-rule { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.automation-step { min-width: 0; margin: 0; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; }
+.automation-step > .grid-2 { margin-bottom: .75rem; }

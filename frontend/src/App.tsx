@@ -18,6 +18,7 @@ import { HistoryExplorer as History } from './screens/HistoryExplorer';
 import { setLang } from './i18n';
 import { setTheme } from './theme';
 import { Statistics } from './screens/Statistics';
+import { Automations } from './screens/Automations';
 import { Monitors } from './screens/Monitors';
 import { StatusPages } from './screens/StatusPages';
 import { Jobs } from './screens/Jobs';
@@ -40,6 +41,7 @@ const HEADINGS: Record<Route['name'], { kicker: string; title: string }> = {
   jobs: { kicker: 'Zeitgesteuerte Aufgaben', title: 'Jobs' },
   history: { kicker: 'Was lief wann', title: 'Verlauf' },
   stats: { kicker: 'Wie läuft es über die Zeit', title: 'Statistik' },
+  automations: { kicker: 'Wenn Ereignisse Aktionen auslösen', title: 'Automationen' },
   monitors: { kicker: 'Lebenszeichen von außen', title: 'Überwachung' },
   'status-pages': { kicker: 'Öffentlich teilen', title: 'Statusseiten' },
   'job-new': { kicker: 'Jobs', title: 'Neuer Job' },
@@ -200,6 +202,7 @@ export function App() {
       {effective.name === 'jobs' && <Jobs profile={profile} />}
       {effective.name === 'history' && <History key={window.location.hash} profile={profile} />}
       {effective.name === 'stats' && <Statistics profile={profile} />}
+      {effective.name === 'automations' && <Automations profile={profile} />}
       {effective.name === 'monitors' && <Monitors profile={profile} />}
       {effective.name === 'status-pages' && <StatusPages profile={profile} />}
       {effective.name === 'job' && <JobDetail key={effective.id} profile={profile} id={effective.id} />}
