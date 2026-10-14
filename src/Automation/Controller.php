@@ -83,8 +83,9 @@ final class Controller
             if ($id === '') {
                 $count=$this->db->fetchOne('SELECT COUNT(*) AS n FROM automations');
                 if ($count !== null && Row::int($count,'n')>=200) throw ValidationFailed::field('name','Höchstens 200 Automationen pro Installation.');
-                $this->db->execute("INSERT INTO automations(owner_id,name,enabled,definition,created_at,updated_at) VALUES(:owner,'Pending',0,'{}',:now,:now)",['owner'=>$owner,'now'=>$now]);
+                $this->db->execute('INSERT INTO automation_identifiers DEFAULT VALUES');
                 $saved=$this->db->lastInsertId();
+                $this->db->execute("INSERT INTO automations(id,owner_id,name,enabled,definition,created_at,updated_at) VALUES(:id,:owner,'Pending',0,'{}',:now,:now)",['id'=>$saved,'owner'=>$owner,'now'=>$now]);
             } else {
                 $saved=(int)$id;
                 if ($this->db->fetchOne('SELECT id FROM automations WHERE id=:id AND owner_id=:owner',['id'=>$saved,'owner'=>$owner]) === null) throw ValidationFailed::field('name','Automation nicht gefunden.');
