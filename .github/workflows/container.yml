@@ -131,6 +131,21 @@ jobs:
           docker exec meridian-web php bin/meridian-runtime health
           test "$(docker exec meridian-web php -r 'echo count(json_decode(file_get_contents("/tmp/meridian-runtime/pids.json"),true));')" -eq 3
           docker exec meridian-worker-shell php -r '$c=stream_socket_client("unix:///run/meridian-docker/docker.sock"); fwrite($c,"GET /containers/json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"); $r=stream_get_contents($c); if (!str_contains($r,"403")) exit(1);'
+          # Migration removes only the known services from this project.
+          for service in scheduler worker-http docker-proxy; do
+            docker run -d --name "meridian-$service" --label com.docker.compose.project=meridian --label "com.docker.compose.service=$service" --entrypoint sh meridian-compact-test -c 'sleep 300'
+          done
+          docker run -d --name unrelated-job --label com.docker.compose.project=other --entrypoint sh meridian-compact-test -c 'sleep 300'
+          docker restart meridian-updater
+          for attempt in $(seq 1 60); do
+            if test "$(docker inspect --format '{{.State.Health.Status}}' meridian-updater)" = healthy && ! docker inspect meridian-docker-proxy >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          for service in scheduler worker-http docker-proxy; do
+            if docker inspect "meridian-$service" >/dev/null 2>&1; then exit 1; fi
+          done
+          test "$(docker inspect --format '{{.State.Running}}' unrelated-job)" = true
+          docker rm -f unrelated-job
           # Preserve the account/key/data while switching the complete Compose variant.
           docker compose -f compose.yaml -f /tmp/local-normal.json down
           docker compose -f compose.host-root.yaml -f /tmp/local-root.json up -d --wait --wait-timeout 180

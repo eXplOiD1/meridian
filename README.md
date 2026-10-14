@@ -161,11 +161,11 @@ Shell jobs execute through `docker exec` in an **approved container**, never in 
 
 - Web, scheduler and HTTP workers share the application container. The separate shell worker has no network and reaches only the restricted Docker proxy and, in the root variant, the host socket.
 - The maintenance container supervises both the updater and `wollomatic/socket-proxy`; only the updater has direct Docker socket access. The shell worker uses the restricted Unix socket. The proxy permits only `_ping`, `version`, container inspection and exec creation/start/inspection; other container operations such as create/start/remove return 403. It has no network or IP, only a Unix socket in `meridian-docker-proxy`, shared with `worker-shell`.
-- `sandbox` (`meridian-sandbox`) provides busybox, bash, curl, jq, CA certificates and timezone data. It runs as user 1001 with no volumes, read-only storage except `/tmp`, 512 MiB memory and 256 processes. It is **not approved automatically**: under **Settings → Execution targets**, add `docker meridian-sandbox` with user `1001`. For more tools, build your own image/service using `docker/Dockerfile.sandbox` as a template.
+- Optional `sandbox` (`meridian-sandbox`, profile `sandbox`) provides busybox, bash, curl, jq, CA certificates and timezone data. It runs as user 1001 with no volumes, read-only storage except `/tmp`, 512 MiB memory and 256 processes. It is **not approved automatically**: under **Settings → Execution targets**, add `docker meridian-sandbox` with user `1001`. For more tools, build your own image/service using `docker/Dockerfile.sandbox` as a template.
 
 Approve other running containers in **Settings → Execution targets**, with the `shell.targets` permission. No Compose/`.env` changes are required. Names must match exactly. Meridian rejects its own containers (`web`, `scheduler`, `worker-http`, `worker-shell`, `docker-proxy` and the `meridian-` prefix except `meridian-sandbox`) as execution targets.
 
-The proxy image is pinned by version and digest. `MERIDIAN_PROXY_IMAGE` permits your own reviewed digest. If the Docker socket group is not root, set `MERIDIAN_DOCKER_GID`.
+The proxy binary in the maintenance image is pinned by version and digest at build time. If the Docker socket group is not root, set `MERIDIAN_DOCKER_GID`.
 
 Docker API access effectively provides root privileges on the host. The proxy restricts access to exec operations but cannot validate request contents. Approve only containers where users with shell-job edit permission may run arbitrary commands. Preserve `meridian-data` and `meridian-secrets` during updates. See [Backup, restore and updates](docs/OPERATIONS.md).
 
@@ -434,7 +434,7 @@ docker compose up -d
 
 Das Image `ghcr.io/exploid1/meridian:latest` folgt dem Branch `main`. Docker-Verwaltungen können neue Images erkennen. Beim ersten Start legt der Container selbst an: den Hauptschlüssel
 (Volume `meridian-secrets`, wird nie überschrieben), die Datenbank (Volume `meridian-data`) und den ersten Admin.
-Die Compose-Dateien enthalten diese direkt eingetragenen Beispielwerte unter `services.web.environment`:
+Für eine Neuinstallation unter `services.web.environment` beispielsweise diese Werte eintragen:
 
 ```yaml
 MERIDIAN_ADMIN_USER: "admin"
@@ -500,7 +500,7 @@ Die `compose.yaml` bringt dafür mit:
   Er lässt nur `_ping`, `version`, Container-Info und Exec (anlegen, starten, abfragen) durch;
   `containers/create`, `start`, `rm` u. a. gibt es nicht (403). Er hat kein Netz und keine IP-Adresse, sondern einen
   Unix-Socket im Volume `meridian-docker-proxy`, das nur er und `worker-shell` einbinden.
-- `sandbox` (`meridian-sandbox`): Standard-Ausführungsort mit busybox, bash, curl, jq, ca-certificates, tzdata,
+- Optionale `sandbox` (`meridian-sandbox`, Profil `sandbox`): Ausführungsort mit busybox, bash, curl, jq, ca-certificates, tzdata,
   Benutzer 1001, ohne Volumes, schreibgeschützt (nur `/tmp`), 512 MiB, 256 Prozesse. Er wird **nicht automatisch
   freigegeben**: in Meridian unter Einstellungen -> Ausführungsorte `docker meridian-sandbox` mit Benutzer `1001`
   eintragen. Mehr Werkzeuge: eigenes Image und eigener Dienst (`docker/Dockerfile.sandbox` als Vorlage).
@@ -510,7 +510,7 @@ Weitere Container freigeben: nur in Meridian unter Einstellungen -> Ausführungs
 stimmen. Meridians eigene Container (`web`, `scheduler`, `worker-http`, `worker-shell`, `docker-proxy`, alles mit dem
 Präfix `meridian-` außer `meridian-sandbox`) lehnt Meridian als Ausführungsort ab.
 
-Das Proxy-Image ist standardmäßig mit Version und Digest festgelegt. `MERIDIAN_PROXY_IMAGE` erlaubt einen eigenen geprüften Digest. Hat `/var/run/docker.sock` eine andere Gruppe als root, `MERIDIAN_DOCKER_GID` setzen.
+Das Proxy-Programm im Wartungsimage ist beim Build mit Version und Digest festgelegt. Hat `/var/run/docker.sock` eine andere Gruppe als root, `MERIDIAN_DOCKER_GID` setzen.
 
 **Sicherheitshinweis:** Ein Zugang zur Docker-API ist faktisch Root auf dem Host. Der Proxy begrenzt ihn auf Exec in den
 eingetragenen Containern, kann aber den Inhalt einer Anfrage nicht prüfen. Nur Container freigeben, in denen Admins mit
@@ -551,7 +551,7 @@ sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/m
 | `admin:bootstrap` | Legt den ersten Admin aus `MERIDIAN_ADMIN_USER` / `MERIDIAN_ADMIN_PASSWORD` an. Nur wenn es noch keinen Benutzer gibt; der Docker-Start ruft das selbst auf. |
 | `migrate` | Spielt ausstehende Datenbank-Änderungen ein. Docker-Start und Installer machen das selbst. |
 | `key:generate <pfad>` | Erzeugt den Hauptschlüssel als Datei (Rechte 0600). Überschreibt nie eine vorhandene Datei. Docker-Start und Installer machen das selbst. |
-| `scheduler:run [--once] [-v]` | Startet den Scheduler als Dauerprozess (Takt alle 5 Sekunden). Läuft als eigener Container (`meridian-scheduler`) bzw. systemd-Dienst. Es plant immer nur ein Scheduler: ein zweiter Prozess wartet, bis die Sperre in der Datenbank frei wird (spätestens 60 Sekunden nach dem Ende des ersten). `SIGTERM` beendet ihn sauber. `--once` macht genau einen Takt. |
+| `scheduler:run [--once] [-v]` | Startet den Scheduler als Dauerprozess (Takt alle 5 Sekunden). Läuft unter Docker gemeinsam mit Web und HTTP-Workern, unter systemd als eigener Dienst. Es plant immer nur ein Scheduler: ein zweiter Prozess wartet, bis die Sperre in der Datenbank frei wird (spätestens 60 Sekunden nach dem Ende des ersten). `SIGTERM` beendet ihn sauber. `--once` macht genau einen Takt. |
 
 Beispiele:
 
