@@ -36,7 +36,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class OverviewController
 {
     public const BUCKET_SECONDS = 300;
-    public const MAX_WINDOW_SECONDS = 26 * 3600;
+    public const MAX_WINDOW_SECONDS = 370 * 86400;
     public const MAX_JOBS = 30;
     public const SLOW_MIN_EXTRA_SECONDS = 30;
 
@@ -73,11 +73,12 @@ final class OverviewController
         $from = $window[0];
         $to = $window[1];
         $now = $this->clock->now();
-        $bucketCount = intdiv($to - $from + self::BUCKET_SECONDS - 1, self::BUCKET_SECONDS);
-        $nowBucket = $now->getTimestamp() < $from ? -1 : intdiv($now->getTimestamp() - $from, self::BUCKET_SECONDS);
+        $size = self::bucketSeconds($to - $from);
+        $bucketCount = intdiv($to - $from + $size - 1, $size);
+        $nowBucket = $now->getTimestamp() < $from ? -1 : intdiv($now->getTimestamp() - $from, $size);
 
         $byJob = [];
-        foreach ($this->overview->buckets($scope, $from, $to, self::BUCKET_SECONDS) as $row) {
+        foreach ($this->overview->buckets($scope, $from, $to, $size) as $row) {
             $byJob[$row['job_id']][] = [$row['bucket'], $row['ok'], $row['bad']];
         }
 
@@ -120,7 +121,7 @@ final class OverviewController
                 'type' => $job->type->value,
                 'enabled' => $job->isEnabled,
                 'buckets' => $buckets,
-                'planned' => $job->isEnabled ? self::planned($job, $now, $from, $to, $nowBucket) : [],
+                'planned' => $job->isEnabled ? self::planned($job, $now, $from, $to, $nowBucket, $size) : [],
                 'next_run_at' => $job->nextRunAt,
             ];
             if (count($rows) >= self::MAX_JOBS) {
@@ -130,7 +131,7 @@ final class OverviewController
 
         // Überwachungen ohne Lebenszeichen (ADR 0011) in derselben Kappung wie die Jobs.
         $monitorRows = [];
-        $monitorBuckets = $this->overview->monitorBuckets($scope, $from, $to, self::BUCKET_SECONDS);
+        $monitorBuckets = $this->overview->monitorBuckets($scope, $from, $to, $size);
         foreach ($this->monitors?->list($scope) ?? [] as $monitor) {
             if (count($monitorRows) < self::MAX_JOBS) {
                 $monitorRows[] = ['id' => $monitor->id, 'name' => $this->masker->mask($monitor->name), 'enabled' => $monitor->isEnabled,
@@ -152,7 +153,7 @@ final class OverviewController
             'window' => [
                 'from' => Timestamp::format((new \DateTimeImmutable('@' . $from))->setTimezone(new \DateTimeZone('UTC'))),
                 'to' => Timestamp::format((new \DateTimeImmutable('@' . $to))->setTimezone(new \DateTimeZone('UTC'))),
-                'bucket_seconds' => self::BUCKET_SECONDS,
+                'bucket_seconds' => $size,
                 'buckets' => $bucketCount,
                 'now_bucket' => $nowBucket,
             ],
@@ -163,9 +164,18 @@ final class OverviewController
         ]);
     }
 
-    /**
-     * „Braucht länger als üblich“: mehr als das Doppelte des üblichen Werts und mindestens {@see self::SLOW_MIN_EXTRA_SECONDS} Sekunden mehr.
-     */
+    /** Keep long-period graphics bounded while preserving the five-minute day view. */
+    public static function bucketSeconds(int $duration): int
+    {
+        return match (true) {
+            $duration <= 26 * 3600 => self::BUCKET_SECONDS,
+            $duration <= 8 * 86400 => 3600,
+            $duration <= 32 * 86400 => 6 * 3600,
+            default => 86400,
+        };
+    }
+
+    /** More than twice the usual duration, with at least thirty extra seconds. */
     public static function isSlow(int $elapsedMs, int $usualMs): bool
     {
         return $elapsedMs > 2 * $usualMs && $elapsedMs - $usualMs >= self::SLOW_MIN_EXTRA_SECONDS * 1000;
@@ -177,7 +187,7 @@ final class OverviewController
      *
      * @return list<int>
      */
-    private static function planned(JobRecord $job, \DateTimeImmutable $now, int $from, int $to, int $nowBucket): array
+    private static function planned(JobRecord $job, \DateTimeImmutable $now, int $from, int $to, int $nowBucket, int $size): array
     {
         try {
             $schedule = CronSchedule::forJob($job->cron, $job->timezone);
@@ -196,11 +206,11 @@ final class OverviewController
             if ($ts >= $to) {
                 break;
             }
-            $bucket = intdiv($ts - $from, self::BUCKET_SECONDS);
+            $bucket = intdiv($ts - $from, $size);
             if ($bucket > $nowBucket && !in_array($bucket, $out, true)) {
                 $out[] = $bucket;
             }
-            $cursor = new \DateTimeImmutable('@' . ($from + ($bucket + 1) * self::BUCKET_SECONDS - 1));
+            $cursor = new \DateTimeImmutable('@' . ($from + ($bucket + 1) * $size - 1));
         }
 
         return $out;
@@ -215,7 +225,7 @@ final class OverviewController
         $from = self::timestamp($request, 'from', $errors);
         $to = self::timestamp($request, 'to', $errors);
         if ($from !== null && $to !== null && ($to <= $from || $to - $from > self::MAX_WINDOW_SECONDS)) {
-            $errors['to'] = 'Das Zeitfenster darf höchstens 26 Stunden umfassen und muss nach dem Anfang enden.';
+            $errors['to'] = 'Das Zeitfenster darf höchstens 370 Tage umfassen und muss nach dem Anfang enden.';
         }
         if ($errors !== [] || $from === null || $to === null) {
             throw new ValidationFailed($errors);

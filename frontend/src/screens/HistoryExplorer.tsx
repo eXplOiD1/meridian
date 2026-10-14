@@ -40,9 +40,11 @@ export function HistoryExplorer({ profile }: { profile: Profile }) {
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     if (value === 'yesterday') start.setDate(start.getDate() - 1);
     if (value === 'week') start.setDate(start.getDate() - (start.getDay() + 6) % 7);
-    if (value === 'month') start.setDate(1);
+    if (value === 'month' || value === 'year') start.setDate(1);
+    if (value === 'year') start.setMonth(0);
     const end = new Date(start);
-    if (value === 'month') end.setMonth(end.getMonth() + 1);
+    if (value === 'year') end.setFullYear(end.getFullYear() + 1);
+    else if (value === 'month') end.setMonth(end.getMonth() + 1);
     else end.setDate(end.getDate() + (value === 'week' ? 7 : 1));
     setFrom(localValue(start)); setTo(localValue(end)); setDay(dayValue(start));
   }
@@ -56,6 +58,9 @@ export function HistoryExplorer({ profile }: { profile: Profile }) {
       start = new Date(Number(match[1]), 0, 4);
       start.setDate(start.getDate() - (start.getDay() + 6) % 7 + (Number(match[2]) - 1) * 7);
       end = new Date(start); end.setDate(end.getDate() + 7);
+    } else if (preset === 'pick-year') {
+      if (!/^[1-9]\d{3}$/.test(value)) return;
+      start = new Date(Number(value), 0, 1); end = new Date(Number(value) + 1, 0, 1);
     } else if (preset === 'pick-month') {
       if (!/^\d{4}-\d{2}$/.test(value)) return;
       start = new Date(value + '-01T00:00:00'); end = new Date(start); end.setMonth(end.getMonth() + 1);
@@ -66,12 +71,17 @@ export function HistoryExplorer({ profile }: { profile: Profile }) {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
     setFrom(localValue(start)); setTo(localValue(end)); setDay(dayValue(start));
   }
+  const fallbackStart = new Date(day + 'T00:00:00');
+  const fallbackEnd = new Date(fallbackStart); fallbackEnd.setDate(fallbackEnd.getDate() + 1);
+  const chartFrom = from || iso(fallbackStart);
+  const chartTo = to || (from ? iso(new Date(new Date(from).getTime() + 86400000)) : iso(fallbackEnd));
+  const singleDay = new Date(chartTo).getTime() - new Date(chartFrom).getTime() <= 26 * 3600000;
   return <>
     <section className="card"><h2>{t('Zeitraum und Ereignisse')}</h2><div className="row history-filters">
       <label className="field"><span className="field__label">{t('Zeitraum')}</span><select className="input" value={preset} onChange={e => choose(e.target.value)}>
-        <option value="all">{t('Alle verfügbaren Daten')}</option><option value="today">{t('Heute')}</option><option value="yesterday">{t('Gestern')}</option><option value="week">{t('Diese Woche')}</option><option value="month">{t('Dieser Monat')}</option><option value="pick-day">{t('Tag wählen')}</option><option value="pick-week">{t('Woche wählen')}</option><option value="pick-month">{t('Monat wählen')}</option><option value="custom">{t('Eigener Zeitraum')}</option>
+        <option value="all">{t('Alle verfügbaren Daten')}</option><option value="today">{t('Heute')}</option><option value="yesterday">{t('Gestern')}</option><option value="week">{t('Diese Woche')}</option><option value="month">{t('Dieser Monat')}</option><option value="year">{t('Dieses Jahr')}</option><option value="pick-day">{t('Tag wählen')}</option><option value="pick-week">{t('Woche wählen')}</option><option value="pick-month">{t('Monat wählen')}</option><option value="pick-year">{t('Jahr wählen')}</option><option value="custom">{t('Eigener Zeitraum')}</option>
       </select></label>
-      {preset.startsWith('pick-') && <label className="field"><span className="field__label">{t('Kalenderauswahl')}</span><input className="input" type={preset === 'pick-week' ? 'week' : preset === 'pick-month' ? 'month' : 'date'} value={calendarValue} onChange={e => chooseCalendar(e.target.value)} /></label>}
+      {preset.startsWith('pick-') && <label className="field"><span className="field__label">{t('Kalenderauswahl')}</span><input className="input" type={preset === 'pick-year' ? 'number' : preset === 'pick-week' ? 'week' : preset === 'pick-month' ? 'month' : 'date'} value={calendarValue} onChange={e => chooseCalendar(e.target.value)} /></label>}
       <label className="field"><span className="field__label">{t('Von')}</span><input className="input" type="datetime-local" value={fromInput} onChange={e => { setFrom(e.target.value); setPreset('custom'); }} /></label>
       <label className="field"><span className="field__label">{t('Bis (ausschließlich)')}</span><input className="input" type="datetime-local" value={toInput} onChange={e => { setTo(e.target.value); setPreset('custom'); }} /></label>
       <label className="field"><span className="field__label">{t('Ereignisse')}</span><select className="input" value={source} onChange={e => setSource(e.target.value)}><option value="all">{t('Jobs und Überwachungen')}</option><option value="jobs">{t('Jobs')}</option><option value="monitors">{t('Überwachungen')}</option></select></label>
@@ -79,30 +89,29 @@ export function HistoryExplorer({ profile }: { profile: Profile }) {
       {invalid && <Alert tone="err">{t('Das Ende muss nach dem Beginn liegen.')}</Alert>}
       <p className="hint">{t('Überwachungsereignisse werden ab dieser Version für 90 Tage gespeichert. Ältere Zeiträume können ohne Daten sein. Versand bestätigt die Annahme durch den Benachrichtigungsdienst, nicht die Anzeige auf dem Gerät.')}</p>
     </section>
-    <label className="field field--inline"><span className="field__label">{t('Tag in der Tagesansicht')}</span><input type="date" className="input" value={day} max={dayValue(new Date())} onChange={e => { if (e.target.value) { setDay(e.target.value); const start = new Date(e.target.value + 'T00:00:00'); const end = new Date(start); end.setDate(end.getDate() + 1); setFrom(localValue(start)); setTo(localValue(end)); setPreset('custom'); } }} /></label>
-    <DayHistory key={day} day={day} />
+    {singleDay && <label className="field field--inline"><span className="field__label">{t('Tag in der Tagesansicht')}</span><input type="date" className="input" value={day} max={dayValue(new Date())} onChange={e => { if (e.target.value) { setDay(e.target.value); const start = new Date(e.target.value + 'T00:00:00'); const end = new Date(start); end.setDate(end.getDate() + 1); setFrom(localValue(start)); setTo(localValue(end)); setPreset('custom'); } }} /></label>}
+    {!invalid && <PeriodHistory key={`${chartFrom}:${chartTo}`} from={chartFrom} to={chartTo} source={source} jobId={jobId} monitorId={monitorId} />}
     {!invalid && source !== 'monitors' && <History key={`jobs:${from}:${to}:${jobId}`} profile={profile} from={from} to={to} jobId={jobId} />}
     {!invalid && source !== 'jobs' && <MonitorHistory key={`monitors:${from}:${to}:${monitorId}`} from={from} to={to} monitorId={monitorId} />}
   </>;
 }
 
-function DayHistory({ day }: { day: string }) {
+function PeriodHistory({ from, to, source, jobId, monitorId }: { from: string; to: string; source: string; jobId: string; monitorId: string }) {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const start = new Date(day + 'T00:00:00');
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const from = new Date(day + 'T00:00:00');
-      const to = new Date(from); to.setDate(to.getDate() + 1);
-      try { const next = await request<Overview>('GET', '/api/overview?' + new URLSearchParams({ from: iso(from), to: iso(to) })); if (!cancelled) { setData(next); setError(null); } }
+      try { const next = await request<Overview>('GET', '/api/overview?' + new URLSearchParams({ from, to })); if (!cancelled) { setData(next); setError(null); } }
       catch (caught) { if (!cancelled) setError(errorMessage(caught)); }
     }
     void load(); const timer = window.setInterval(() => void load(), 60000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [day]);
+  }, [from, to]);
   if (error) return <Alert tone="err">{error}</Alert>;
-  return data ? <TaktBand data={data} from={start} title="Tagesverlauf" /> : <p>{t('Lädt …')}</p>;
+  if (!data) return <p>{t('Lädt …')}</p>;
+  const filtered = { ...data, jobs: source === 'monitors' ? [] : data.jobs.filter(job => !jobId || String(job.id) === jobId), monitors: source === 'jobs' ? [] : (data.monitors ?? []).filter(monitor => !monitorId || String(monitor.id) === monitorId) };
+  return <TaktBand data={filtered} from={new Date(from)} title={new Date(to).getTime() - new Date(from).getTime() <= 26 * 3600000 ? 'Tagesverlauf' : 'Zeitraumverlauf'} />;
 }
 
 interface MonitorEvent { id: number; monitor_id: number; name: string; category: string | null; occurred_at: string; kind: string; state: string; ok: boolean | null; latency_ms: number | null; note: string; notifications: { pending: number; sent: number; failed: number } }

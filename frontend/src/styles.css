@@ -638,3 +638,7 @@ code, pre, kbd, samp, .mono, .cron, .input--mono, .input--mono-plain, .input--ar
 .table--runs tr.is-selected > td { background: var(--soft); }
 .rundetail-row .rundetail { border-top: 0; padding-top: 6px; }
 @media (min-width: 768px) { .table tbody tr.rundetail-row > td { display: table-cell; } }
+
+.takt__axislabels { width: 100%; overflow: visible; fill: var(--dim); }
+.takt__axislabels text { font-size: 11px; }
+@media (max-width: 767.98px) { .takt__axislabels text.takt__axislabel--compact-hidden { visibility: hidden; } }
