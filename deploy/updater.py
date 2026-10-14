@@ -213,9 +213,15 @@ class Updater:
         self.state.update(current=self.current(), latest=revision, checked_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
         self.state["available"] = revision != self.state["current"]
         if self.mode == "docker" and self.state["available"]:
-            for image in ("meridian", "meridian-sandbox"):
+            images = [("meridian", "sha-"), ("meridian-sandbox", "sha-")]
+            bridge = command(["docker", "ps", "-a", "--filter", "name=^/meridian-host-bridge$", "--format", "{{.ID}}"], 20)
+            if bridge:
+                project = command(["docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.project"}}', "meridian-host-bridge"], 20)
+                if project == self.location()[0]:
+                    images.append(("meridian", "host-sha-"))
+            for image, prefix in images:
                 try:
-                    command(["docker", "manifest", "inspect", "ghcr.io/exploid1/" + image + ":sha-" + revision], 30)
+                    command(["docker", "manifest", "inspect", "ghcr.io/exploid1/" + image + ":" + prefix + revision], 30)
                 except Exception:
                     self.state["available"] = False
                     self.last_check = time.time() - 21300
