@@ -58,6 +58,7 @@ export interface LastRun {
 }
 
 export interface JobSummary {
+  automation_only?: boolean;
   id: number;
   name: string;
   type: JobType;

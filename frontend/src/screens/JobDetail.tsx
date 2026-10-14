@@ -165,7 +165,7 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
   }
 
   const state = stateOf(job);
-  const preset = presetName(job.cron);
+  const preset = job.automation_only ? t('Nur durch Automation') : presetName(job.cron);
   const http = job.http ?? null;
   const waiting = tracked !== null;
 
@@ -214,7 +214,7 @@ export function JobDetail({ profile, id }: { profile: Profile; id: string }) {
           <dt>{t('Zeitplan')}</dt>
           <dd>
             {preset !== null ? preset + ' · ' : ''}
-            <code className="cron cron--inline">{job.cron}</code> ({job.timezone})
+            <code className="cron cron--inline">{job.automation_only ? t('Kein eigener Zeitplan') : job.cron}</code> ({job.timezone})
           </dd>
           <dt>{t('Nächster Lauf')}</dt>
           <dd>{job.is_enabled ? formatShort(job.next_run_at) : t('deaktiviert')}</dd>
