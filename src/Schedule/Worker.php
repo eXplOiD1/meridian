@@ -169,7 +169,7 @@ final class Worker
         return $this->db->immediate(function () use ($runId): RunRequest|RunEvent|null {
             $now = Timestamp::format($this->clock->now());
             $row = $this->db->fetchOne(
-                "SELECT r.id, r.job_id, r.trigger, r.attempt, r.started_by, j.id AS job_exists, j.type, j.is_enabled, j.overlap_policy FROM runs r LEFT JOIN jobs j ON j.id = r.job_id WHERE r.id = :id AND r.status = 'queued'",
+                "SELECT r.id, r.job_id, r.trigger, r.attempt, r.started_by, r.automation_id, j.id AS job_exists, j.type, j.is_enabled, j.overlap_policy FROM runs r LEFT JOIN jobs j ON j.id = r.job_id WHERE r.id = :id AND r.status = 'queued'",
                 ['id' => $runId],
             );
             if ($row === null || !is_int($row['job_id']) || !is_int($row['attempt'])) {
@@ -191,7 +191,7 @@ final class Worker
             if ($row['is_enabled'] !== 1 && $trigger !== RunTrigger::Test) {
                 return $this->closeQueued($runId, $jobId, RunStatus::Skipped, self::NOTE_JOB_DISABLED, $now);
             }
-            if (!$this->starterMayStart($trigger, $startedBy, $jobId)) {
+            if (!$this->starterMayStart($trigger, $startedBy, $jobId, is_int($row['automation_id']) ? $row['automation_id'] : null)) {
                 return $this->closeQueued($runId, $jobId, RunStatus::Skipped, self::NOTE_STARTER_FORBIDDEN, $now);
             }
             if ($row['overlap_policy'] !== OverlapPolicy::Parallel->value) {
@@ -222,8 +222,13 @@ final class Worker
      * Manuell/Test ohne Benutzer (gelöscht: `ON DELETE SET NULL`) startet nie. Geplante Läufe und Wiederholungen
      * geplanter Läufe haben keinen auslösenden Benutzer.
      */
-    private function starterMayStart(RunTrigger $trigger, ?int $startedBy, int $jobId): bool
+    private function starterMayStart(RunTrigger $trigger, ?int $startedBy, int $jobId, ?int $automationId = null): bool
     {
+        if ($automationId !== null) {
+            // An authorizer without database-backed rule provenance cannot approve unattended actions.
+            return $startedBy !== null && $this->authorizer instanceof DbRunAuthorizer
+                && $this->authorizer->mayStartAutomation($startedBy,$jobId,$automationId);
+        }
         if ($startedBy === null) {
             return $trigger !== RunTrigger::Manual && $trigger !== RunTrigger::Test;
         }
@@ -361,7 +366,7 @@ final class Worker
         $delay = RetryPolicy::delaySeconds($job['retry_delay_seconds'], $request->attempt);
         $this->db->execute(
             // Die Wiederholung übernimmt den auslösenden Benutzer: H1 prüft ihn beim Übernehmen erneut.
-            'INSERT INTO runs (job_id, trigger, status, scheduled_for, attempt, note, started_by) VALUES (:job, :trigger, :status, :scheduled, :attempt, :note, :started_by)',
+            'INSERT INTO runs (job_id, trigger, status, scheduled_for, attempt, note, started_by, automation_id, automation_chain) VALUES (:job, :trigger, :status, :scheduled, :attempt, :note, :started_by, (SELECT automation_id FROM runs WHERE id=:parent), (SELECT automation_chain FROM runs WHERE id=:parent))',
             [
                 'job' => $request->jobId,
                 'trigger' => RunTrigger::Retry->value,
@@ -370,6 +375,7 @@ final class Worker
                 'attempt' => $request->attempt + 1,
                 'note' => self::NOTE_RETRY,
                 'started_by' => $request->startedBy,
+                  'parent' => $request->runId,
             ],
         );
     }

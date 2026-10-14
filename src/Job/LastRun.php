@@ -22,6 +22,7 @@ final readonly class LastRun
         public ?string $finishedAt,
         public ?int $durationMs,
         public ?int $httpStatus,
+        public ?int $automationId = null,
     ) {
     }
 }

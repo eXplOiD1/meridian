@@ -30,7 +30,7 @@ final class RunRepository
      * mehr als `literal-string`.
      */
     private const QUERY = 'SELECT r.id, r.job_id, r.trigger, r.status, r.attempt, r.scheduled_for, r.started_at, r.finished_at,
-r.duration_ms, r.http_status, r.note, r.started_by, u.display_name AS started_by_name, c.name AS category_name,
+r.duration_ms, r.http_status, r.automation_id, r.note, r.started_by, u.display_name AS started_by_name, c.name AS category_name,
 j.type AS job_type, j.name AS job_name, CASE WHEN :with_output = 1 THEN r.output END AS output, r.exit_code,
 r.cancel_requested_at, r.cancel_requested_by, cu.display_name AS cancelled_by_name, r.output_bytes,
 EXISTS (SELECT 1 FROM run_log_chunks k WHERE k.run_id = r.id) AS live
@@ -170,6 +170,7 @@ ORDER BY r.id DESC LIMIT :limit';
                 Row::intOrNull($row, 'output_bytes'),
                 Row::int($row, 'live') === 1,
                 Row::string($row, 'job_name'),
+                Row::intOrNull($row, 'automation_id'),
             );
         }
 

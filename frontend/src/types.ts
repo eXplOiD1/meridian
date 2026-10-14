@@ -38,7 +38,7 @@ export interface AuditPage {
 
 export type JobType = 'http' | 'shell';
 export type RunStatus = 'queued' | 'running' | 'ok' | 'failed' | 'timeout' | 'aborted' | 'skipped';
-export type RunTrigger = 'schedule' | 'manual' | 'retry' | 'test';
+export type RunTrigger = 'schedule' | 'manual' | 'retry' | 'test' | 'automation';
 export type OverlapPolicy = 'skip' | 'parallel' | 'queue';
 export type StoreResponse = 'inherit' | 'on' | 'off';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';

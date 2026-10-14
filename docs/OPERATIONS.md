@@ -40,7 +40,7 @@ php bin/meridian backup:list
 
 ## Restore
 
-1. **Stop Meridian:** `docker compose stop web scheduler worker-http worker-shell`, or `systemctl stop meridian-web meridian-scheduler meridian-worker-http meridian-worker-shell`. Stop the updater during manual recovery as well: `docker compose stop updater` or `systemctl stop meridian-updater`. On systemd, stop only installed services. Restore is rejected while the scheduler is active.
+1. **Stop Meridian:** `docker compose stop web worker-shell`, or `systemctl stop meridian-web meridian-scheduler meridian-worker-http meridian-worker-shell`. Stop the updater during manual recovery as well: `docker compose stop updater` or `systemctl stop meridian-updater`. On systemd, stop only installed services. Restore is rejected while the scheduler is active.
 2. Supply the **correct master key** (`MERIDIAN_KEY_FILE`). A backup belongs to the key used when it was created. Meridian checks before its first write and changes nothing if the key does not match.
 3. On Docker, run a one-off container with the same volumes:
 
@@ -105,3 +105,6 @@ Meridian checks web URLs, TCP ports and hosts using ping. Checks run in `worker-
 - **Ping** requires the `ping` program (`iputils` in the image) and permission to send ICMP. The supplied Compose file sets `net.ipv4.ping_group_range` for `worker-http`, without adding a capability. On systemd, install ping and set `sysctl net.ipv4.ping_group_range="0 2147483647"`. If unavailable, the monitor reports that ping is not available in this installation.
 - **Private targets**, such as 192.168.x.x and Docker hostnames, are blocked until approved under **Settings → Internal targets**, preferably per category and port.
 - Alerts after the configured number of failures use the same channels as jobs, configured under **Settings → Notifications**.
+
+
+[Compact Docker deployment and migration](COMPACT_DOCKER.md#english). [Automations](AUTOMATIONS.md#english).

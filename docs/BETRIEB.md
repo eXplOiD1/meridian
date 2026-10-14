@@ -48,7 +48,7 @@ php bin/meridian backup:list
 
 ## Wiederherstellung
 
-1. **Meridian anhalten** (`docker compose stop web scheduler worker-http worker-shell` bzw.
+1. **Meridian anhalten** (`docker compose stop web worker-shell` bzw.
    `systemctl stop meridian-web meridian-scheduler meridian-worker-http meridian-worker-shell`). Den Update-Dienst während manueller Wiederherstellung ebenfalls stoppen (`docker compose stop updater` bzw. `systemctl stop meridian-updater`). Bei systemd nur installierte Dienste stoppen. Der Befehl lehnt ab, solange der Planer läuft.
 2. Den **richtigen Hauptschlüssel** bereitstellen (`MERIDIAN_KEY_FILE`). Eine Sicherung gehört zu dem Schlüssel, mit dem
    sie erstellt wurde; Meridian prüft das **vor dem ersten Schreiben** und ändert bei Abweichung nichts.
@@ -121,3 +121,6 @@ Meridian prüft Web-Adressen, TCP-Ports und Hosts (Ping) selbst. Die Prüfung l�
 - **Ping** braucht das Programm `ping` (im Image: `iputils`) und das Recht, ICMP zu senden. Im mitgelieferten `compose.yaml` setzt `worker-http` dafür `net.ipv4.ping_group_range` (keine Capability nötig). Bei systemd-Installationen: `ping` installieren und `sysctl net.ipv4.ping_group_range="0 2147483647"` setzen. Fehlt das, steht in der Überwachung „Ping ist in dieser Installation nicht verfügbar“.
 - **Ziele im eigenen Netz** (192.168.x.x, Docker-Namen) sind wie bei HTTP-Jobs gesperrt, bis unter Einstellungen → Interne Ziele eine Freigabe (am besten je Kategorie und Port) besteht.
 - Die Meldung nach `n` Fehlversuchen nutzt dieselben Kanäle wie Jobs (Einstellungen → Benachrichtigungen).
+
+
+[Kompakter Docker-Betrieb und Umstieg](COMPACT_DOCKER.md#deutsch). [Automationen](AUTOMATIONS.md#deutsch).

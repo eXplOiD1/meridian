@@ -17,6 +17,7 @@ export type Route =
   | { name: 'history' }
   | { name: 'stats' }
   | { name: 'monitors' }
+  | { name: 'automations' }
   | { name: 'status-pages' }
   | { name: 'job-new' }
   | { name: 'job'; id: string }
@@ -51,6 +52,7 @@ export function parseRoute(hash: string): Route {
   if (parts.length === 1 && first === 'statistik') {
     return { name: 'stats' };
   }
+  if (parts.length === 1 && first === 'automationen') { return { name: 'automations' }; }
   if (parts.length === 1 && first === 'ueberwachung') {
     return { name: 'monitors' };
   }

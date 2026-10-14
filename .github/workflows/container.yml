@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           docker compose -f compose.host-root.yaml config --quiet
-          MERIDIAN_HOST_UID=1001 MERIDIAN_HOST_GID=1001 docker compose -f compose.yaml -f compose.host.yaml config --quiet
+          docker compose -f compose.yaml config --quiet
           docker build -f docker/Dockerfile.host -t meridian-host-test .
           docker volume create meridian-host-test-socket
           trap 'docker rm -f meridian-host-test >/dev/null 2>&1 || true; docker volume rm meridian-host-test-socket >/dev/null 2>&1 || true' EXIT
@@ -93,8 +93,67 @@ jobs:
           $run->close();
           echo "Explicit host-root execution through the web profile passed.\n";
           PHP
+  compact-stack-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build compact application and maintenance images
+        run: |
+          docker build -f docker/Dockerfile -t meridian-compact-test .
+          docker build -f docker/Dockerfile.updater -t meridian-maintenance-test .
+          docker build -f docker/Dockerfile.host -t meridian-bridge-test .
+      - name: Check normal and host-root stacks, isolation and restart recovery
+        shell: bash
+        env:
+          MERIDIAN_IMAGE: meridian-compact-test
+          MERIDIAN_UPDATER_IMAGE: meridian-maintenance-test
+          MERIDIAN_HOST_IMAGE: meridian-bridge-test
+          MERIDIAN_ADMIN_PASSWORD: Integration-only-password
+        run: |
+          set -euxo pipefail
+          # Local images are loaded already; Compose must not try to pull them.
+          printf '%s\n' '{"services":{"web":{"pull_policy":"never"},"worker-shell":{"pull_policy":"never"},"updater":{"pull_policy":"never"},"host-bridge":{"pull_policy":"never"}}}' > /tmp/local-root.json
+          printf '%s\n' '{"services":{"web":{"pull_policy":"never"},"worker-shell":{"pull_policy":"never"},"updater":{"pull_policy":"never"}}}' > /tmp/local-normal.json
+          trap 'docker compose -f compose.host-root.yaml -f /tmp/local-root.json logs --tail=80 || true; docker compose -f compose.host-root.yaml -f /tmp/local-root.json down -v --remove-orphans || true' EXIT
+          docker compose -f compose.yaml -f /tmp/local-normal.json up -d --wait --wait-timeout 180
+          test "$(docker compose -f compose.yaml ps --status running --services | wc -l)" -eq 3
+          test "$(docker exec meridian-web php -r 'echo count(json_decode(file_get_contents("/tmp/meridian-runtime/pids.json"),true));')" -eq 3
+          docker exec meridian-web php bin/meridian-runtime pause
+          docker restart meridian-web
+          sleep 3
+          docker exec meridian-web php bin/meridian-runtime health
+          test "$(docker exec meridian-web php -r 'echo count(json_decode(file_get_contents("/tmp/meridian-runtime/pids.json"),true));')" -eq 1
+          docker exec meridian-web php bin/meridian-runtime resume
+          sleep 3
+          test "$(docker exec meridian-web php -r 'echo count(json_decode(file_get_contents("/tmp/meridian-runtime/pids.json"),true));')" -eq 3
+          docker restart meridian-web
+          sleep 3
+          docker exec meridian-web php bin/meridian-runtime health
+          test "$(docker exec meridian-web php -r 'echo count(json_decode(file_get_contents("/tmp/meridian-runtime/pids.json"),true));')" -eq 3
+          docker exec meridian-worker-shell php -r '$c=stream_socket_client("unix:///run/meridian-docker/docker.sock"); fwrite($c,"GET /containers/json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"); $r=stream_get_contents($c); if (!str_contains($r,"403")) exit(1);'
+          # Migration removes only the known services from this project.
+          for service in scheduler worker-http docker-proxy; do
+            docker run -d --init --name "meridian-$service" --label com.docker.compose.project=meridian --label "com.docker.compose.service=$service" --entrypoint sleep meridian-compact-test 300
+          done
+          docker run -d --name unrelated-job --label com.docker.compose.project=other --entrypoint sh meridian-compact-test -c 'sleep 300'
+          docker restart meridian-updater
+          for attempt in $(seq 1 180); do
+            if test "$(docker inspect --format '{{.State.Health.Status}}' meridian-updater)" = healthy && ! docker inspect meridian-docker-proxy >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          for service in scheduler worker-http docker-proxy; do
+            if docker inspect "meridian-$service" >/dev/null 2>&1; then exit 1; fi
+          done
+          test "$(docker inspect --format '{{.State.Running}}' unrelated-job)" = true
+          docker rm -f unrelated-job
+          # Preserve the account/key/data while switching the complete Compose variant.
+          docker compose -f compose.yaml -f /tmp/local-normal.json down
+          docker compose -f compose.host-root.yaml -f /tmp/local-root.json up -d --wait --wait-timeout 180
+          test "$(docker compose -f compose.host-root.yaml ps --status running --services | wc -l)" -eq 4
+          docker exec meridian-worker-shell php -r 'require "vendor/autoload.php"; use Meridian\Runner\Shell\{ExecSpec,HostSocketExecutor,HostSockets,ShellInterpreter,ShellTarget,ShellTargetKind}; $e=new HostSocketExecutor(HostSockets::parse(getenv("MERIDIAN_SHELL_HOST_SOCKETS"))); $r=$e->start(new ExecSpec(1,1,"test",new ShellTarget(ShellTargetKind::Host,"web"),ShellInterpreter::Sh,null,null,"UTC",ExecSpec::newNonce(),"id -u",[])); $out=""; $until=microtime(true)+10; while (!$r->finished() && microtime(true)<$until) { $b=$r->read(0.2); if($b!==null) $out.=$b->bytes(); } if (!$r->finished() || $r->exitCode()!==0 || $out!=="0\n") exit(1); $r->close();'
+          docker stats --no-stream --format '{{.Name}}: {{.MemUsage}} / {{.PIDs}} processes'
   build:
-    needs: host-bridge-test
+    needs: [host-bridge-test, compact-stack-test]
     runs-on: ubuntu-latest
     strategy:
       matrix:

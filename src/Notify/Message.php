@@ -34,6 +34,7 @@ final readonly class Message
         if ($this->language === 'en') {
             return match ($this->kind) {
                 'failure' => 'Meridian: ' . $this->jobName . ' failed',
+                'automation' => 'Meridian automation: ' . $this->jobName,
                 'recovery' => 'Meridian: ' . $this->jobName . ' recovered',
                 'slow' => 'Meridian: ' . $this->jobName . ' took longer than usual',
                 'monitor_down' => 'Meridian: No heartbeat from ' . $this->jobName,
@@ -46,6 +47,7 @@ final readonly class Message
 
         return match ($this->kind) {
             'failure' => 'Meridian: ' . $this->jobName . ' ist fehlgeschlagen',
+            'automation' => 'Meridian Automation: ' . $this->jobName,
             'recovery' => 'Meridian: ' . $this->jobName . ' läuft wieder',
             'slow' => 'Meridian: ' . $this->jobName . ' braucht länger als üblich',
             'monitor_down' => 'Meridian: Kein Lebenszeichen von ' . $this->jobName,
@@ -83,6 +85,9 @@ final readonly class Message
 
     public function text(): string
     {
+        if ($this->kind === 'automation') {
+            return $this->subject() . "\n" . ($this->detail ?? '') . "\n" . $this->occurredAt . " (UTC)\n";
+        }
         if ($this->language === 'en') {
             return $this->englishText();
         }

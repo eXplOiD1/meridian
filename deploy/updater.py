@@ -213,9 +213,15 @@ class Updater:
         self.state.update(current=self.current(), latest=revision, checked_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
         self.state["available"] = revision != self.state["current"]
         if self.mode == "docker" and self.state["available"]:
-            for image in ("meridian", "meridian-sandbox"):
+            images = [("meridian", "sha-"), ("meridian-sandbox", "sha-")]
+            bridge = command(["docker", "ps", "-a", "--filter", "name=^/meridian-host-bridge$", "--format", "{{.ID}}"], 20)
+            if bridge:
+                project = command(["docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.project"}}', "meridian-host-bridge"], 20)
+                if project == self.location()[0]:
+                    images.append(("meridian", "host-sha-"))
+            for image, prefix in images:
                 try:
-                    command(["docker", "manifest", "inspect", "ghcr.io/exploid1/" + image + ":sha-" + revision], 30)
+                    command(["docker", "manifest", "inspect", "ghcr.io/exploid1/" + image + ":" + prefix + revision], 30)
                 except Exception:
                     self.state["available"] = False
                     self.last_check = time.time() - 21300
@@ -235,22 +241,37 @@ class Updater:
         directory.mkdir(mode=0o700)
         return directory
 
+    def deployment_services(self):
+        configured = set(self.compose("config", "--services").splitlines())
+        services = [name for name in SERVICES if name in configured and name != "sandbox"]
+        for name in ("sandbox", "host-bridge"):
+            if name in configured:
+                found = command(["docker", "ps", *(["-a"] if name == "host-bridge" else []), "--filter", "name=^/meridian-" + name + "$", "--format", "{{.ID}}"], 20)
+                if found:
+                    services.append(name)
+        if "web" not in services or "worker-shell" not in services:
+            raise RuntimeError("required deployment services missing")
+        return services
+
     def docker_install(self, revision):
         if self.compose_file and not pathlib.Path(self.compose_file).is_file():
             raise RuntimeError("compose missing")
         project = 'meridian' if self.compose_file else self.location()[0]
+        services = self.deployment_services()
+        compact = 'scheduler' not in services
+        background = [name for name in services if name != 'web']
         # Check deployment identity before touching any container.
-        for service in SERVICES:
+        for service in services:
             actual = command(["docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.project"}}', "meridian-" + service])
             if actual != project:
                 raise RuntimeError("unexpected stack")
-        images = {service: "ghcr.io/exploid1/" + ("meridian-sandbox" if service == "sandbox" else "meridian") + ":sha-" + revision for service in SERVICES}
+        images = {service: "ghcr.io/exploid1/" + ("meridian-sandbox" if service == "sandbox" else "meridian") + ":" + ("host-" if service == "host-bridge" else "") + "sha-" + revision for service in services}
         self.publish("downloading", "Update wird heruntergeladen.")
         for image in sorted(set(images.values())):
             command(["docker", "pull", image], 1800)
         # Pin downloaded image IDs, preventing a tag change between pull and deployment.
         images = {service: command(["docker", "image", "inspect", "--format", "{{.Id}}", image]) for service, image in images.items()}
-        old = {service: command(["docker", "inspect", "--format", "{{.Image}}", "meridian-" + service]) for service in SERVICES}
+        old = {service: command(["docker", "inspect", "--format", "{{.Image}}", "meridian-" + service]) for service in services}
         with tempfile.TemporaryDirectory(dir=self.private) as temp:
             directory = pathlib.Path(temp)
             new_override = self.override(directory, images)
@@ -262,7 +283,9 @@ class Updater:
             try:
                 self.publish("backup", "Jobs werden beendet und eine Sicherung wird erstellt.")
                 stopped = True
-                self.compose("stop", "-t", "120", "scheduler", "worker-http", "worker-shell")
+                self.compose("stop", "-t", "120", *background)
+                if compact:
+                    self.compose("exec", "-T", "web", "php", "bin/meridian-runtime", "pause")
                 self.compose("exec", "-T", "web", "php", "bin/meridian", "backup:create", "--keep=365")
                 name = self.compose("exec", "-T", "web", "php", "-r", '$files=glob("/var/lib/meridian/backups/meridian-*.sqlite"); rsort($files); echo basename($files[0]);')
                 if not re.fullmatch(r"meridian-\d{8}-\d{6}\.sqlite", name):
@@ -272,17 +295,22 @@ class Updater:
                 (snapshot / "images.json").write_text(json.dumps(old))
                 changed = True
                 self.state['recovery_required'] = True
-                self.compose("stop", "-t", "30", "web", "sandbox")
+                self.compose("stop", "-t", "30", "web", *(["sandbox"] if "sandbox" in services else []))
                 self.publish("installing", "Neue Version wird gestartet.")
                 self.compose("up", "-d", "--no-build", "--no-deps", "web", override=new_override)
                 self.docker_health([])
-                self.compose("up", "-d", "--no-build", "--no-deps", *SERVICES[1:], override=new_override)
-                self.docker_health()
+                if "host-bridge" in background:
+                    self.compose("up", "-d", "--no-build", "--no-deps", "host-bridge", override=new_override)
+                    self.docker_health(["host-bridge"])
+                self.compose("up", "-d", "--no-build", "--no-deps", *background, override=new_override)
+                self.docker_health(background)
+                if compact:
+                    self.compose("exec", "-T", "web", "php", "bin/meridian-runtime", "resume")
                 self.state['recovery_required'] = False
             except Exception:
                 if changed:
                     self.publish("rollback", "Update fehlgeschlagen. Vorherige Version wird wiederhergestellt.")
-                    self.compose("stop", "-t", "30", *SERVICES)
+                    self.compose("stop", "-t", "30", *services)
                     helper = command(["docker", "create", "--network", "none", "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--cap-add", "DAC_OVERRIDE", "--cap-add", "FOWNER", "--security-opt", "no-new-privileges:true", "--volumes-from", "meridian-web", "--entrypoint", "sh", old["web"], "-c", 'set -eu; rm -f /var/lib/meridian/meridian.sqlite-wal /var/lib/meridian/meridian.sqlite-shm; cp /tmp/restore.sqlite /var/lib/meridian/meridian.sqlite; cp /tmp/restore.key /etc/meridian/master.key; chown 1000:1000 /var/lib/meridian/meridian.sqlite /etc/meridian/master.key; chmod 600 /var/lib/meridian/meridian.sqlite /etc/meridian/master.key'])
                     if not re.fullmatch(r"[0-9a-f]{64}", helper):
                         raise RuntimeError("invalid helper")
@@ -297,11 +325,18 @@ class Updater:
                     rollback = self.override(directory, old)
                     self.compose("up", "-d", "--no-build", "--no-deps", "web", override=rollback)
                     self.docker_health([])
-                    self.compose("up", "-d", "--no-build", "--no-deps", *SERVICES[1:], override=rollback)
-                    self.docker_health()
+                    if "host-bridge" in background:
+                        self.compose("up", "-d", "--no-build", "--no-deps", "host-bridge", override=rollback)
+                        self.docker_health(["host-bridge"])
+                    self.compose("up", "-d", "--no-build", "--no-deps", *background, override=rollback)
+                    self.docker_health(background)
+                    if compact:
+                        self.compose("exec", "-T", "web", "php", "bin/meridian-runtime", "resume")
                     self.state['recovery_required'] = False
                 elif stopped:
-                    self.compose("start", "scheduler", "worker-http", "worker-shell")
+                    self.compose("start", *background)
+                    if compact:
+                        self.compose("exec", "-T", "web", "php", "bin/meridian-runtime", "resume")
                 raise
 
     def docker_health(self, services=None):
@@ -311,7 +346,8 @@ class Updater:
         for _ in range(60):
             web = command(["docker", "inspect", "--format", "{{.State.Health.Status}}", "meridian-web"], 20)
             running = all(command(["docker", "inspect", "--format", "{{.State.Running}}", "meridian-" + service], 20) == "true" for service in services)
-            if web == "healthy" and running:
+            bridge_ready = "host-bridge" not in services or command(["docker", "inspect", "--format", "{{.State.Health.Status}}", "meridian-host-bridge"], 20) == "healthy"
+            if web == "healthy" and running and bridge_ready:
                 return
             time.sleep(2)
         raise RuntimeError("health check failed")

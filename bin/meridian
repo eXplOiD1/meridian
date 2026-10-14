@@ -204,11 +204,12 @@ if (is_dir($config->dataDir)) {
     $maintenance = null;
     $notifier = null;
     $checker = null;
+    $automation = null;
     $app->add(new WorkerRunCommand(
         static fn (JobType $type): Worker => new Worker($db, $clock, WorkerIdentity::generate($type), [$type], $runnersFor($type), $authorizer, null, new DbLiveLogFactory($db, $clock)),
         $env,
         __FILE__,
-        static function (JobType $type, bool $first) use ($env, $db, $config, $clock, &$maintenance, &$notifier, &$checker): array {
+        static function (JobType $type, bool $first) use ($env, $db, $config, $clock, &$maintenance, &$notifier, &$checker, &$automation, $users, $audit): array {
             if ($type === JobType::Http) {
                 $network = new ChannelNetwork(new SystemHostResolver(), InfrastructureTargets::fromConfig($config));
                 $curl = new CurlTransport('Meridian/' . $config->version);
@@ -229,7 +230,10 @@ if (is_dir($config->dataDir)) {
                     $clock,
                 );
 
-                return [...$checker->tick(), ...$notifier->tick()];
+                $automation ??= new \Meridian\Automation\Engine($db, $clock, $users, new SecretBox(KeyLoader::load($env)), $audit, new SecretMasker());
+                $checks = $checker->tick();
+                $automation->tick();
+                return [...$checks, ...$notifier->tick()];
             }
             if ($type !== JobType::Shell) {
                 return [];
@@ -238,8 +242,9 @@ if (is_dir($config->dataDir)) {
 
             return $maintenance->run($first);
         },
-        static function (JobType $type) use (&$notifier): array {
+        static function (JobType $type) use (&$notifier, &$automation): array {
             if ($type !== JobType::Http || $notifier === null) { return []; }
+            $automation?->tick();
             $result = $notifier->deliver();
             if ($result['sent'] === 0 && $result['retry'] === 0 && $result['failed'] === 0) { return []; }
             return ['Benachrichtigungen: ' . $result['sent'] . ' zugestellt, ' . $result['retry'] . ' zur Wiederholung, ' . $result['failed'] . ' endgültig fehlgeschlagen.'];

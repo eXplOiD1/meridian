@@ -30,6 +30,10 @@ Email recipients can be configured per SMTP channel, category and job. Job-speci
 
 Status pages have a German or English default language, set when creating or editing a page. New pages initially use your UI language. Visitors can switch using DE/EN without changing the saved default. Custom titles and display names are not translated.
 
+### Automations
+
+[Automation guide](docs/AUTOMATIONS.md#english): job and monitor events, schedules, AND/OR conditions, job actions and notifications.
+
 ### Notification channels
 
 Create a channel under **Settings → Notifications**, then select it in the required jobs or monitors. Channel language follows your saved UI language by default; German and English can also be selected explicitly.
@@ -95,7 +99,7 @@ A job's Notifications settings can enable a runtime warning. Meridian compares c
 5. Deploy/start the project. Images are downloaded and required volumes are created automatically.
 6. Open `http://<Docker-host-IP>:8090` and sign in with those credentials.
 
-`compose.build.yaml` is the alternative for building images yourself. Use `compose.yaml` for normal stack installations.
+There are exactly two complete deployment files: [compose.yaml](compose.yaml) (3 containers) and [compose.host-root.yaml](compose.host-root.yaml) (4 containers with explicitly enabled host-root execution). See [compact Docker deployment](docs/COMPACT_DOCKER.md#english).
 
 #### Command-line installation
 
@@ -105,11 +109,11 @@ Save `compose.yaml` in its own folder on the Docker host, replace the example cr
 docker compose up -d
 ```
 
-`ghcr.io/exploid1/meridian:latest` follows `main`. Docker managers may detect new images. On first start, the container creates the master key in `meridian-secrets` (never overwritten), the database in `meridian-data`, and the first admin. Both Compose files contain these literal examples under `services.web.environment`:
+`ghcr.io/exploid1/meridian:latest` follows `main`. Docker managers may detect new images. On first start, the container creates the master key in `meridian-secrets` (never overwritten), the database in `meridian-data`, and the first admin. For first setup, set these values under `services.web.environment` (existing accounts are preserved):
 
 ```yaml
 MERIDIAN_ADMIN_USER: "admin"
-MERIDIAN_ADMIN_PASSWORD: "BEISPIEL-passwort-bitte-aendern"
+MERIDIAN_ADMIN_PASSWORD: "your-chosen-password"
 MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"
 ```
 
@@ -147,7 +151,7 @@ Manual updates remain available: redeploy in your Docker manager with image pull
 docker compose pull && docker compose up -d
 ```
 
-For building from GitHub, use `docker compose -f compose.build.yaml up -d --build`. `MERIDIAN_REPO_REF` selects a branch, tag or commit (default `main`).
+For local builds, use the Dockerfiles directly and set the corresponding `MERIDIAN_IMAGE`, `MERIDIAN_UPDATER_IMAGE`, `MERIDIAN_HOST_IMAGE` or `MERIDIAN_SANDBOX_IMAGE` variables in either complete Compose file.
 
 For user management, password resets and unlocking, see [Commands](#commands). `MERIDIAN_ADMIN_USER` and `MERIDIAN_ADMIN_PASSWORD` apply only while no users exist. Editing Compose credentials does not modify an existing account. Change the password under **My account** or with `user:password`. You may remove the admin entries from Compose after initial setup; the account remains stored. Back up `meridian-secrets`: without its key, stored secrets are lost.
 
@@ -155,13 +159,13 @@ For user management, password resets and unlocking, see [Commands](#commands). `
 
 Shell jobs execute through `docker exec` in an **approved container**, never in the Meridian container. Compose includes:
 
-- Separate `worker-http` and `worker-shell` workers (`worker:run --type=http|shell`). The scheduler only plans jobs, without key or network access. The shell worker has no network and reaches only the Docker proxy.
-- `docker-proxy` (`wollomatic/socket-proxy`) gives the shell worker restricted Docker socket access (read-only socket mount). The separate updater also has direct socket access for installations. The proxy permits only `_ping`, `version`, container inspection and exec creation/start/inspection; other container operations such as create/start/remove return 403. It has no network or IP, only a Unix socket in `meridian-docker-proxy`, shared with `worker-shell`.
-- `sandbox` (`meridian-sandbox`) provides busybox, bash, curl, jq, CA certificates and timezone data. It runs as user 1001 with no volumes, read-only storage except `/tmp`, 512 MiB memory and 256 processes. It is **not approved automatically**: under **Settings → Execution targets**, add `docker meridian-sandbox` with user `1001`. For more tools, build your own image/service using `docker/Dockerfile.sandbox` as a template.
+- Web, scheduler and HTTP workers share the application container. The separate shell worker has no network and reaches only the restricted Docker proxy and, in the root variant, the host socket.
+- The maintenance container supervises both the updater and `wollomatic/socket-proxy`; only the updater has direct Docker socket access. The shell worker uses the restricted Unix socket. The proxy permits only `_ping`, `version`, container inspection and exec creation/start/inspection; other container operations such as create/start/remove return 403. It has no network or IP, only a Unix socket in `meridian-docker-proxy`, shared with `worker-shell`.
+- Optional `sandbox` (`meridian-sandbox`, profile `sandbox`) provides busybox, bash, curl, jq, CA certificates and timezone data. It runs as user 1001 with no volumes, read-only storage except `/tmp`, 512 MiB memory and 256 processes. It is **not approved automatically**: under **Settings → Execution targets**, add `docker meridian-sandbox` with user `1001`. For more tools, build your own image/service using `docker/Dockerfile.sandbox` as a template.
 
 Approve other running containers in **Settings → Execution targets**, with the `shell.targets` permission. No Compose/`.env` changes are required. Names must match exactly. Meridian rejects its own containers (`web`, `scheduler`, `worker-http`, `worker-shell`, `docker-proxy` and the `meridian-` prefix except `meridian-sandbox`) as execution targets.
 
-The proxy image is pinned by version and digest. `MERIDIAN_PROXY_IMAGE` permits your own reviewed digest. If the Docker socket group is not root, set `MERIDIAN_DOCKER_GID`.
+The proxy binary in the maintenance image is pinned by version and digest at build time. If the Docker socket group is not root, set `MERIDIAN_DOCKER_GID`.
 
 Docker API access effectively provides root privileges on the host. The proxy restricts access to exec operations but cannot validate request contents. Approve only containers where users with shell-job edit permission may run arbitrary commands. Preserve `meridian-data` and `meridian-secrets` during updates. See [Backup, restore and updates](docs/OPERATIONS.md).
 
@@ -196,7 +200,7 @@ sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/m
 | `admin:bootstrap` | Creates the first admin from `MERIDIAN_ADMIN_USER`/`MERIDIAN_ADMIN_PASSWORD` only when no users exist. Docker startup runs it automatically. |
 | `migrate` | Applies pending database migrations; Docker startup and installer run it automatically. |
 | `key:generate <path>` | Creates a master key with permissions 0600, never overwriting an existing file. Startup/installer run it automatically. |
-| `scheduler:run [--once] [-v]` | Runs the scheduler every five seconds as a dedicated container/service. Only one scheduler plans jobs; another waits for the database lease, which expires at most 60 seconds after the first exits. SIGTERM stops cleanly; `--once` performs one iteration. |
+| `scheduler:run [--once] [-v]` | Runs the scheduler every five seconds as a supervised process in Docker or a dedicated systemd service. Only one scheduler plans jobs; another waits for the database lease, which expires at most 60 seconds after the first exits. SIGTERM stops cleanly; `--once` performs one iteration. |
 
 Examples:
 
@@ -327,6 +331,8 @@ Changes to `/etc/meridian/meridian.env` apply after restarting the affected serv
 
 ## Deutsch
 
+[Automationen](docs/AUTOMATIONS.md#deutsch) · [Kompakter Docker-Betrieb: zwei Compose-Dateien](docs/COMPACT_DOCKER.md#deutsch)
+
 [English](#english) · [Deutsch](#deutsch)
 
 Dokumentation: [Betriebshandbuch (Deutsch)](docs/BETRIEB.md), [Operations manual (English)](docs/OPERATIONS.md), [Lizenz](LICENSE), [Drittanbieterhinweise](THIRD_PARTY_NOTICES.md).
@@ -416,7 +422,7 @@ Für die Installation genügt [compose.yaml](compose.yaml). In einer Docker-Verw
 5. Den Stack bereitstellen bzw. das Projekt starten. Die Images werden heruntergeladen und die benötigten Volumes automatisch angelegt.
 6. `http://<IP-des-Docker-Hosts>:8090` öffnen und mit den eingetragenen Zugangsdaten anmelden.
 
-`compose.build.yaml` ist nur die Alternative zum Selbstbauen; für die normale Stack-Installation wird `compose.yaml` verwendet.
+Es gibt genau zwei vollständige Dateien: [compose.yaml](compose.yaml) (3 Container) und [compose.host-root.yaml](compose.host-root.yaml) (4 Container mit ausdrücklich aktiviertem Host-Root-Zugriff). Siehe [kompakter Docker-Betrieb](docs/COMPACT_DOCKER.md#deutsch).
 
 #### Installation über die Kommandozeile
 
@@ -428,11 +434,11 @@ docker compose up -d
 
 Das Image `ghcr.io/exploid1/meridian:latest` folgt dem Branch `main`. Docker-Verwaltungen können neue Images erkennen. Beim ersten Start legt der Container selbst an: den Hauptschlüssel
 (Volume `meridian-secrets`, wird nie überschrieben), die Datenbank (Volume `meridian-data`) und den ersten Admin.
-Die Compose-Dateien enthalten diese direkt eingetragenen Beispielwerte unter `services.web.environment`:
+Für eine Neuinstallation unter `services.web.environment` beispielsweise diese Werte eintragen:
 
 ```yaml
 MERIDIAN_ADMIN_USER: "admin"
-MERIDIAN_ADMIN_PASSWORD: "BEISPIEL-passwort-bitte-aendern"
+MERIDIAN_ADMIN_PASSWORD: "your-chosen-password"
 MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"
 ```
 
@@ -446,7 +452,7 @@ Vor dem ersten Start den Benutzernamen nach Wunsch und das Beispielpasswort unbe
 
 Beim Öffnen der Updates-Seite wird automatisch eine Prüfung angefordert, sofern kein Vorgang läuft oder bereits wartet. Unter **Einstellungen → Updates** können Administratoren nach Updates suchen und eine Aktualisierung bestätigen. Derselbe Ablauf unterstützt Docker Compose und systemd. Unter **Update-Kanal** wählen Admins **Main (stabil)** oder **Beta (Vorabversion)**. Der Wechsel prüft den gewählten Branch, installiert aber noch nichts. Die Auswahl bleibt bei Neustarts erhalten. Beta kann Fehler enthalten; ein Rückwechsel kann ältere Software installieren und setzt eine kompatible Datenbank voraus. Der getrennte Update-Dienst prüft den gewählten Kanal beim Start und automatisch alle sechs Stunden; die Installation beginnt ausschließlich nach einer Admin-Bestätigung. Bei Docker wird erst ein Update angeboten, wenn die Images für den konkreten Commit veröffentlicht sind. Der Dienst lädt sie vor der Unterbrechung herunter, beendet die Worker, sichert Datenbank und Hauptschlüssel, startet die neue Version und prüft ihre Dienste. Bei einem Installations- oder Startfehler versucht er, die vorherige Version mit ihrer Datenbank wiederherzustellen. Bei Stromausfall oder Abbruch des Update-Dienstes kann eine manuelle Wiederherstellung nötig sein.
 
-**Docker/UGOS/Portainer:** Der Update-Dienst startet mit dem Stack automatisch. Beide Compose-Dateien enthalten ihn ohne optionales Profil. Projektname und Compose-Dateien werden aus den Container-Metadaten ermittelt; Portainer-Pfade werden bei Bedarf auf dessen Host-Daten-Volume abgebildet. Bei fehlenden oder ungültigen Metadaten wird das Update nicht begonnen.
+**Docker/UGOS/Portainer:** Beide Dateien starten den Wartungsdienst automatisch. Projekt- und Compose-Pfade werden aus den Container-Metadaten ermittelt. Ungültige Metadaten verhindern ein Update.
 
 Bestehende Installationen: die aktuelle Compose-Datei übernehmen und den Stack einmal neu bereitstellen. Ein Image-Pull allein fügt den neuen Dienst nicht hinzu. Mit der CLI im Stack-Ordner:
 
@@ -474,7 +480,7 @@ In der Docker-Verwaltung den bestehenden Stack erneut bereitstellen und dabei da
 docker compose pull && docker compose up -d
 ```
 
-Zum Selbstbauen aus GitHub dient `compose.build.yaml`: `docker compose -f compose.build.yaml up -d --build`. `MERIDIAN_REPO_REF` wählt dabei einen Branch, Tag oder Commit (Standard `main`).
+Zum Selbstbauen dienen die Dockerfiles. Die Images lassen sich über `MERIDIAN_IMAGE`, `MERIDIAN_UPDATER_IMAGE`, `MERIDIAN_HOST_IMAGE` und `MERIDIAN_SANDBOX_IMAGE` in einer der beiden vollständigen Compose-Dateien auswählen.
 
 Benutzer verwalten, Passwort zurücksetzen, Sperren aufheben: siehe [Befehle](#befehle).
 `MERIDIAN_ADMIN_USER` und `MERIDIAN_ADMIN_PASSWORD` gelten nur beim allerersten Start, solange es noch keinen Benutzer gibt.
@@ -488,13 +494,13 @@ Geheimnisse verloren.
 Shell-Jobs laufen nie im Meridian-Container, sondern per `docker exec` in einem **freigegebenen Container**.
 Die `compose.yaml` bringt dafür mit:
 
-- `worker-http` und `worker-shell`: getrennte Worker (`worker:run --type=http|shell`); der `scheduler` plant nur
+- Webserver, Scheduler und HTTP-Worker laufen gemeinsam im Anwendungscontainer. Der Shell-Worker bleibt getrennt und ohne Netzwerk.
   (kein Hauptschlüssel, kein Netz). `worker-shell` hat kein Netz und erreicht nur den Docker-Proxy.
-- `docker-proxy` (`wollomatic/socket-proxy`): stellt dem Shell-Worker den eingeschränkten Zugriff auf `/var/run/docker.sock` bereit (nur lesend eingebunden). Der getrennte Updater erhält ebenfalls direkten Socket-Zugriff für Installationen.
+- Der Wartungscontainer vereint Updater und eingeschränkten Docker-Socket-Proxy. Nur der Updater hat direkten Docker-Zugriff; der Shell-Worker nutzt den eingeschränkten Unix-Socket.
   Er lässt nur `_ping`, `version`, Container-Info und Exec (anlegen, starten, abfragen) durch;
   `containers/create`, `start`, `rm` u. a. gibt es nicht (403). Er hat kein Netz und keine IP-Adresse, sondern einen
   Unix-Socket im Volume `meridian-docker-proxy`, das nur er und `worker-shell` einbinden.
-- `sandbox` (`meridian-sandbox`): Standard-Ausführungsort mit busybox, bash, curl, jq, ca-certificates, tzdata,
+- Optionale `sandbox` (`meridian-sandbox`, Profil `sandbox`): Ausführungsort mit busybox, bash, curl, jq, ca-certificates, tzdata,
   Benutzer 1001, ohne Volumes, schreibgeschützt (nur `/tmp`), 512 MiB, 256 Prozesse. Er wird **nicht automatisch
   freigegeben**: in Meridian unter Einstellungen -> Ausführungsorte `docker meridian-sandbox` mit Benutzer `1001`
   eintragen. Mehr Werkzeuge: eigenes Image und eigener Dienst (`docker/Dockerfile.sandbox` als Vorlage).
@@ -504,7 +510,7 @@ Weitere Container freigeben: nur in Meridian unter Einstellungen -> Ausführungs
 stimmen. Meridians eigene Container (`web`, `scheduler`, `worker-http`, `worker-shell`, `docker-proxy`, alles mit dem
 Präfix `meridian-` außer `meridian-sandbox`) lehnt Meridian als Ausführungsort ab.
 
-Das Proxy-Image ist standardmäßig mit Version und Digest festgelegt. `MERIDIAN_PROXY_IMAGE` erlaubt einen eigenen geprüften Digest. Hat `/var/run/docker.sock` eine andere Gruppe als root, `MERIDIAN_DOCKER_GID` setzen.
+Das Proxy-Programm im Wartungsimage ist beim Build mit Version und Digest festgelegt. Hat `/var/run/docker.sock` eine andere Gruppe als root, `MERIDIAN_DOCKER_GID` setzen.
 
 **Sicherheitshinweis:** Ein Zugang zur Docker-API ist faktisch Root auf dem Host. Der Proxy begrenzt ihn auf Exec in den
 eingetragenen Containern, kann aber den Inhalt einer Anfrage nicht prüfen. Nur Container freigeben, in denen Admins mit
@@ -545,7 +551,7 @@ sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/m
 | `admin:bootstrap` | Legt den ersten Admin aus `MERIDIAN_ADMIN_USER` / `MERIDIAN_ADMIN_PASSWORD` an. Nur wenn es noch keinen Benutzer gibt; der Docker-Start ruft das selbst auf. |
 | `migrate` | Spielt ausstehende Datenbank-Änderungen ein. Docker-Start und Installer machen das selbst. |
 | `key:generate <pfad>` | Erzeugt den Hauptschlüssel als Datei (Rechte 0600). Überschreibt nie eine vorhandene Datei. Docker-Start und Installer machen das selbst. |
-| `scheduler:run [--once] [-v]` | Startet den Scheduler als Dauerprozess (Takt alle 5 Sekunden). Läuft als eigener Container (`meridian-scheduler`) bzw. systemd-Dienst. Es plant immer nur ein Scheduler: ein zweiter Prozess wartet, bis die Sperre in der Datenbank frei wird (spätestens 60 Sekunden nach dem Ende des ersten). `SIGTERM` beendet ihn sauber. `--once` macht genau einen Takt. |
+| `scheduler:run [--once] [-v]` | Startet den Scheduler als Dauerprozess (Takt alle 5 Sekunden). Läuft unter Docker gemeinsam mit Web und HTTP-Workern, unter systemd als eigener Dienst. Es plant immer nur ein Scheduler: ein zweiter Prozess wartet, bis die Sperre in der Datenbank frei wird (spätestens 60 Sekunden nach dem Ende des ersten). `SIGTERM` beendet ihn sauber. `--once` macht genau einen Takt. |
 
 Beispiele:
 

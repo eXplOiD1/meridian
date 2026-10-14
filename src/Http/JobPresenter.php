@@ -137,7 +137,7 @@ final class JobPresenter
         $data = [
             'id' => $run->id,
             'job_id' => $run->jobId,
-            'trigger' => $run->trigger->value,
+            'trigger' => $run->automationId === null ? $run->trigger->value : 'automation',
             'status' => $run->status->value,
             'attempt' => $run->attempt,
             'scheduled_for' => $run->scheduledFor,
@@ -224,7 +224,7 @@ final class JobPresenter
         return [
             'id' => $run->id,
             'status' => $run->status->value,
-            'trigger' => $run->trigger->value,
+            'trigger' => $run->automationId === null ? $run->trigger->value : 'automation',
             'finished_at' => $run->finishedAt,
             'duration_ms' => $run->durationMs,
             'http_status' => $run->httpStatus,

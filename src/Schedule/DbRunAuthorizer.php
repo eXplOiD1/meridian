@@ -47,4 +47,19 @@ final class DbRunAuthorizer implements RunAuthorizer
             return false;
         }
     }
+
+    public function mayStartAutomation(int $userId, int $jobId, int $automationId): bool
+    {
+        try {
+            $rule=$this->db->fetchOne('SELECT owner_id,enabled,definition FROM automations WHERE id=:id',['id'=>$automationId]);
+            if ($rule === null || $rule['owner_id'] !== $userId || $rule['enabled'] !== 1) { return false; }
+            $grants=$this->users->grantsFor($userId);
+            if (!$this->access->can($grants,Permission::ManageAutomations)) { return false; }
+            // Source/condition access can be revoked after the event queued this job.
+            \Meridian\Automation\Definition::read(\Meridian\Http\JsonBody::object(\Meridian\Job\Row::string($rule,'definition'),16384,8) ?? [],$this->db,$grants);
+            return $this->mayStart($userId,$jobId);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
 }

@@ -19,6 +19,9 @@ final class BrowserPushAudience
         $users = new UserRepository($this->db, new PasswordHasher());
         $grants = $users->grantsFor($user);
         $access = new AccessControl();
+        if ($message->kind === 'automation') {
+            return $message->browserUserId === $user && $access->can($grants, Permission::ManageAutomations);
+        }
         if ($message->kind === 'test') {
             return $message->browserUserId === null
                 ? $access->can($grants, Permission::ManageSettings)

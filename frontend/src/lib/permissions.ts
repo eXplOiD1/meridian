@@ -34,6 +34,7 @@ export function canManageCategories(profile: Profile): boolean {
 
 /** Deutsche Bezeichnungen der Rechte (Schlüssel und „gefährlich“ kommen vom Server, GET /api/roles). */
 export const PERMISSION_LABELS: Record<string, string> = {
+  'automations.manage': 'Automationen verwalten',
   'jobs.view': 'Jobs ansehen',
   'jobs.run': 'Jobs ausführen',
   'jobs.edit_http': 'HTTP-Jobs bearbeiten',
@@ -49,6 +50,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
 
 /** Ein Erklärsatz je Recht für den Rollen-Editor. */
 export const PERMISSION_HINTS: Record<string, string> = {
+  'automations.manage': 'Eigene Automationen mit Auslösern, Bedingungen und Aktionen verwalten.',
   'jobs.view': 'Jobs, Läufe und Verlauf der erlaubten Kategorien ansehen.',
   'jobs.run': 'Jobs von Hand starten und laufende Läufe abbrechen.',
   'jobs.edit_http': 'HTTP-Jobs anlegen, ändern und löschen.',
@@ -125,3 +127,5 @@ export function isScoped(profile: Profile): boolean {
 export function roleNames(profile: Profile): string {
   return profile.roles.map((grant) => grant.role).join(', ');
 }
+
+export function canManageAutomations(profile: Profile): boolean { return profile.roles.some(grant => grant.categories === null && grant.permissions.includes('automations.manage')); }

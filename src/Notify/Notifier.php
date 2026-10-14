@@ -440,7 +440,7 @@ final class Notifier
         $result = ['sent' => 0, 'retry' => 0, 'failed' => 0];
         $nowText = Timestamp::format($this->clock->now());
         $due = $this->db->fetchAll(
-            "SELECT id, kind, channel_id, job_id, job_name, run_status, occurred_at, detail, failures, recipients, browser_monitor_id, browser_user_id FROM notification_outbox
+            "SELECT id, kind, channel_id, job_id, job_name, run_status, occurred_at, detail, failures, recipients, browser_monitor_id, browser_user_id, automation_id FROM notification_outbox
               WHERE status = 'pending' AND next_attempt_at <= :now ORDER BY id LIMIT :limit",
             ['now' => $nowText, 'limit' => self::BATCH],
         );
@@ -515,6 +515,12 @@ final class Notifier
      */
     private function send(array $row): ?string
     {
+        if (Row::string($row, 'kind') === 'automation') {
+            $rule = $this->db->fetchOne('SELECT owner_id,enabled,definition FROM automations WHERE id=:id', ['id'=>Row::int($row,'automation_id')]);
+            $users = new \Meridian\User\UserRepository($this->db, new \Meridian\Security\PasswordHasher());
+            if ($rule === null || !Row::bool($rule,'enabled') || !(new \Meridian\Security\AccessControl())->can($users->grantsFor(Row::int($rule,'owner_id')), \Meridian\Security\Permission::ManageAutomations)) return SendFailed::DISABLED;
+            try { \Meridian\Automation\Definition::read(\Meridian\Http\JsonBody::object(Row::string($rule,'definition'),16384,8) ?? [],$this->db,$users->grantsFor(Row::int($rule,'owner_id'))); } catch (\Throwable) { return SendFailed::DISABLED; }
+        }
         $channel = $this->channels->find(Row::int($row, 'channel_id'));
         if ($channel === null || !$channel->isEnabled) {
             return SendFailed::DISABLED;
