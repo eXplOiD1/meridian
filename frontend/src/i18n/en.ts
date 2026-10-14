@@ -3,6 +3,9 @@
  */
 /** Englische Fassungen; Schlüssel ist der deutsche Quelltext. Fehlt ein Eintrag, bleibt die Oberfläche deutsch. */
 export const EN: Record<string, string> = {
+  "Dieses Jahr": "This year",
+  "Jahr wählen": "Choose a year",
+  "Zeitraumverlauf": "History for this period",
   "Host-Profile verwenden den fest eingestellten Benutzer des Host-Dienstes. Unter Docker muss die Host-Bridge im Stack enthalten sein; der vollständige Host-Root-Stack bringt sie bereits mit.": "Host profiles use the fixed host service account. Docker requires the host bridge in the stack; the complete host-root stack already includes it.",
   "Host-Profile und Root-Freigaben nur nach Bestätigung mit deinem Meridian-Passwort. Geplante Jobs laufen danach ohne erneute Passwortabfrage.": "Confirm host profiles and root approvals with your current Meridian password. Scheduled jobs then run without asking for the password again.",
 
