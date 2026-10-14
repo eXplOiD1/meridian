@@ -110,7 +110,7 @@ jobs:
           MERIDIAN_HOST_IMAGE: meridian-bridge-test
           MERIDIAN_ADMIN_PASSWORD: Integration-only-password
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           # Local images are loaded already; Compose must not try to pull them.
           printf '%s\n' '{"services":{"web":{"pull_policy":"never"},"worker-shell":{"pull_policy":"never"},"updater":{"pull_policy":"never"},"host-bridge":{"pull_policy":"never"}}}' > /tmp/local-root.json
           printf '%s\n' '{"services":{"web":{"pull_policy":"never"},"worker-shell":{"pull_policy":"never"},"updater":{"pull_policy":"never"}}}' > /tmp/local-normal.json

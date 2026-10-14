@@ -9,6 +9,20 @@ declare(strict_types=1);
 $state = '/tmp/meridian-runtime';
 $action = $argv[1] ?? 'run';
 $maintenance = (getenv('MERIDIAN_DATA_DIR') ?: '/var/lib/meridian') . '/updates/runtime-paused';
+if ($action === 'shell-health') {
+    $path = (getenv('MERIDIAN_DATA_DIR') ?: '/var/lib/meridian') . '/meridian.sqlite';
+    if (!is_file($path)) { exit(1); }
+    try {
+        $db = new PDO('sqlite:' . $path);
+        $db->exec('PRAGMA busy_timeout=2000');
+        $query = $db->prepare("SELECT pid FROM workers WHERE kind='shell' AND host=:host AND seen_at>=:since");
+        $query->execute(['host'=>gethostname(),'since'=>gmdate('Y-m-d\\TH:i:s+00:00',time()-30)]);
+        foreach ($query->fetchAll(PDO::FETCH_COLUMN) as $pid) {
+            if ((is_int($pid) || (is_string($pid) && ctype_digit($pid))) && (int)$pid > 1 && posix_kill((int)$pid,0)) { exit(0); }
+        }
+    } catch (Throwable) { exit(1); }
+    exit(1);
+}
 if (in_array($action, ['pause', 'resume'], true)) {
     if (!is_dir($state)) { exit(1); }
     if ($action === 'pause') {
