@@ -646,3 +646,7 @@ code, pre, kbd, samp, .mono, .cron, .input--mono, .input--mono-plain, .input--ar
 .automation-rule { padding: 1rem 0; border-bottom: 1px solid var(--line); }
 .automation-step { min-width: 0; margin: 0; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; }
 .automation-step > .grid-2 { margin-bottom: .75rem; }
+
+.automation-identity { align-items: flex-end; }
+.automation-identity > .check { min-height: 48px; align-items: center; }
+.automation-identity > .check input { margin-top: 0; }

@@ -40,6 +40,7 @@ services:
       retries: 3
   updater:
     image: ${MERIDIAN_UPDATER_IMAGE:-ghcr.io/exploid1/meridian:updater-latest}
+    pull_policy: always
     container_name: meridian-updater
     restart: unless-stopped
     environment:
