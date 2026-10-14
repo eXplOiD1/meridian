@@ -1,0 +1,116 @@
+#!/usr/bin/env php
+<?php
+
+// Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+// SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+declare(strict_types=1);
+
+// Docker-only supervisor. Shell jobs never run here. The updater can pause background work for a consistent backup.
+$state = '/tmp/meridian-runtime';
+$action = $argv[1] ?? 'run';
+$maintenance = (getenv('MERIDIAN_DATA_DIR') ?: '/var/lib/meridian') . '/updates/runtime-paused';
+if (in_array($action, ['pause', 'resume'], true)) {
+    if (!is_dir($state)) { exit(1); }
+    if ($action === 'pause') {
+        if (file_put_contents($maintenance, '1') === false || file_put_contents($state . '/pause', '1') === false) { exit(1); }
+        $deadline = microtime(true) + 40;
+        do {
+            clearstatcache();
+            if (is_file($state . '/paused')) { exit(0); }
+            usleep(100000);
+        } while (microtime(true) < $deadline);
+        exit(1);
+    }
+    if (is_file($maintenance) && !unlink($maintenance)) { exit(1); }
+    @unlink($state . '/pause');
+    exit(0);
+}
+if ($action === 'health') {
+    $raw = @file_get_contents($state . '/pids.json');
+    $pids = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($pids) || !isset($pids['web']) || count($pids) < (is_file($state . '/paused') ? 1 : 3)) { exit(1); }
+    foreach ($pids as $pid) {
+        if (!is_int($pid) || $pid <= 1 || !posix_kill($pid, 0)) { exit(1); }
+    }
+    $context = stream_context_create(['http' => ['timeout' => 3]]);
+    exit(@file_get_contents('http://127.0.0.1:8080/api/health', false, $context) === false ? 1 : 0);
+}
+if ($action !== 'run' || !function_exists('pcntl_fork') || !function_exists('posix_setsid')) { exit(64); }
+if (!is_dir($state) && !mkdir($state, 0700)) { exit(70); }
+$lock = fopen($state . '/lock', 'c');
+if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) { exit(70); }
+@unlink($state . '/paused');
+if (is_file($maintenance)) { file_put_contents($state . '/pause', '1'); }
+$commands = [
+    'web' => ['/usr/local/bin/frankenphp', 'run', '--config', '/etc/frankenphp/Caddyfile', '--adapter', 'caddyfile'],
+    'scheduler' => [PHP_BINARY, __DIR__ . '/meridian', 'scheduler:run'],
+    'http' => [PHP_BINARY, __DIR__ . '/meridian', 'worker:run', '--type=http', '--concurrency=' . (getenv('MERIDIAN_HTTP_WORKERS') ?: '2')],
+];
+/** @var array<string, int> $children */
+$children = [];
+$stopping = false;
+pcntl_async_signals(true);
+pcntl_signal(SIGTERM, static function () use (&$stopping): void { $stopping = true; });
+pcntl_signal(SIGINT, static function () use (&$stopping): void { $stopping = true; });
+$start = static function (string $name) use ($commands, &$children, $lock): void {
+    $pid = pcntl_fork();
+    if ($pid === -1) { throw new RuntimeException('Cannot start runtime service.'); }
+    if ($pid === 0) {
+        fclose($lock);
+        pcntl_signal(SIGTERM, SIG_DFL);
+        pcntl_signal(SIGINT, SIG_DFL);
+        if (posix_setsid() === -1) { exit(70); }
+        $command = $commands[$name];
+        $executable = array_shift($command);
+        pcntl_exec($executable, $command);
+        exit(70);
+    }
+    $children[$name] = $pid;
+};
+$stop = static function (array $names) use (&$children): void {
+    foreach ($names as $name) { if (isset($children[$name])) { posix_kill($children[$name], SIGTERM); } }
+    $deadline = microtime(true) + 30;
+    do {
+        foreach ($names as $name) {
+            if (isset($children[$name]) && pcntl_waitpid($children[$name], $status, WNOHANG) !== 0) { unset($children[$name]); }
+        }
+        if (array_intersect(array_keys($children), $names) === []) { return; }
+        usleep(100000);
+    } while (microtime(true) < $deadline);
+    foreach ($names as $name) {
+        if (isset($children[$name])) {
+            posix_kill(-$children[$name], SIGKILL);
+            posix_kill($children[$name], SIGKILL);
+            pcntl_waitpid($children[$name], $status);
+            unset($children[$name]);
+        }
+    }
+};
+$exitCode = 0;
+try {
+    $start('web');
+    while (!$stopping) {
+        clearstatcache();
+        if (is_file($state . '/pause')) {
+            if (isset($children['scheduler']) || isset($children['http'])) { $stop(['scheduler', 'http']); }
+            file_put_contents($state . '/paused', '1');
+        } else {
+            @unlink($state . '/paused');
+            foreach (['scheduler', 'http'] as $name) { if (!isset($children[$name])) { $start($name); } }
+        }
+        file_put_contents($state . '/pids.json', json_encode($children, JSON_THROW_ON_ERROR));
+        foreach ($children as $pid) {
+            if (pcntl_waitpid($pid, $status, WNOHANG) !== 0) { throw new RuntimeException('Runtime service stopped.'); }
+        }
+        usleep(200000);
+    }
+} catch (Throwable) {
+    fwrite(STDERR, "meridian-runtime: service stopped; restarting the container.\n");
+    $exitCode = 70;
+} finally {
+    $stop(['scheduler', 'http']);
+    $stop(['web']);
+    @unlink($state . '/pids.json');
+    fclose($lock);
+}
+exit($exitCode);

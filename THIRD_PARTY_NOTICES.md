@@ -74,3 +74,7 @@ Barlow Condensed, Public Sans and JetBrains Mono retain their original SIL Open 
 ## Container images
 
 FrankenPHP, Alpine Linux, Node.js, Composer and the Docker socket proxy retain their upstream licenses. Operating-system packages and image components are governed by the notices in their respective images. No exclusive ownership of these components is claimed.
+
+## socket-proxy (maintenance image)
+
+The maintenance image includes wollomatic/socket-proxy 1.13.1 under the MIT license. Source: https://github.com/wollomatic/socket-proxy. See [license](licenses/socket-proxy-MIT.txt).

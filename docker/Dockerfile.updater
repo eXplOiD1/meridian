@@ -1,8 +1,11 @@
 # syntax=docker/dockerfile:1
 # Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
 # SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+FROM wollomatic/socket-proxy:1.13.1@sha256:3935b709275e4ec35d6ed5a5c4a1f0d01ed31eec5e7234efc3357ecd47689002 AS proxy
 FROM docker:27-cli
 RUN apk add --no-cache python3
+COPY --from=proxy /socket-proxy /usr/local/bin/socket-proxy
+COPY deploy/updater-entrypoint.py /usr/local/lib/meridian-updater-entrypoint.py
 COPY deploy/updater.py /usr/local/lib/meridian-updater.py
 COPY LICENSE THIRD_PARTY_NOTICES.md /usr/local/share/meridian/
 COPY licenses/ /usr/local/share/meridian/licenses/
@@ -39,4 +42,4 @@ with tempfile.TemporaryDirectory() as temporary:
 print('Linux update queue and symlink protection passed.')
 PY
 ENV MERIDIAN_UPDATE_MODE=docker
-CMD ["python3", "/usr/local/lib/meridian-updater.py"]
+CMD ["python3", "/usr/local/lib/meridian-updater-entrypoint.py"]
