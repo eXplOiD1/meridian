@@ -56,7 +56,7 @@ final class JobRepository
     /**
      * Letzter abgeschlossener Lauf (ohne Testläufe, ohne übersprungene) und „läuft gerade“ für eine Menge Jobs.
      */
-    private const RUN_STATE = 'SELECT j.id AS job_id, lr.id AS run_id, lr.trigger, lr.status, lr.finished_at, lr.duration_ms, lr.http_status,
+    private const RUN_STATE = 'SELECT j.id AS job_id, lr.id AS run_id, lr.trigger, lr.automation_id, lr.status, lr.finished_at, lr.duration_ms, lr.http_status,
             EXISTS (SELECT 1 FROM runs r2 WHERE r2.job_id = j.id AND r2.status = \'running\') AS running
        FROM jobs j
        LEFT JOIN runs lr ON lr.id = (SELECT r.id FROM runs r WHERE r.job_id = j.id AND r.trigger <> \'test\'
@@ -360,7 +360,7 @@ final class JobRepository
             $trigger = $runId === null ? null : RunTrigger::tryFrom(Row::string($row, 'trigger'));
             $last = $runId === null || $status === null || $trigger === null
                 ? null
-                : new LastRun($runId, $status, $trigger, Row::stringOrNull($row, 'finished_at'), Row::intOrNull($row, 'duration_ms'), Row::intOrNull($row, 'http_status'));
+                : new LastRun($runId, $status, $trigger, Row::stringOrNull($row, 'finished_at'), Row::intOrNull($row, 'duration_ms'), Row::intOrNull($row, 'http_status'), Row::intOrNull($row, 'automation_id'));
             $states[Row::int($row, 'job_id')] = ['last_run' => $last, 'running' => Row::bool($row, 'running')];
         }
 

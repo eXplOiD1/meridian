@@ -31,6 +31,7 @@ final class RunService
 {
     /** Höchstens so viele manuelle Läufe und Testläufe je Benutzer in der letzten Stunde. */
     public const MAX_PER_HOUR = 60;
+    public const MAX_AUTOMATION_PER_HOUR = 360;
 
     public function __construct(
         private readonly Connection $db,
@@ -43,19 +44,20 @@ final class RunService
 
     /**
      * @param list<RoleGrant> $grants
+     * @param list<int> $chain
      *
      * @return int|null die Nummer des eingereihten Laufs; null = Job nicht sichtbar (→ 404)
      *
      * @throws AccessDenied|RunNotQueued
      */
-    public function enqueue(int $userId, array $grants, int $jobId, RunTrigger $trigger): ?int
+    public function enqueue(int $userId, array $grants, int $jobId, RunTrigger $trigger, ?int $automationId = null, array $chain = []): ?int
     {
         if ($trigger !== RunTrigger::Manual && $trigger !== RunTrigger::Test) {
             throw new \InvalidArgumentException('Nur manuelle Läufe und Testläufe werden hier eingereiht.');
         }
         $viewScope = $this->access->scope($grants, Permission::ViewJobs);
 
-        return $this->db->immediate(function () use ($userId, $grants, $jobId, $trigger, $viewScope): ?int {
+        $work = function () use ($userId, $grants, $jobId, $trigger, $viewScope, $automationId, $chain): ?int {
             $job = $this->jobs->findVisible($jobId, $viewScope);
             if ($job === null) {
                 return null;
@@ -67,7 +69,7 @@ final class RunService
             if ($trigger === RunTrigger::Manual && !$job->isEnabled) {
                 throw new RunNotQueued(RunRefusal::JobDisabled);
             }
-            if ($this->recentCount($userId, $now) >= self::MAX_PER_HOUR) {
+            if ($this->recentCount($userId, $now, $automationId !== null) >= ($automationId === null ? self::MAX_PER_HOUR : self::MAX_AUTOMATION_PER_HOUR)) {
                 throw new RunNotQueued(RunRefusal::RateLimited);
             }
             if ($this->hasOpenRun($jobId)) {
@@ -75,18 +77,19 @@ final class RunService
             }
 
             $this->db->execute(
-                "INSERT INTO runs (job_id, trigger, status, scheduled_for, attempt, started_by) VALUES (:job, :trigger, 'queued', :scheduled, 1, :user)",
-                ['job' => $jobId, 'trigger' => $trigger->value, 'scheduled' => Timestamp::format($now), 'user' => $userId],
+                "INSERT INTO runs (job_id, trigger, status, scheduled_for, attempt, started_by, automation_id, automation_chain) VALUES (:job, :trigger, 'queued', :scheduled, 1, :user, :automation, :chain)",
+                ['job' => $jobId, 'trigger' => $trigger->value, 'scheduled' => Timestamp::format($now), 'user' => $userId, 'automation' => $automationId, 'chain' => json_encode($chain, JSON_THROW_ON_ERROR)],
             );
             $runId = $this->db->lastInsertId();
             $this->audit->record(
                 $userId,
-                $trigger === RunTrigger::Test ? 'job.run_test' : 'job.run_manual',
+                $automationId !== null ? 'job.run_automation' : ($trigger === RunTrigger::Test ? 'job.run_test' : 'job.run_manual'),
                 'job:' . $jobId . ' ' . $job->name . '; run:' . $runId,
             );
 
             return $runId;
-        });
+        };
+        return $this->db->inTransaction() ? $work() : $this->db->immediate($work);
     }
 
     private function hasOpenRun(int $jobId): bool
@@ -97,11 +100,11 @@ final class RunService
         ) !== null;
     }
 
-    private function recentCount(int $userId, \DateTimeImmutable $now): int
+    private function recentCount(int $userId, \DateTimeImmutable $now, bool $automation = false): int
     {
         $row = $this->db->fetchOne(
-            "SELECT COUNT(*) AS n FROM runs WHERE started_by = :user AND trigger IN ('manual', 'test') AND scheduled_for > :since",
-            ['user' => $userId, 'since' => Timestamp::format($now->modify('-1 hour'))],
+            "SELECT COUNT(*) AS n FROM runs WHERE started_by = :user AND trigger IN ('manual', 'test') AND scheduled_for > :since AND ((:automation=1 AND automation_id IS NOT NULL) OR (:automation=0 AND automation_id IS NULL))",
+            ['user' => $userId, 'since' => Timestamp::format($now->modify('-1 hour')), 'automation'=>(int)$automation],
         );
 
         return $row === null ? 0 : Row::int($row, 'n');

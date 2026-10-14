@@ -45,6 +45,7 @@ final readonly class RunRecord
         public bool $live = false,
         /** Name des Jobs: nur für den Audit-Eintrag, nicht für die Antwort. */
         public string $jobName = '',
+        public ?int $automationId = null,
     ) {
     }
 }

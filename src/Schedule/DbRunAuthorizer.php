@@ -47,4 +47,11 @@ final class DbRunAuthorizer implements RunAuthorizer
             return false;
         }
     }
+
+    public function mayStartAutomation(int $userId, int $jobId, int $automationId): bool
+    {
+        $rule=$this->db->fetchOne('SELECT owner_id,enabled FROM automations WHERE id=:id',['id'=>$automationId]);
+        return $rule !== null && $rule['owner_id'] === $userId && $rule['enabled'] === 1
+            && $this->access->can($this->users->grantsFor($userId),Permission::ManageAutomations) && $this->mayStart($userId,$jobId);
+    }
 }
