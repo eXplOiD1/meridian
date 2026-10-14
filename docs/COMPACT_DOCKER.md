@@ -17,7 +17,7 @@ Copy the entire chosen file into the existing NAS Compose editor and redeploy, p
 
 Both files follow the stable `main` images by default. For beta, set `MERIDIAN_IMAGE=ghcr.io/exploid1/meridian:candidate`, `MERIDIAN_UPDATER_IMAGE=ghcr.io/exploid1/meridian:updater-candidate`, and, for the root variant, `MERIDIAN_HOST_IMAGE=ghcr.io/exploid1/meridian:host-candidate`. Use `MERIDIAN_SANDBOX_IMAGE=ghcr.io/exploid1/meridian-sandbox:candidate` if enabled. Alternatively edit the corresponding image lines in the NAS editor.
 
-On a fresh installation, set `services.web.environment.MERIDIAN_ADMIN_PASSWORD` to your chosen password (at least eight characters). Leaving it empty generates a first-run password in the protected bootstrap file. Existing accounts and passwords are preserved. Use HTTPS through your reverse proxy for browser access.
+On a fresh installation, set `services.web.environment.MERIDIAN_ADMIN_PASSWORD` to your chosen password (at least eight characters). Replace the literal example password directly in the Compose editor; no password variable or .env file is required. Existing accounts and passwords are preserved. Use HTTPS through your reverse proxy for browser access.
 
 The sandbox is optional and adds one container. Enable it with `docker compose --profile sandbox up -d`, or remove its `profiles: [sandbox]` setting in the NAS editor. Use it only when jobs target `meridian-sandbox`; other approved existing containers require no sandbox. An existing sandbox is preserved, so stop it if no longer needed. The updater updates a running sandbox, and the host bridge when present.
 
@@ -40,7 +40,7 @@ Die gesamte gewählte Datei im vorhandenen NAS-Compose-Editor ersetzen und neu b
 
 Beide Dateien verwenden standardmäßig stabile Main-Images. Für Beta `MERIDIAN_IMAGE=ghcr.io/exploid1/meridian:candidate`, `MERIDIAN_UPDATER_IMAGE=ghcr.io/exploid1/meridian:updater-candidate` und bei Root `MERIDIAN_HOST_IMAGE=ghcr.io/exploid1/meridian:host-candidate` setzen. Bei aktivierter Sandbox zusätzlich `MERIDIAN_SANDBOX_IMAGE=ghcr.io/exploid1/meridian-sandbox:candidate`. Alternativ die jeweiligen Image-Zeilen im NAS-Editor ändern.
 
-Bei einer Neuinstallation unter `services.web.environment.MERIDIAN_ADMIN_PASSWORD` ein eigenes Passwort mit mindestens acht Zeichen eintragen. Leer erzeugt ein Startpasswort in der geschützten Bootstrap-Datei. Bestehende Konten und Passwörter bleiben erhalten. Den Browserzugriff über den Reverse Proxy mit HTTPS betreiben.
+Bei einer Neuinstallation unter `services.web.environment.MERIDIAN_ADMIN_PASSWORD` ein eigenes Passwort mit mindestens acht Zeichen eintragen. Das direkt eingetragene Beispielpasswort im Compose-Editor ersetzen; dafür ist keine Passwortvariable oder .env-Datei nötig. Bestehende Konten und Passwörter bleiben erhalten. Den Browserzugriff über den Reverse Proxy mit HTTPS betreiben.
 
 Die optionale Sandbox ergänzt einen Container: mit `docker compose --profile sandbox up -d` aktivieren oder im NAS-Editor ihre Einstellung `profiles: [sandbox]` entfernen. Sie wird nur für Jobs auf `meridian-sandbox` benötigt. Andere freigegebene Container benötigen sie nicht. Eine vorhandene Sandbox bleibt erhalten und kann bei Nichtgebrauch gestoppt werden. Updates berücksichtigen eine laufende Sandbox und die vorhandene Host-Bridge.
 

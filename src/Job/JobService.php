@@ -52,7 +52,7 @@ final class JobService
      *
      * @throws AccessDenied|\Meridian\Http\ValidationFailed
      */
-    public function create(int $userId, array $grants, #[\SensitiveParameter] array $input): ?JobRecord
+    public function create(int $userId, array $grants, #[\SensitiveParameter] array $input, ?int $automationId = null): ?JobRecord
     {
         // Das Recht richtet sich nach dem Typ der Anfrage; alles außer „shell“ prüft das HTTP-Recht, der Validator
         // lehnt unbekannte Typen danach mit 422 ab.
@@ -63,16 +63,22 @@ final class JobService
             throw new AccessDenied($permission);
         }
 
-        $id = $this->db->immediate(function () use ($userId, $grants, $input, $editScope, $permission): int {
+        $work = function () use ($userId, $grants, $input, $editScope, $permission, $automationId): int {
             $draft = $this->validator->validate($input, $editScope, null);
             // Doppelt hält besser: das Recht in der Zielkategorie, auch wenn der Validator den Bereich schon kennt.
             $this->access->require($grants, $permission, $draft->categoryName);
             $id = $this->jobs->insert($draft, $userId);
+            if ($automationId !== null) {
+                if ($this->db->fetchOne('SELECT id FROM automations WHERE id=:id AND owner_id=:owner',['id'=>$automationId,'owner'=>$userId]) === null) { throw new \LogicException('Automation owner mismatch.'); }
+                $this->db->execute('UPDATE jobs SET automation_only=1,next_run_at=NULL WHERE id=:id',['id'=>$id]);
+                $this->db->execute('INSERT INTO automation_action_jobs(job_id,automation_id) VALUES(:job,:rule)',['job'=>$id,'rule'=>$automationId]);
+            }
             $this->audit->record($userId, 'job.created', 'job:' . $id . ' ' . $draft->name);
 
             return $id;
-        });
-        $this->reschedule($id);
+        };
+        $id = $this->db->inTransaction() ? $work() : $this->db->immediate($work);
+        if ($automationId === null) { $this->reschedule($id); }
 
         return $this->jobs->findVisible($id, $editScope);
     }

@@ -159,7 +159,7 @@ export function Jobs({ profile }: { profile: Profile }) {
               <tbody>
                 {shown.map((job) => {
                   const state = stateOf(job);
-                  const preset = presetName(job.cron);
+                  const preset = job.automation_only ? t('Nur durch Automation') : presetName(job.cron);
                   return (
                     <tr key={job.id}>
                       <td data-label="Job">
@@ -178,7 +178,7 @@ export function Jobs({ profile }: { profile: Profile }) {
                       <td data-label="Zeitplan">
                         <div className="cell">
                           {preset !== null ? <span>{preset}</span> : null}
-                          <code className="cron">{job.cron}</code>
+                          <code className="cron">{job.automation_only ? t('Kein eigener Zeitplan') : job.cron}</code>
                         </div>
                       </td>
                       <td data-label="Letzter Lauf">

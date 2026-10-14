@@ -776,7 +776,7 @@ export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile;
         </div>
         <label className="check">
           <input type="checkbox" checked={form.isEnabled} onChange={(e) => set('isEnabled', e.target.checked)} />
-          <span>{t('Job ist aktiv und läuft nach Zeitplan')}</span>
+          <span>{t(job?.automation_only?'Aktions-Job ist aktiv':'Job ist aktiv und läuft nach Zeitplan')}</span>
         </label>
       </section>
 
@@ -895,7 +895,7 @@ export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile;
         </section>
       )}
 
-      <section className="card" aria-label={t('Zeitplan')}>
+      {job?.automation_only ? <section className="card"><h2>{t('Nur durch Automation')}</h2><p>{t('Dieser Aktions-Job hat keinen eigenen Zeitplan. Den Auslöser stellst du in der Automation ein.')}</p></section> : (      <section className="card" aria-label={t('Zeitplan')}>
         <h2>{t('Zeitplan')}</h2>
         <ScheduleBuilder cron={form.cron} onChange={(value) => set('cron', value)} minSeconds={limits?.min_interval_seconds ?? 10} />
         <div className="grid-2">
@@ -928,7 +928,7 @@ export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile;
           <input type="checkbox" checked={form.catchUp} onChange={(e) => set('catchUp', e.target.checked)} />
           <span>{t('Verpassten Lauf nachholen (einmal), wenn der Scheduler zur Zeit nicht lief')}</span>
         </label>
-      </section>
+      </section>)}
       </div>
 
       <div role="tabpanel" id="jobpanel-advanced" aria-labelledby="jobtab-advanced" className="etabpanel" hidden={tab !== 'advanced'}>

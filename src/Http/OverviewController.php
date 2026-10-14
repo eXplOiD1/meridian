@@ -121,7 +121,7 @@ final class OverviewController
                 'type' => $job->type->value,
                 'enabled' => $job->isEnabled,
                 'buckets' => $buckets,
-                'planned' => $job->isEnabled ? self::planned($job, $now, $from, $to, $nowBucket, $size) : [],
+                'planned' => $job->isEnabled && !$job->automationOnly ? self::planned($job, $now, $from, $to, $nowBucket, $size) : [],
                 'next_run_at' => $job->nextRunAt,
             ];
             if (count($rows) >= self::MAX_JOBS) {

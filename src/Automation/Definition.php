@@ -63,8 +63,18 @@ final readonly class Definition
         foreach ($rawActions as $entry) {
             if (!is_array($entry) || array_diff(array_keys($entry), ['kind','id','ids','text']) !== []) { $bad('actions', 'Ungültige Aktion.'); }
             $kind = $entry['kind'] ?? null; $id = $entry['id'] ?? 0; $ids = $entry['ids'] ?? []; $text = $entry['text'] ?? '';
-            if (!is_string($kind) || !in_array($kind, ['job','notify'], true) || !is_int($id) || !is_array($ids) || !array_is_list($ids) || count($ids) > 10 || !is_string($text) || mb_strlen($text) > 1000 || preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $text)) { $bad('actions', 'Job starten oder Benachrichtigung mit höchstens 1000 Zeichen auswählen.'); }
-            if ($kind === 'job') { self::entity($db, $grants, 'job', $id, true); }
+            if (!is_string($kind) || !in_array($kind, ['job','notify','shell','docker','webhook'], true) || !is_int($id) || !is_array($ids) || !array_is_list($ids) || count($ids) > 10 || !is_string($text) || mb_strlen($text) > 1000 || preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $text)) { $bad('actions', 'Job starten oder Benachrichtigung mit höchstens 1000 Zeichen auswählen.'); }
+            if ($kind !== 'notify') { self::entity($db, $grants, 'job', $id, true); }
+
+            if (in_array($kind,['shell','docker','webhook'],true)) {
+                $target=$db->fetchOne('SELECT type,config_json FROM jobs WHERE id=:id',['id'=>$id]);
+                $expected=$kind === 'webhook' ? 'http' : 'shell';
+                if ($target === null || $target['type'] !== $expected) { $bad('actions','Aktion passt nicht zum Job-Typ.'); }
+                if ($expected === 'shell') {
+                    $config=\Meridian\Runner\Shell\ShellJobConfig::fromJson(Row::string($target,'config_json'));
+                    if ($config->target->kind->value !== ($kind === 'docker' ? 'docker' : 'host')) { $bad('actions','Ausführungsort passt nicht zur Aktion.'); }
+                }
+            }
             $channelIds = [];
             /** @var mixed $channel */
             foreach ($ids as $channel) { if (!is_int($channel) || $channel < 1 || $db->fetchOne('SELECT id FROM notification_channels WHERE id=:id AND is_enabled=1', ['id'=>$channel]) === null) { $bad('actions', 'Aktiven Benachrichtigungskanal auswählen.'); } $channelIds[] = $channel; }

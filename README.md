@@ -113,7 +113,7 @@ docker compose up -d
 
 ```yaml
 MERIDIAN_ADMIN_USER: "admin"
-MERIDIAN_ADMIN_PASSWORD: "your-chosen-password"
+MERIDIAN_ADMIN_PASSWORD: "BEISPIEL-passwort-bitte-aendern"
 MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"
 ```
 
@@ -438,7 +438,7 @@ Für eine Neuinstallation unter `services.web.environment` beispielsweise diese 
 
 ```yaml
 MERIDIAN_ADMIN_USER: "admin"
-MERIDIAN_ADMIN_PASSWORD: "your-chosen-password"
+MERIDIAN_ADMIN_PASSWORD: "BEISPIEL-passwort-bitte-aendern"
 MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"
 ```
 

@@ -62,7 +62,7 @@ final class Planner
     {
         $now = $this->clock->now();
         $due = $this->db->fetchAll(
-            'SELECT id FROM jobs WHERE is_enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= :now ORDER BY next_run_at, id LIMIT 200',
+            'SELECT id FROM jobs WHERE is_enabled = 1 AND automation_only = 0 AND next_run_at IS NOT NULL AND next_run_at <= :now ORDER BY next_run_at, id LIMIT 200',
             ['now' => Timestamp::format($now)],
         );
 
@@ -93,7 +93,7 @@ final class Planner
      */
     public function hasIntervalJobs(): bool
     {
-        return $this->db->fetchOne("SELECT 1 AS found FROM jobs WHERE is_enabled = 1 AND cron LIKE '@every %' LIMIT 1") !== null;
+        return $this->db->fetchOne("SELECT 1 AS found FROM jobs WHERE is_enabled = 1 AND automation_only = 0 AND cron LIKE '@every %' LIMIT 1") !== null;
     }
 
     /**
@@ -104,12 +104,12 @@ final class Planner
     public function reschedule(int $jobId): ?\DateTimeImmutable
     {
         return $this->db->immediate(function () use ($jobId): ?\DateTimeImmutable {
-            $job = $this->db->fetchOne('SELECT cron, timezone, is_enabled, expires_at FROM jobs WHERE id = :id', ['id' => $jobId]);
+            $job = $this->db->fetchOne('SELECT cron, timezone, is_enabled, expires_at, automation_only FROM jobs WHERE id = :id', ['id' => $jobId]);
             if ($job === null) {
                 throw new \InvalidArgumentException('Job nicht gefunden.');
             }
             $next = null;
-            if ($job['is_enabled'] === 1 && is_string($job['cron']) && is_string($job['timezone'])) {
+            if ($job['is_enabled'] === 1 && $job['automation_only'] === 0 && is_string($job['cron']) && is_string($job['timezone'])) {
                 try {
                     $next = CronSchedule::forJob($job['cron'], $job['timezone'])->nextAfter($this->clock->now());
                 } catch (\InvalidArgumentException | \RuntimeException) {
@@ -141,11 +141,11 @@ final class Planner
 
         $now = $this->clock->now();
         $job = $this->db->fetchOne(
-            'SELECT id, cron, timezone, overlap_policy, catch_up, is_enabled, expires_at, next_run_at FROM jobs WHERE id = :id',
+            'SELECT id, cron, timezone, overlap_policy, catch_up, is_enabled, expires_at, next_run_at, automation_only FROM jobs WHERE id = :id',
             ['id' => $jobId],
         );
         // Zwischen Auswahl und Transaktion deaktiviert, gelöscht oder schon geplant: nichts tun.
-        if ($job === null || $job['is_enabled'] !== 1 || !is_string($job['next_run_at'])) {
+        if ($job === null || $job['is_enabled'] !== 1 || $job['automation_only'] !== 0 || !is_string($job['next_run_at'])) {
             return null;
         }
 

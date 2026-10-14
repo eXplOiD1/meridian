@@ -8,8 +8,10 @@ Open **Automations → Create automation**. Rules belong to their creator and ru
 
 1. Choose a trigger: job success, failure, timeout, cancellation or recovery; monitor outage or recovery; or a five-field cron schedule with a time zone.
 2. Optionally add conditions: job status, consecutive failures, monitor state, a time window or weekdays. Combine all conditions (AND) or any condition (OR). No conditions means the trigger is sufficient.
-3. Choose one to five actions: start an existing job or send a custom message through enabled notification channels. Browser messages go to the rule owner's subscribed devices.
+3. Choose one to five actions: start an existing job, send a custom message, configure a host shell script, run a command in an approved Docker container, or call a webhook/HTTP endpoint. Browser messages go to the rule owner's subscribed devices.
 4. Choose a minimum interval between executions (default 60 seconds) and confirm your current password to enable the rule or change an enabled rule.
+
+Direct actions create encrypted action jobs with no separate schedule, in the same transaction as the rule. HTTP actions require HTTP-job editing permission; host/container scripts require shell-job editing permission and an approved execution target. They use the normal workers, URL/network protections and job limits. Saved scripts, URLs, headers and bodies are not returned in the automation list. To change them, open the linked action job or select **Replace configuration**. Replacing/removing an action disables its previous job and preserves its run history. Deleting the rule disables its action jobs. Choose time zones from the dropdown.
 
 Example: when the website monitor reports an outage, and it is a weekday between 08:00 and 18:00, start an approved recovery job and send a notification. Example schedule: `0 8 * * 1-5` runs at 08:00 on weekdays in the chosen time zone. Overnight time windows are supported; identical start/end times mean the whole day.
 
@@ -27,8 +29,10 @@ Automations use existing HTTP workers, job queues and notification delivery. No 
 
 1. Auslöser wählen: Job erfolgreich, fehlgeschlagen, Zeitlimit überschritten, abgebrochen oder wieder erfolgreich; Überwachung ausgefallen oder wieder erreichbar; alternativ einen Zeitplan mit fünf Cron-Feldern und Zeitzone.
 2. Optional Bedingungen ergänzen: Job-Zustand, Fehler in Folge, Überwachungszustand, Uhrzeitfenster oder Wochentage. Alle Bedingungen (UND) oder mindestens eine (ODER) verlangen. Ohne Bedingungen genügt der Auslöser.
-3. Eine bis fünf Aktionen wählen: vorhandenen Job starten oder eine eigene Nachricht über aktive Kanäle senden. Browser-Nachrichten erreichen die verbundenen Geräte des Regel-Erstellers.
+3. Eine bis fünf Aktionen wählen: vorhandenen Job starten, eine eigene Nachricht senden, ein Host-Skript einrichten, einen Befehl in einem freigegebenen Docker-Container ausführen oder einen Webhook/HTTP-Endpunkt aufrufen. Browser-Nachrichten erreichen die verbundenen Geräte des Regel-Erstellers.
 4. Mindestabstand wählen (Standard 60 Sekunden). Zum Aktivieren oder Ändern einer aktiven Regel das eigene aktuelle Passwort bestätigen.
+
+Direkte Aktionen erstellen verschlüsselte Aktions-Jobs ohne eigenen Zeitplan, gemeinsam mit der Regel in einer Transaktion. HTTP-Aktionen benötigen das Recht zum Bearbeiten von HTTP-Jobs; Host-/Container-Skripte das Recht für Shell-Jobs und einen freigegebenen Ausführungsort. Es gelten die normalen Worker, URL-/Netzwerk-Prüfungen und Job-Grenzen. Gespeicherte Skripte, URLs, Header und Body werden in der Automationsliste nicht zurückgegeben. Zum Ändern den verlinkten Aktions-Job öffnen oder **Konfiguration ersetzen** wählen. Ersetzen/Entfernen deaktiviert den bisherigen Job und erhält seinen Verlauf. Löschen der Regel deaktiviert ihre Aktions-Jobs. Zeitzonen werden per Dropdown gewählt.
 
 Beispiel: Meldet die Web-Überwachung einen Ausfall und ist es werktags zwischen 08:00 und 18:00, einen freigegebenen Wiederherstellungs-Job starten und eine Nachricht senden. `0 8 * * 1-5` läuft werktags um 08:00 in der gewählten Zeitzone. Uhrzeitfenster über Mitternacht funktionieren; gleicher Beginn und Ende gelten für den ganzen Tag.
 

@@ -40,6 +40,7 @@ services:
       retries: 3
   updater:
     image: ${MERIDIAN_UPDATER_IMAGE:-ghcr.io/exploid1/meridian:updater-latest}
+    pull_policy: always
     container_name: meridian-updater
     restart: unless-stopped
     environment:
@@ -90,7 +91,8 @@ services:
       MERIDIAN_LIVE_STREAMS: '4'
       MERIDIAN_AUTO_SETUP: '1'
       MERIDIAN_ADMIN_USER: admin
-      MERIDIAN_ADMIN_PASSWORD: ${MERIDIAN_ADMIN_PASSWORD:-}
+      # Replace before first deployment / Vor der Ersteinrichtung ersetzen.
+      MERIDIAN_ADMIN_PASSWORD: "BEISPIEL-passwort-bitte-aendern"
       MERIDIAN_ENV: ${MERIDIAN_ENV:-prod}
       MERIDIAN_TRUSTED_PROXIES: 172.19.0.0/16
       MERIDIAN_HTTP_WORKERS: ${MERIDIAN_HTTP_WORKERS:-2}

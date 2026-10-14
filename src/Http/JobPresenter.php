@@ -191,6 +191,7 @@ final class JobPresenter
             'timezone' => $job->timezone,
             'next_run_at' => $job->nextRunAt,
             'is_enabled' => $job->isEnabled,
+            'automation_only' => $job->automationOnly,
             'overlap_policy' => $job->overlapPolicy->value,
             'retry_count' => $job->retryCount,
             'retry_delay_seconds' => $job->retryDelaySeconds,
