@@ -74,6 +74,22 @@
 }
 
 * { box-sizing: border-box; }
+/* Scrollbars follow the active theme in every scrollable area. */
+* { scrollbar-width: thin; scrollbar-color: var(--dim) var(--panel); }
+@supports selector(::-webkit-scrollbar) {
+  * { scrollbar-width: auto; scrollbar-color: auto; }
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--panel); }
+  ::-webkit-scrollbar-thumb { background: var(--dim); border: 3px solid var(--panel); border-radius: var(--radius-pill); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+  ::-webkit-scrollbar-thumb:active { background: var(--accent-strong); }
+}
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; scrollbar-width: auto; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: Canvas; }
+  ::-webkit-scrollbar-thumb { background: CanvasText; border-color: Canvas; }
+  ::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background: Highlight; }
+}
 html, body { margin: 0; height: 100%; }
 body {
   background: radial-gradient(ellipse at 80% 0%, var(--bg-glow) 0%, transparent 50%), var(--bg);
@@ -657,6 +673,7 @@ body.modal-open { overflow: hidden; }
 .editor-modal::backdrop { background: rgb(5 5 15 / 72%); }
 .editor-modal__header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .editor-modal__header h2 { margin: 0; overflow-wrap: anywhere; }
+.editor-modal__close { width: 44px; height: 44px; min-width: 44px; min-height: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-size: 20px; line-height: 1; }
 .editor-modal__body { padding: 24px; min-width: 0; }
 .editor-modal__body > .card { margin: 0; padding: 0; box-shadow: none; border: 0; }
 .editor-modal__body > .card + .card { margin-top: 24px; }
