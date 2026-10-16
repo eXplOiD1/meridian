@@ -669,19 +669,21 @@ code, pre, kbd, samp, .mono, .cron, .input--mono, .input--mono-plain, .input--ar
 
 /* Creation and editing stay separate from their overview. */
 body.modal-open { overflow: hidden; }
-.editor-modal { color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow-pop); padding: 0; width: min(1080px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; }
+.editor-modal { color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow-pop); padding: 0; width: min(1080px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); overflow: hidden; }
+.editor-modal[open] { display: flex; flex-direction: column; }
 .editor-modal::backdrop { background: rgb(5 5 15 / 72%); }
-.editor-modal__header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.editor-modal__header { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .editor-modal__header h2 { margin: 0; overflow-wrap: anywhere; }
 .editor-modal__close { width: 44px; height: 44px; min-width: 44px; min-height: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-size: 20px; line-height: 1; }
-.editor-modal__body { padding: 24px; min-width: 0; }
+.editor-modal__body { padding: 24px; margin-right: 6px; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.editor-modal__body::-webkit-scrollbar-track { border-radius: var(--radius-pill); }
 .editor-modal__body > .card { margin: 0; padding: 0; box-shadow: none; border: 0; }
 .editor-modal__body > .card + .card { margin-top: 24px; }
 .editor-modal__body .targets__form { margin-top: 0; }
-.editor-modal__footer { padding: 0 24px 24px; }
+.editor-modal__footer { flex-shrink: 0; padding: 16px 24px 24px; border-top: 1px solid var(--line); }
 @media (max-width: 600px) {
   .editor-modal { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 16px; }
   .editor-modal__header { padding: 14px 16px; }
   .editor-modal__body { padding: 16px; }
-  .editor-modal__footer { padding: 0 16px 16px; }
+  .editor-modal__footer { padding: 12px 16px 16px; }
 }
