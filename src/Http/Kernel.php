@@ -38,7 +38,6 @@ final class Kernel
         $this->routes = new RouteCollection();
         $this->get('health', '/api/health', fn (#[\SensitiveParameter] Request $r): Response => new JsonResponse([
             'status' => 'ok',
-            'version' => $this->config->version,
         ]));
     }
 
