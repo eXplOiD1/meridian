@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary */
 import { useEffect, useState } from 'react';
 import { AutomationActionFields, newDirectAction, type DirectActionDraft } from '../components/AutomationActionFields';
+import { Modal } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
@@ -31,6 +32,7 @@ function timezones(current: string): string[] {
 export function Automations({ profile }: { profile: Profile }) {
   const [data,setData]=useState<Options | null>(null);
   const [form,setForm]=useState<Definition>(empty);
+  const [open,setOpen]=useState(false);
   const [editing,setEditing]=useState<number | null>(null);
   const [password,setPassword]=useState('');
   const [busy,setBusy]=useState(false);
@@ -41,8 +43,8 @@ export function Automations({ profile }: { profile: Profile }) {
   async function load(){try{const loaded=await request<Options>('GET','/api/automations');setData(loaded);if(loaded.timezones)setForm(old=>loaded.timezones?.includes(old.timezone)?old:{...old,timezone:'UTC'});}catch(caught){setError(errorMessage(caught));}}
   useEffect(()=>{if(!allowed)return;void load();const timer=setInterval(()=>void load(),15000);return()=>clearInterval(timer);},[allowed]);
   const jobs=data?.jobs??[];const monitors=data?.monitors??[];const channels=data?.channels??[];
-  function reset(){setForm(empty());setEditing(null);setPassword('');}
-  function edit(rule: Rule){setEditing(rule.id);setPassword('');setNotice(null);setError(null);setForm({name:rule.name,enabled:rule.enabled,event:rule.event,source_id:rule.source_id,cron:rule.cron,timezone:rule.timezone,logic:rule.logic,conditions:rule.conditions,actions:rule.actions,cooldown_seconds:rule.cooldown_seconds});}
+  function reset(){setOpen(false);setForm(empty());setEditing(null);setPassword('');setError(null);}
+  function edit(rule: Rule){setOpen(true);setEditing(rule.id);setPassword('');setNotice(null);setError(null);setForm({name:rule.name,enabled:rule.enabled,event:rule.event,source_id:rule.source_id,cron:rule.cron,timezone:rule.timezone,logic:rule.logic,conditions:rule.conditions,actions:rule.actions,cooldown_seconds:rule.cooldown_seconds});}
   async function save(event: React.FormEvent){
     event.preventDefault();setBusy(true);setError(null);setNotice(null);
     try{await request(editing===null?'POST':'PUT','/api/automations'+(editing===null?'':'/'+editing),{csrf:profile.csrf_token,body:{...form,...(form.enabled?{current_password:password}:{})}});reset();await load();setNotice(t('Automation gespeichert.'));}
@@ -63,8 +65,8 @@ export function Automations({ profile }: { profile: Profile }) {
   function select(options:Option[],value:number,onChange:(id:number)=>void,label:string){return <label className="field"><span className="field__label">{t(label)}</span><select className="input" value={value} onChange={event=>onChange(Number(event.target.value))} required><option value={0}>{t('Bitte wählen …')}</option>{options.map(option=><option value={option.id} key={option.id}>{option.name}</option>)}</select></label>;}
   if(!allowed)return <Alert tone="err">{t('Für Automationen fehlt dir das Recht.')}</Alert>;
   return <>
-    {error&&<Alert tone="err">{error}</Alert>}{notice&&<Alert tone="ok">{notice}</Alert>}
-    <section className="card"><h2>{t('Wenn … dann …')}</h2><p className="card__lead">{t('Automationen reagieren auf Jobs, Überwachungen oder einen Zeitplan. Sind die Bedingungen erfüllt, werden Jobs gestartet oder Nachrichten gesendet.')}</p>
+    {!open&&error&&<Alert tone="err">{error}</Alert>}{notice&&<Alert tone="ok">{notice}</Alert>}
+    <section className="card"><h2>{t('Wenn … dann …')}</h2><button type="button" className="btn btn--solid" onClick={()=>{reset();setNotice(null);setOpen(true);}}>{t('Automation anlegen')}</button><p className="card__lead">{t('Automationen reagieren auf Jobs, Überwachungen oder einen Zeitplan. Sind die Bedingungen erfüllt, werden Jobs gestartet oder Nachrichten gesendet.')}</p>
       {!data&&<p>{t('Lädt …')}</p>}{data?.automations.length===0&&<p>{t('Noch keine Automationen.')}</p>}
       {data?.automations.map(rule=><article className="automation-rule" key={rule.id}>
         <div className="row"><strong>{rule.name}</strong><span className={'badge'+(!rule.enabled?' badge--muted':'')}>{t(rule.enabled?'Aktiv':'Deaktiviert')}</span></div>
@@ -74,7 +76,8 @@ export function Automations({ profile }: { profile: Profile }) {
         {expanded===rule.id&&<div className="table-wrap"><table className="table"><thead><tr><th>{t('Zeit')}</th><th>{t('Ergebnis')}</th><th>{t('Aktionen')}</th></tr></thead><tbody>{rule.executions.map(execution=><tr key={execution.id}><td>{formatTime(execution.at)}</td><td>{t(execution.status==='executed'?'Aktionen eingereiht.':execution.status==='skipped'?'Übersprungen':'Fehlgeschlagen')}<div className="hint">{t(execution.detail)}</div></td><td>{execution.actions.map((entry,index)=>entry.run_id?<div key={index}><a href={hrefOf('jobs/'+entry.id)}>{t('Job-Lauf')} #{entry.run_id}</a></div>:<div key={index}>{t('Benachrichtigung')} #{entry.delivery_id}</div>)}</td></tr>)}</tbody></table>{rule.executions.length===0&&<p>{t('Noch keine Ausführungen.')}</p>}</div>}
       </article>)}
     </section>
-    <section className="card"><h2>{t(editing===null?'Automation anlegen':'Automation bearbeiten')}</h2><form className="form" onSubmit={event=>void save(event)}>
+    <Modal open={open} title={t(editing===null?'Automation anlegen':'Automation bearbeiten')} onClose={reset} busy={busy}>
+      {error&&<Alert tone="err">{error}</Alert>}<form className="form" onSubmit={event=>void save(event)}>
       <div className="grid-2 automation-identity"><label className="field"><span className="field__label">{t('Name')}</span><input className="input" value={form.name} maxLength={100} required onChange={event=>setForm({...form,name:event.target.value})}/></label><label className="check"><input type="checkbox" checked={form.enabled} onChange={event=>setForm({...form,enabled:event.target.checked})}/>{t('Automation ist aktiv')}</label></div>
       <h3>{t('Wenn')}</h3><div className="grid-2"><label className="field"><span className="field__label">{t('Auslöser')}</span><select className="input" value={form.event} onChange={event=>setForm({...form,event:event.target.value,source_id:0})}>{Object.entries(EVENTS).map(([key,label])=><option value={key} key={key}>{t(label)}</option>)}</select></label>{form.event!=='schedule'&&select(form.event.startsWith('job.')?jobs:monitors,form.source_id,id=>setForm({...form,source_id:id}),form.event.startsWith('job.')?'Auslösender Job':'Auslösende Überwachung')}</div>
       {form.event==='schedule'&&<div className="grid-2"><label className="field"><span className="field__label">{t('Zeitplan')}</span><input className="input input--mono" value={form.cron} required onChange={event=>setForm({...form,cron:event.target.value})}/><span className="hint">{t('Minute Stunde Tag Monat Wochentag, z. B. 0 8 * * 1-5 für werktags um 08:00.')}</span></label><label className="field"><span className="field__label">{t('Zeitzone')}</span><select className="input" value={form.timezone} required onChange={event=>setForm({...form,timezone:event.target.value})}>{(data?.timezones??timezones(form.timezone)).map(zone=><option key={zone} value={zone}>{zone}</option>)}</select></label></div>}
@@ -99,6 +102,6 @@ export function Automations({ profile }: { profile: Profile }) {
       {form.enabled&&<label className="field"><span className="field__label">{t('Aktuelles Passwort')}</span><input className="input" type="password" value={password} required autoComplete="current-password" onChange={event=>setPassword(event.target.value)}/><span className="hint">{t('Aktive Automationen werden mit deinem Passwort bestätigt. Bei jedem Auslösen werden deine Rechte erneut geprüft.')}</span></label>}
       <p className="hint">{t('Geplante Jobs und bereits eingereihte Aktionen laufen ohne weitere Passwortabfrage. Bedingungen prüfen führt keine Aktionen aus.')}</p>
       <div className="row"><button className="btn btn--solid" type="submit" disabled={busy}>{t(busy?'Speichert …':'Speichern')}</button>{editing!==null&&<button className="btn btn--ghost" type="button" onClick={reset}>{t('Abbrechen')}</button>}</div>
-    </form></section>
+    </form></Modal>
   </>;
 }

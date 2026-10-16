@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { Modal } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { FormField } from '../components/FormField';
@@ -353,6 +354,7 @@ export function Monitors({ profile }: { profile: Profile }) {
   const [draft, setDraft] = useState<Draft>(emptyDraft(''));
   const [editing, setEditing] = useState<{ id: number; draft: Draft; revealed?: boolean } | null>(null);
   const [issued, setIssued] = useState<Issued | null>(null);
+  const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ source: 'form' | 'row'; label: string; ok: boolean; latency: number | null; note: string | null } | null>(null);
@@ -407,6 +409,8 @@ export function Monitors({ profile }: { profile: Profile }) {
   /** Bearbeiten öffnen; bei aktiver Prüfung das gespeicherte Ziel laden, wenn der Admin „Gespeicherte Skripte und Links anzeigen“ eingeschaltet hat (nur im Zustand dieser Seite, nie im Browser-Speicher). */
   function startEdit(m: Monitor): void {
     setErrors({});
+    setFormError(null);
+    setTestResult(null);
     setEditing({ id: m.id, draft: draftOf(m) });
     if (m.kind === 'heartbeat') {
       return;
@@ -467,10 +471,11 @@ export function Monitors({ profile }: { profile: Profile }) {
     <>
       <section className="card" aria-label={t('Überwachungen')}>
         <h2>{t('Überwachung')}</h2>
+        {mayCreate && <button type="button" className="btn btn--solid" onClick={() => { setErrors({}); setFormError(null); setTestResult(null); setCreating(true); }}>{t('Überwachung anlegen')}</button>}
         <p className="card__lead">
           {t('Meridian prüft eine Web-Adresse, einen Netzwerk-Port oder einen Host per Ping, oder wartet auf das Lebenszeichen eines Skripts, einer Sicherung oder eines Routers. Bleibt die Rückmeldung aus, meldet Meridian den Ausfall und danach die Rückkehr.')}</p>
         {loadError !== null && <Alert tone="err">{loadError}</Alert>}
-        {formError !== null && <Alert tone="err">{formError}</Alert>}
+        {!creating && editing === null && formError !== null && <Alert tone="err">{formError}</Alert>}
         {issued !== null && <IssuedToken issued={issued} onClose={() => setIssued(null)} />}
         {testResult !== null && testResult.source === 'row' && <TestResultAlert result={testResult} />}
         {monitors !== null && monitors.length === 0 && <p className="card__lead">{t('Noch keine Überwachung angelegt.')}</p>}
@@ -557,8 +562,8 @@ export function Monitors({ profile }: { profile: Profile }) {
           </div>
         )}
         {editing !== null && (
-          <div className="replace">
-            <h3>{t('Überwachung bearbeiten')}</h3>
+          <Modal open title={t('Überwachung bearbeiten')} busy={busy || testing !== null} onClose={() => { setEditing(null); setErrors({}); setFormError(null); }}>
+            {formError !== null && <Alert tone="err">{formError}</Alert>}
             {editing.revealed === true && <Alert tone="warn">{t('Das gespeicherte Ziel wird angezeigt (Einstellung des Admins). Der Abruf wurde protokolliert. Beim Speichern wird es so übernommen, wie es hier steht.')}</Alert>}
             <MonitorForm
               draft={editing.draft}
@@ -577,12 +582,12 @@ export function Monitors({ profile }: { profile: Profile }) {
                 setErrors({});
               }}
             />
-          </div>
+          </Modal>
         )}
       </section>
-      {mayCreate && editing === null && (
-        <section className="card" aria-label={t('Überwachung anlegen')}>
-          <h2>{t('Überwachung anlegen')}</h2>
+      {mayCreate && editing === null && creating && (
+        <Modal open title={t('Überwachung anlegen')} busy={busy || testing !== null} onClose={() => { setCreating(false); setErrors({}); setFormError(null); setDraft(emptyDraft(draft.categoryId)); }}>
+          {formError !== null && <Alert tone="err">{formError}</Alert>}
           <MonitorForm
             draft={draft}
             setDraft={setDraft}
@@ -594,9 +599,9 @@ export function Monitors({ profile }: { profile: Profile }) {
             testing={testing === 'form'}
             testResult={testResult !== null && testResult.source === 'form' ? testResult : null}
             onTest={() => void runTest('form', draft.name === '' ? t('Testprüfung') : draft.name, '/api/monitors/test', { kind: draft.kind, category_id: draft.categoryId === '' ? null : Number.parseInt(draft.categoryId, 10), ...testBody(draft) })}
-            onSubmit={() => void submit('POST', '/api/monitors', draft).then((ok) => ok && setDraft(emptyDraft(draft.categoryId)))}
+            onSubmit={() => void submit('POST', '/api/monitors', draft).then((ok) => { if (ok) { setDraft(emptyDraft(draft.categoryId)); setCreating(false); } })}
           />
-        </section>
+        </Modal>
       )}
     </>
   );

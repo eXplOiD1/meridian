@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { Modal } from './Modal';
 import { Alert } from './Alert';
 import { BrowserPushDevices } from './BrowserPushDevices';
 import { Confirm } from './Confirm';
@@ -167,6 +168,7 @@ function summary(channel: NotificationChannel): string {
  */
 export function NotificationChannels({ csrf }: { csrf: string }) {
   const [channels, setChannels] = useState<NotificationChannel[] | null>(null);
+  const [open, setOpen] = useState(false);
   const [max, setMax] = useState(20);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [form, setForm] = useState<ChannelForm>(EMPTY);
@@ -196,6 +198,7 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
   }
 
   function reset(): void {
+    setOpen(false);
     setForm(EMPTY);
     setEditing(null);
     setErrors({});
@@ -264,7 +267,7 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
       </Alert>
       {loadError !== null && <Alert tone="err">{loadError}</Alert>}
       {notice !== null && <Alert tone="ok">{notice}</Alert>}
-      {formError !== null && <Alert tone="err">{formError}</Alert>}
+      {!open && formError !== null && <Alert tone="err">{formError}</Alert>}
       {channels !== null && channels.length === 0 && <p className="card__lead">{t('Noch kein Kanal angelegt. Ohne Kanal verschickt Meridian keine Benachrichtigungen.')}</p>}
       {channels !== null && channels.length > 0 && (
         <div className="table-wrap">
@@ -305,6 +308,7 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
                         className="btn btn--ghost btn--small"
                         disabled={busy}
                         onClick={() => {
+                          setOpen(true);
                           setEditing(channel);
                           setForm(fromChannel(channel));
                           setErrors({});
@@ -324,8 +328,11 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
         </div>
       )}
 
+      <button type="button" className="btn btn--solid" disabled={(channels?.length ?? 0) >= max} onClick={() => { reset(); setNotice(null); setOpen(true); }}>{t('Kanal hinzufügen')}</button>
+      <Modal open={open} title={editing === null ? t('Kanal hinzufügen') : t('Kanal bearbeiten:') + ' ' + editing.name} busy={busy} onClose={reset}>
+      {formError !== null && <Alert tone="err">{formError}</Alert>}
+      {notice !== null && <Alert tone="ok">{notice}</Alert>}
       <form className="form targets__form" onSubmit={(event) => void submit(event)} noValidate>
-        <h3>{editing === null ? t('Kanal hinzufügen') : t('Kanal bearbeiten:') + ' ' + editing.name}</h3>
         {(channels?.length ?? 0) >= max && editing === null && <Alert tone="warn">{t('Es sind schon {n} Kanäle angelegt. Nicht benötigte zuerst löschen.', { n: max })}</Alert>}
         <div className="grid-2">
           <FormField label={t('Art')} error={errors.type} hint={editing !== null ? t('Die Art eines Kanals lässt sich nicht ändern.') : undefined}>
@@ -484,6 +491,7 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
           )}
         </div>
       </form>
+      </Modal>
     </section>
   );
 }

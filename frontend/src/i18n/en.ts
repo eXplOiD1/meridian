@@ -3,6 +3,7 @@
  */
 /** Englische Fassungen; Schlüssel ist der deutsche Quelltext. Fehlt ein Eintrag, bleibt die Oberfläche deutsch. */
 export const EN: Record<string, string> = {
+  "Schließen": "Close",
   "Shell-Skript auf dem Host ausführen": "Run a shell script on the host",
   "Befehl im Docker-Container ausführen": "Run a command in a Docker container",
   "Webhook / HTTP-Anfrage ausführen": "Call a webhook / HTTP endpoint",

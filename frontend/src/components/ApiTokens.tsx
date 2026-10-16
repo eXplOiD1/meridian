@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { Modal } from './Modal';
 import { Alert } from './Alert';
 import { Confirm } from './Confirm';
 import { FormField } from './FormField';
@@ -26,6 +27,7 @@ const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
  * Läufe, Übersicht und Statistik.
  */
 export function ApiTokens({ csrf }: { csrf: string }) {
+  const [open, setOpen] = useState(false);
   const [tokens, setTokens] = useState<ApiTokenEntry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -62,6 +64,7 @@ export function ApiTokens({ csrf }: { csrf: string }) {
         body: { name, read_only: mode === 'read', expires_in_days: expiry === 'never' ? null : Number.parseInt(expiry, 10), current_password: password },
       });
       setCreated(result.plain);
+      setOpen(false);
       setName('');
       setPassword('');
       await load();
@@ -99,7 +102,7 @@ export function ApiTokens({ csrf }: { csrf: string }) {
       <p className="card__lead">
         {t('Zugriffstoken lassen Skripte und andere Programme Jobs, Läufe, Übersicht und Statistik abrufen (und mit „Lesen und Schreiben“ auch Jobs anlegen, ändern und starten). Ein Token hat genau die Rechte seines Benutzers, nie mehr. Für Konto, Einstellungen, Benutzer und gespeicherte Skripte gilt es nie.')}</p>
       {loadError !== null && <Alert tone="err">{loadError}</Alert>}
-      {formError !== null && <Alert tone="err">{formError}</Alert>}
+      {!open && formError !== null && <Alert tone="err">{formError}</Alert>}
       {created !== null && (
         <Alert tone="warn">
           <strong>{t('Dein neues Token (wird nur jetzt angezeigt):')}</strong>
@@ -141,8 +144,10 @@ export function ApiTokens({ csrf }: { csrf: string }) {
           </table>
         </div>
       )}
+      <button type="button" className="btn btn--solid" onClick={() => { setName(''); setPassword(''); setMode('read'); setExpiry('90'); setErrors({}); setFormError(null); setOpen(true); }}>{t('Token anlegen')}</button>
+      <Modal open={open} title={t('Token anlegen')} busy={busy} onClose={() => { setOpen(false); setPassword(''); setName(''); setMode('read'); setExpiry('90'); setErrors({}); setFormError(null); }}>
+      {formError !== null && <Alert tone="err">{formError}</Alert>}
       <form className="form" onSubmit={(event) => void create(event)} noValidate>
-        <h3>{t('Token anlegen')}</h3>
         <div className="grid-2">
           <FormField label={t('Name')} error={errors.name} hint={t('Wofür das Token gedacht ist, z. B. „Grafana“.')}>
             {(aria) => <input {...aria} className="input" name="token-name" value={name} maxLength={60} autoComplete="off" onChange={(e) => setName(e.target.value)} />}
@@ -178,6 +183,7 @@ export function ApiTokens({ csrf }: { csrf: string }) {
             {t('Token erzeugen')}</button>
         </div>
       </form>
+      </Modal>
     </section>
   );
 }

@@ -28,9 +28,10 @@ function takeDuplicate(): { name: string; description: string; permissions: stri
 interface Props {
   profile: Profile;
   id: string | null;
+  onBusyChange?: (busy: boolean) => void;
 }
 
-export function RoleEdit({ profile, id }: Props) {
+export function RoleEdit({ profile, id, onBusyChange }: Props) {
   const manage = canManageRoles(profile);
   const csrf = profile.csrf_token;
   const [data, setData] = useState<ManagedRoles | null>(null);
@@ -43,6 +44,7 @@ export function RoleEdit({ profile, id }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
 
   function adopt(next: ManagedRole): void {
     setRole(next);

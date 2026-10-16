@@ -21,6 +21,7 @@ interface Props {
   profile: Profile;
   /** null = neuer Benutzer */
   id: string | null;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 interface Issued {
@@ -39,7 +40,7 @@ function same(a: AssignmentInput[], b: AssignmentInput[]): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function UserEdit({ profile, id }: Props) {
+export function UserEdit({ profile, id, onBusyChange }: Props) {
   const csrf = profile.csrf_token;
   const [user, setUser] = useState<UserRow | null>(null);
   const [catalog, setCatalog] = useState<RoleCatalog | null>(null);
@@ -51,6 +52,7 @@ export function UserEdit({ profile, id }: Props) {
   const [assignments, setAssignments] = useState<AssignmentInput[]>([]);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [info, setInfo] = useState<string | null>(null);
