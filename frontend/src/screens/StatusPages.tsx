@@ -1,8 +1,8 @@
 /* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
-import { useCallback, useEffect, useState } from 'react';
-import { Modal } from '../components/Modal';
+import { useId, useCallback, useEffect, useState } from 'react';
+import { Modal, ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { FormField } from '../components/FormField';
@@ -38,7 +38,7 @@ function draftOf(page: StatusPage | null, categoryId: string): Draft {
   };
 }
 
-function PageForm({ draft, setDraft, categories, candidates, errors, busy, submitLabel, onSubmit, onCancel }: {
+function PageForm({ draft, setDraft, categories, candidates, errors, busy, submitLabel, onSubmit }: {
   draft: Draft;
   setDraft: (d: Draft) => void;
   categories: CategoryRef[];
@@ -47,8 +47,8 @@ function PageForm({ draft, setDraft, categories, candidates, errors, busy, submi
   busy: boolean;
   submitLabel: string;
   onSubmit: () => void;
-  onCancel?: () => void;
 }) {
+  const formId = useId();
   const [pick, setPick] = useState('');
   const free = candidates.filter((c) => !draft.items.some((i) => i.type === c.type && i.id === c.id));
   const add = (): void => {
@@ -59,7 +59,7 @@ function PageForm({ draft, setDraft, categories, candidates, errors, busy, submi
     }
   };
   return (
-    <form
+    <form id={formId}
       className="form"
       noValidate
       onSubmit={(event) => {
@@ -137,15 +137,11 @@ function PageForm({ draft, setDraft, categories, candidates, errors, busy, submi
             {t('Hinzufügen')}</button>
         </div>
       </fieldset>
-      <div className="row">
-        <button type="submit" className="btn btn--solid" disabled={busy || draft.title.trim() === ''}>
+      <ModalActions>
+        <button type="submit" form={formId} className="btn btn--solid" disabled={busy || draft.title.trim() === ''}>
           {submitLabel}
         </button>
-        {onCancel !== undefined && (
-          <button type="button" className="btn btn--ghost" onClick={onCancel}>
-            {t('Abbrechen')}</button>
-        )}
-      </div>
+      </ModalActions>
     </form>
   );
 }
@@ -304,10 +300,6 @@ export function StatusPages({ profile }: { profile: Profile }) {
               busy={busy}
               submitLabel={t('Speichern')}
               onSubmit={() => void submit('PUT', '/api/status-pages/' + String(editing.id), editing.draft).then((ok) => ok && setEditing(null))}
-              onCancel={() => {
-                setEditing(null);
-                setErrors({});
-              }}
             />
           </Modal>
         )}

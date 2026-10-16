@@ -1,9 +1,9 @@
 /* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useId, useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Modal } from '../components/Modal';
+import { Modal, ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { FormField } from '../components/FormField';
@@ -134,7 +134,7 @@ function draftOf(m: Monitor): Draft {
   return { maxResponse: String((m.max_response_ms ?? 5000) / 1000), kind: m.kind, target: '', expectedStatus: m.expected_status ?? '200-399', failAfter: String(m.fail_after ?? 3), name: m.name, value: interval.value, unit: interval.unit, graceValue: m.grace_seconds === 0 ? '0' : grace.value, graceUnit: grace.unit, categoryId: m.category_id === null ? '' : String(m.category_id), notifyDown: m.notify_on_down, notifyUp: m.notify_on_up, notifyChannels: m.notify_channels, channelIds: m.channel_ids ?? [] };
 }
 
-function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, editing, onSubmit, onCancel, onTest, testing, testResult }: {
+function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, editing, onSubmit, onTest, testing, testResult }: {
   draft: Draft;
   setDraft: (d: Draft) => void;
   categories: CategoryRef[];
@@ -143,11 +143,11 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
   submitLabel: string;
   editing: boolean;
   onSubmit: () => void;
-  onCancel?: () => void;
   onTest?: () => void;
   testing?: boolean;
   testResult?: TestResult | null;
 }) {
+  const formId = useId();
   const [channels, setChannels] = useState<NotificationChannelName[]>([]);
   const [channelError, setChannelError] = useState<string | null>(null);
   useEffect(() => {
@@ -166,7 +166,7 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
     </select>
   );
   return (
-    <form
+    <form id={formId}
       className="form"
       noValidate
       onSubmit={(event: FormEvent) => {
@@ -294,8 +294,8 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
         {errors.channel_ids !== undefined && <p className="field__error">{errors.channel_ids}</p>}
       </div>}
       {testResult !== null && testResult !== undefined && <TestResultAlert result={testResult} />}
-      <div className="row">
-        <button type="submit" className="btn btn--solid" disabled={busy || draft.name.trim() === ''}>
+      <ModalActions>
+        <button type="submit" form={formId} className="btn btn--solid" disabled={busy || draft.name.trim() === ''}>
           {submitLabel}
         </button>
         {isActive && onTest !== undefined && (
@@ -303,11 +303,7 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
             {testing === true ? t('Prüft …') : t('Jetzt testen')}
           </button>
         )}
-        {onCancel !== undefined && (
-          <button type="button" className="btn btn--ghost" onClick={onCancel}>
-            {t('Abbrechen')}</button>
-        )}
-      </div>
+      </ModalActions>
     </form>
   );
 }
@@ -577,10 +573,6 @@ export function Monitors({ profile }: { profile: Profile }) {
             testResult={testResult !== null && testResult.source === 'form' ? testResult : null}
               onTest={() => void runTest('form', editing.draft.name, '/api/monitors/' + String(editing.id) + '/test', testBody(editing.draft))}
               onSubmit={() => void submit('PUT', '/api/monitors/' + String(editing.id), editing.draft).then((ok) => ok && setEditing(null))}
-              onCancel={() => {
-                setEditing(null);
-                setErrors({});
-              }}
             />
           </Modal>
         )}

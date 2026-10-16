@@ -1,8 +1,8 @@
 /* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary */
-import { useEffect, useState } from 'react';
+import { useId, useEffect, useState } from 'react';
 import { AutomationActionFields, newDirectAction, type DirectActionDraft } from '../components/AutomationActionFields';
-import { Modal } from '../components/Modal';
+import { Modal, ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
@@ -30,6 +30,7 @@ function timezones(current: string): string[] {
 }
 
 export function Automations({ profile }: { profile: Profile }) {
+  const formId = useId();
   const [data,setData]=useState<Options | null>(null);
   const [form,setForm]=useState<Definition>(empty);
   const [open,setOpen]=useState(false);
@@ -77,7 +78,7 @@ export function Automations({ profile }: { profile: Profile }) {
       </article>)}
     </section>
     <Modal open={open} title={t(editing===null?'Automation anlegen':'Automation bearbeiten')} onClose={reset} busy={busy}>
-      {error&&<Alert tone="err">{error}</Alert>}<form className="form" onSubmit={event=>void save(event)}>
+      {error&&<Alert tone="err">{error}</Alert>}<form id={formId} className="form" onSubmit={event=>void save(event)}>
       <div className="grid-2 automation-identity"><label className="field"><span className="field__label">{t('Name')}</span><input className="input" value={form.name} maxLength={100} required onChange={event=>setForm({...form,name:event.target.value})}/></label><label className="check"><input type="checkbox" checked={form.enabled} onChange={event=>setForm({...form,enabled:event.target.checked})}/>{t('Automation ist aktiv')}</label></div>
       <h3>{t('Wenn')}</h3><div className="grid-2"><label className="field"><span className="field__label">{t('Auslöser')}</span><select className="input" value={form.event} onChange={event=>setForm({...form,event:event.target.value,source_id:0})}>{Object.entries(EVENTS).map(([key,label])=><option value={key} key={key}>{t(label)}</option>)}</select></label>{form.event!=='schedule'&&select(form.event.startsWith('job.')?jobs:monitors,form.source_id,id=>setForm({...form,source_id:id}),form.event.startsWith('job.')?'Auslösender Job':'Auslösende Überwachung')}</div>
       {form.event==='schedule'&&<div className="grid-2"><label className="field"><span className="field__label">{t('Zeitplan')}</span><input className="input input--mono" value={form.cron} required onChange={event=>setForm({...form,cron:event.target.value})}/><span className="hint">{t('Minute Stunde Tag Monat Wochentag, z. B. 0 8 * * 1-5 für werktags um 08:00.')}</span></label><label className="field"><span className="field__label">{t('Zeitzone')}</span><select className="input" value={form.timezone} required onChange={event=>setForm({...form,timezone:event.target.value})}>{(data?.timezones??timezones(form.timezone)).map(zone=><option key={zone} value={zone}>{zone}</option>)}</select></label></div>}
@@ -101,7 +102,7 @@ export function Automations({ profile }: { profile: Profile }) {
       <label className="field"><span className="field__label">{t('Mindestabstand zwischen Ausführungen (Sekunden)')}</span><input className="input" type="number" min={0} max={86400} value={form.cooldown_seconds} onChange={event=>setForm({...form,cooldown_seconds:Number(event.target.value)})}/></label>
       {form.enabled&&<label className="field"><span className="field__label">{t('Aktuelles Passwort')}</span><input className="input" type="password" value={password} required autoComplete="current-password" onChange={event=>setPassword(event.target.value)}/><span className="hint">{t('Aktive Automationen werden mit deinem Passwort bestätigt. Bei jedem Auslösen werden deine Rechte erneut geprüft.')}</span></label>}
       <p className="hint">{t('Geplante Jobs und bereits eingereihte Aktionen laufen ohne weitere Passwortabfrage. Bedingungen prüfen führt keine Aktionen aus.')}</p>
-      <div className="row"><button className="btn btn--solid" type="submit" disabled={busy}>{t(busy?'Speichert …':'Speichern')}</button>{editing!==null&&<button className="btn btn--ghost" type="button" onClick={reset}>{t('Abbrechen')}</button>}</div>
+      <ModalActions><button className="btn btn--solid" type="submit" form={formId} disabled={busy}>{t(busy?'Speichert …':'Speichern')}</button></ModalActions>
     </form></Modal>
   </>;
 }
