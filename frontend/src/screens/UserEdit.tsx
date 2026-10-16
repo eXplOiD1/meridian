@@ -1,8 +1,9 @@
 /* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useId, useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { AssignmentEditor, isDangerousRole, validAssignments } from '../components/AssignmentEditor';
 import { Confirm } from '../components/Confirm';
@@ -41,6 +42,7 @@ function same(a: AssignmentInput[], b: AssignmentInput[]): boolean {
 }
 
 export function UserEdit({ profile, id, onBusyChange }: Props) {
+  const formId = useId();
   const csrf = profile.csrf_token;
   const [user, setUser] = useState<UserRow | null>(null);
   const [catalog, setCatalog] = useState<RoleCatalog | null>(null);
@@ -253,7 +255,7 @@ export function UserEdit({ profile, id, onBusyChange }: Props) {
 
   if (isNew) {
     return (
-      <form className="settings editor" onSubmit={(event) => void create(event)}>
+      <form id={formId} className="settings editor" onSubmit={(event) => void create(event)}>
         {back}
         {messages}
         <section className="card" aria-label={t('Stammdaten')}>
@@ -271,10 +273,7 @@ export function UserEdit({ profile, id, onBusyChange }: Props) {
           <AssignmentEditor catalog={catalog} categories={categories} value={assignments} onChange={setAssignments} error={fields.assignments} />
           {needsPassword && passwordField}
         </section>
-        <div className="row editor__actions">
-          <button type="submit" className="btn btn--solid" disabled={busy || username.trim() === '' || displayName === '' || !assignmentsValid || (needsPassword && password === '')}>
-            {t('Benutzer anlegen')}</button>
-          <a
+        <ModalActions className="row editor__actions" cancel={<a
             className="btn btn--ghost"
             href={hrefOf('benutzer')}
             onClick={(event) => {
@@ -282,8 +281,10 @@ export function UserEdit({ profile, id, onBusyChange }: Props) {
               navigate('benutzer');
             }}
           >
-            {t('Abbrechen')}</a>
-        </div>
+            {t('Abbrechen')}</a>}>
+          <button type="submit" form={formId} className="btn btn--solid" disabled={busy || username.trim() === '' || displayName === '' || !assignmentsValid || (needsPassword && password === '')}>
+            {t('Benutzer anlegen')}</button>
+        </ModalActions>
       </form>
     );
   }

@@ -2,9 +2,9 @@
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
 import { ExpandableLead } from '../components/ExpandableLead';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useId, useCallback, useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { Modal } from '../components/Modal';
+import { Modal, ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { NotificationChannels } from '../components/NotificationChannels';
@@ -358,6 +358,7 @@ function scopeLabel(target: InternalTarget): string {
 }
 
 function InternalTargets({ csrf }: { csrf: string }) {
+  const formId = useId();
   const [targets, setTargets] = useState<InternalTarget[] | null>(null);
   const [categories, setCategories] = useState<CategoryRef[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -534,7 +535,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
 
       <button type="button" className="btn btn--solid" onClick={() => { cancelEdit(); setNotice(null); setOpen(true); }}>{t('Freigabe hinzufügen')}</button>
       <Modal open={open} title={t(editing === null ? 'Freigabe hinzufügen' : 'Freigabe bearbeiten')} busy={busy} onClose={cancelEdit}>
-      <form className="form targets__form" onSubmit={(event) => void save(event)} aria-labelledby="settings-targets-add">
+      <form id={formId} className="form targets__form" onSubmit={(event) => void save(event)} aria-labelledby="settings-targets-add">
         <h3 className="visually-hidden" id="settings-targets-add">{editing === null ? t('Freigabe hinzufügen') : t('Freigabe bearbeiten')}</h3>
         {formError !== null && <Alert tone="err">{formError}</Alert>}
         <div className="grid-2">
@@ -577,12 +578,11 @@ function InternalTargets({ csrf }: { csrf: string }) {
           {(aria) => <input {...aria} className="input" name="note" maxLength={200} autoComplete="off" value={form.note} onChange={(e) => set('note', e.target.value)} />}
         </FormField>
         {errors.body !== undefined && <Alert tone="err">{errors.body}</Alert>}
-        <div className="row">
-          <button type="submit" className="btn btn--solid" disabled={busy || form.value.trim() === ''}>
+        <ModalActions>
+          <button type="submit" form={formId} className="btn btn--solid" disabled={busy || form.value.trim() === ''}>
             {busy ? t('Speichert …') : editing === null ? t('Freigabe anlegen') : t('Änderung speichern')}
           </button>
-          {editing !== null && <button type="button" className="btn btn--ghost" disabled={busy} onClick={cancelEdit}>{t('Abbrechen')}</button>}
-        </div>
+        </ModalActions>
       </form>
       </Modal>
     </section>
@@ -604,6 +604,7 @@ function splitUsers(text: string): string[] {
 }
 
 function ShellTargets({ csrf }: { csrf: string }) {
+  const formId = useId();
   const [targets, setTargets] = useState<ShellTargetEntry[] | null>(null);
   const [categories, setCategories] = useState<CategoryRef[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -825,7 +826,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
 
       <button type="button" className="btn btn--solid" onClick={() => { cancelEdit(); setNotice(null); setOpen(true); }}>{t('Ausführungsort hinzufügen')}</button>
       <Modal open={open} title={t(editing === null ? 'Ausführungsort hinzufügen' : 'Ausführungsort bearbeiten')} busy={busy} onClose={cancelEdit}>
-      <form className="form targets__form" onSubmit={(event) => void save(event)} aria-labelledby="settings-shell-targets-add">
+      <form id={formId} className="form targets__form" onSubmit={(event) => void save(event)} aria-labelledby="settings-shell-targets-add">
         <h3 className="visually-hidden" id="settings-shell-targets-add">{editing === null ? t('Ausführungsort hinzufügen') : t('Ausführungsort bearbeiten')}</h3>
         {editing !== null && (
           <p className="hint">
@@ -894,15 +895,11 @@ function ShellTargets({ csrf }: { csrf: string }) {
             {(aria) => <input {...aria} className="input" type="password" autoComplete="current-password" maxLength={1024} value={password} required onChange={(event) => setPassword(event.target.value)} />}
           </FormField>
         )}
-        <div className="row">
-          <button type="submit" className="btn btn--solid" disabled={busy || form.name.trim() === ''}>
+        <ModalActions>
+          <button type="submit" form={formId} className="btn btn--solid" disabled={busy || form.name.trim() === ''}>
             {busy ? t('Speichert …') : editing === null ? t('Ausführungsort anlegen') : t('Änderung speichern')}
           </button>
-          {editing !== null && (
-            <button type="button" className="btn btn--ghost" disabled={busy} onClick={cancelEdit}>
-              {t('Abbrechen')}</button>
-          )}
-        </div>
+        </ModalActions>
       </form>
       </Modal>
     </section>

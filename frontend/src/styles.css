@@ -680,10 +680,13 @@ body.modal-open { overflow: hidden; }
 .editor-modal__body > .card { margin: 0; padding: 0; box-shadow: none; border: 0; }
 .editor-modal__body > .card + .card { margin-top: 24px; }
 .editor-modal__body .targets__form { margin-top: 0; }
-.editor-modal__footer { flex-shrink: 0; padding: 16px 24px 24px; border-top: 1px solid var(--line); }
+.editor-modal__footer { flex-shrink: 0; padding: 20px 24px; border-top: 1px solid var(--line); background: var(--panel); max-height: 50dvh; overflow: auto; }
+.modal-actions { justify-content: flex-end; gap: 12px; }
+.modal-actions > .confirm { flex-basis: 100%; }
 @media (max-width: 600px) {
   .editor-modal { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 16px; }
   .editor-modal__header { padding: 14px 16px; }
   .editor-modal__body { padding: 16px; }
-  .editor-modal__footer { padding: 12px 16px 16px; }
+  .editor-modal__footer { padding: 16px; }
+  .modal-actions > .btn { flex: 1 1 auto; }
 }

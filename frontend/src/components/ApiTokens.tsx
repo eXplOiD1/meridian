@@ -1,9 +1,9 @@
 /* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useId, useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Modal } from './Modal';
+import { Modal, ModalActions } from './Modal';
 import { Alert } from './Alert';
 import { Confirm } from './Confirm';
 import { FormField } from './FormField';
@@ -27,6 +27,7 @@ const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
  * Läufe, Übersicht und Statistik.
  */
 export function ApiTokens({ csrf }: { csrf: string }) {
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [tokens, setTokens] = useState<ApiTokenEntry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -147,7 +148,7 @@ export function ApiTokens({ csrf }: { csrf: string }) {
       <button type="button" className="btn btn--solid" onClick={() => { setName(''); setPassword(''); setMode('read'); setExpiry('90'); setErrors({}); setFormError(null); setOpen(true); }}>{t('Token anlegen')}</button>
       <Modal open={open} title={t('Token anlegen')} busy={busy} onClose={() => { setOpen(false); setPassword(''); setName(''); setMode('read'); setExpiry('90'); setErrors({}); setFormError(null); }}>
       {formError !== null && <Alert tone="err">{formError}</Alert>}
-      <form className="form" onSubmit={(event) => void create(event)} noValidate>
+      <form id={formId} className="form" onSubmit={(event) => void create(event)} noValidate>
         <div className="grid-2">
           <FormField label={t('Name')} error={errors.name} hint={t('Wofür das Token gedacht ist, z. B. „Grafana“.')}>
             {(aria) => <input {...aria} className="input" name="token-name" value={name} maxLength={60} autoComplete="off" onChange={(e) => setName(e.target.value)} />}
@@ -178,10 +179,10 @@ export function ApiTokens({ csrf }: { csrf: string }) {
           </FormField>
         </div>
         {mode === 'write' && <Alert tone="warn">{t('Ein Token mit Schreibrecht kann Jobs anlegen, ändern, löschen und starten, so wie du es darfst. Gib es nur Programmen, denen du vertraust.')}</Alert>}
-        <div className="row">
-          <button type="submit" className="btn btn--solid" disabled={busy || name.trim() === '' || password === ''}>
+        <ModalActions>
+          <button type="submit" form={formId} className="btn btn--solid" disabled={busy || name.trim() === '' || password === ''}>
             {t('Token erzeugen')}</button>
-        </div>
+        </ModalActions>
       </form>
       </Modal>
     </section>

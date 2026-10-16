@@ -1,9 +1,9 @@
 /* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useId, useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Modal } from './Modal';
+import { Modal, ModalActions } from './Modal';
 import { Alert } from './Alert';
 import { BrowserPushDevices } from './BrowserPushDevices';
 import { Confirm } from './Confirm';
@@ -167,6 +167,7 @@ function summary(channel: NotificationChannel): string {
  * Das Feld bleibt leer; „leer lassen“ behält den gespeicherten Wert. Nur für Benutzer mit dem Recht „Einstellungen ändern“.
  */
 export function NotificationChannels({ csrf }: { csrf: string }) {
+  const formId = useId();
   const [channels, setChannels] = useState<NotificationChannel[] | null>(null);
   const [open, setOpen] = useState(false);
   const [max, setMax] = useState(20);
@@ -332,7 +333,7 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
       <Modal open={open} title={editing === null ? t('Kanal hinzufügen') : t('Kanal bearbeiten:') + ' ' + editing.name} busy={busy} onClose={reset}>
       {formError !== null && <Alert tone="err">{formError}</Alert>}
       {notice !== null && <Alert tone="ok">{notice}</Alert>}
-      <form className="form targets__form" onSubmit={(event) => void submit(event)} noValidate>
+      <form id={formId} className="form targets__form" onSubmit={(event) => void submit(event)} noValidate>
         {(channels?.length ?? 0) >= max && editing === null && <Alert tone="warn">{t('Es sind schon {n} Kanäle angelegt. Nicht benötigte zuerst löschen.', { n: max })}</Alert>}
         <div className="grid-2">
           <FormField label={t('Art')} error={errors.type} hint={editing !== null ? t('Die Art eines Kanals lässt sich nicht ändern.') : undefined}>
@@ -481,15 +482,11 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
           <input type="checkbox" checked={form.enabled} onChange={(e) => set('enabled', e.target.checked)} />
           <span>{t('Kanal ist aktiv')}</span>
         </label>
-        <div className="row">
-          <button type="submit" className="btn btn--solid" disabled={busy}>
+        <ModalActions>
+          <button type="submit" form={formId} className="btn btn--solid" disabled={busy}>
             {editing === null ? t('Kanal anlegen') : t('Speichern')}
           </button>
-          {editing !== null && (
-            <button type="button" className="btn btn--ghost" onClick={reset}>
-              {t('Abbrechen')}</button>
-          )}
-        </div>
+        </ModalActions>
       </form>
       </Modal>
     </section>

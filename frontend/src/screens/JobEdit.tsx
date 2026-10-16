@@ -1,8 +1,9 @@
 /* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useId, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
+import { ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { ScheduleBuilder } from '../components/ScheduleBuilder';
 import { Confirm } from '../components/Confirm';
@@ -237,6 +238,7 @@ function SchedulePreview({ cron, timezone }: { cron: string; timezone: string })
 }
 
 export function JobEdit({ profile, id, onEditorModeChange, onBusyChange }: { profile: Profile; id: string | null; onEditorModeChange: (mode: 'simple' | 'expert') => void; onBusyChange?: (busy: boolean) => void }) {
+  const formId = useId();
   const editing = id !== null;
   const [job, setJob] = useState<JobDetail | null>(null);
   const [categories, setCategories] = useState<CategoryRef[] | null>(null);
@@ -682,7 +684,7 @@ export function JobEdit({ profile, id, onEditorModeChange, onBusyChange }: { pro
   }
 
   return (
-    <form
+    <form id={formId}
       className="form editor"
       onSubmit={(event: FormEvent) => {
         event.preventDefault();
@@ -1205,18 +1207,17 @@ export function JobEdit({ profile, id, onEditorModeChange, onBusyChange }: { pro
         </section>
       </div>
 
-      <div className="row editor__actions editor__actions--sticky">
-        <button type="submit" className="btn btn--solid" disabled={busy}>
+      <ModalActions className="row editor__actions editor__actions--sticky" cancel={<a className="btn btn--ghost" href={hrefOf(editing ? 'jobs/' + String(id) : 'jobs')}>
+          {t('Abbrechen')}</a>}>
+        <button type="submit" form={formId} className="btn btn--solid" disabled={busy}>
           {busy ? t('Speichert …') : t('Speichern')}
         </button>
         {editing && (
           <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => void submit('test')}>
             {t('Speichern und testen')}</button>
         )}
-        <a className="btn btn--ghost" href={hrefOf(editing ? 'jobs/' + String(id) : 'jobs')}>
-          {t('Abbrechen')}</a>
         {editing && <Confirm label={t('Löschen')} question={t('Job samt Verlauf endgültig löschen?')} confirmLabel={t('Ja, löschen')} busy={busy} onConfirm={() => void remove()} />}
-      </div>
+      </ModalActions>
     </form>
   );
 }

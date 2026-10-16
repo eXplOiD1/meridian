@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
 import { useEffect, useState } from 'react';
+import { ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { FormField } from '../components/FormField';
@@ -369,13 +370,13 @@ export function RoleEdit({ profile, id, onBusyChange }: Props) {
           </section>
         )}
 
-        <div className="row">
+        <ModalActions>
           {saveButton}
           {role !== null && (
             <button type="button" className="btn btn--ghost" onClick={duplicate}>
               {t('Duplizieren')}</button>
           )}
-        </div>
+        </ModalActions>
       </div>
 
       {role !== null && !role.builtin && (

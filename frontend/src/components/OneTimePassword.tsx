@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { formatTime } from '../lib/format';
 import { Alert } from './Alert';
+import { ModalActions } from './Modal';
 import { t } from '../i18n';
 
 interface Props {
@@ -39,12 +40,12 @@ export function OneTimePassword({ username, password, expiresAt, onDone }: Props
       <p className="hint">
         {t('Gültig bis {time}. {name} muss beim ersten Anmelden ein eigenes Passwort festlegen.', { time: formatTime(expiresAt), name: username })}
       </p>
-      <div className="row">
+      <ModalActions showCancel={false}>
         <button type="button" className="btn btn--solid" onClick={() => void copy()}>
           {t('In die Zwischenablage kopieren')}</button>
         <button type="button" className="btn btn--ghost" onClick={onDone}>
           {t('Fertig, Passwort ausblenden')}</button>
-      </div>
+      </ModalActions>
       <p className="hint" role="status">
         {copied === 'yes' && t('Kopiert. Die Zwischenablage nach dem Einfügen leeren.')}
         {copied === 'no' && t('Kopieren nicht möglich. Das Passwort oben markieren und von Hand kopieren.')}

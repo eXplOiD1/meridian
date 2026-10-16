@@ -1,9 +1,9 @@
 /* Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useId, useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Modal } from '../components/Modal';
+import { Modal, ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { FormField } from '../components/FormField';
 import { request } from '../lib/api';
@@ -206,6 +206,7 @@ function Row({ category, csrf, onChanged }: RowProps) {
 }
 
 export function Categories({ profile }: { profile: Profile }) {
+  const formId = useId();
   const csrf = profile.csrf_token;
   const [list, setList] = useState<CategoryUsage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -258,16 +259,16 @@ export function Categories({ profile }: { profile: Profile }) {
         <button type="button" className="btn btn--solid" onClick={() => { setName(''); setFieldError(undefined); setError(null); setOpen(true); }}>{t('Kategorie anlegen')}</button>
         <Modal open={open} title={t('Kategorie anlegen')} busy={busy} onClose={() => { setOpen(false); setName(''); setFieldError(undefined); setError(null); }}>
         {error !== null && <Alert tone="err">{error}</Alert>}
-        <form onSubmit={(event) => void create(event)}>
+        <form id={formId} onSubmit={(event) => void create(event)}>
           <FormField label={t('Neue Kategorie')} error={fieldError}>
             {(aria) => <div className="row category-create">
               <div className="row__grow">
                 <input {...aria} className="input" name="name" autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
-              <button type="submit" className="btn btn--solid" disabled={busy || name === ''}>
-                {t('Kategorie anlegen')}</button>
+
             </div>}
           </FormField>
+          <ModalActions><button type="submit" form={formId} className="btn btn--solid" disabled={busy || name === ''}>{t('Kategorie anlegen')}</button></ModalActions>
         </form>
         </Modal>
         <div className="table-wrap">
