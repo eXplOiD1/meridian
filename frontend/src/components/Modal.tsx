@@ -49,7 +49,7 @@ export function Modal({ open, title, onClose, busy = false, children }: Props) {
       }}>
       <header className="editor-modal__header">
         <h2 id={heading} tabIndex={-1} autoFocus>{title}</h2>
-        <button type="button" className="btn btn--ghost btn--small" disabled={busy} onClick={onClose} aria-label={t('Schließen')}>×</button>
+        <button type="button" className="btn btn--ghost editor-modal__close" disabled={busy} onClick={onClose} aria-label={t('Schließen')}>×</button>
       </header>
       <div className="editor-modal__body">{children}</div>
       <footer className="editor-modal__footer">
