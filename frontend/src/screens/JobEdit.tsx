@@ -236,7 +236,7 @@ function SchedulePreview({ cron, timezone }: { cron: string; timezone: string })
   );
 }
 
-export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile; id: string | null; onEditorModeChange: (mode: 'simple' | 'expert') => void }) {
+export function JobEdit({ profile, id, onEditorModeChange, onBusyChange }: { profile: Profile; id: string | null; onEditorModeChange: (mode: 'simple' | 'expert') => void; onBusyChange?: (busy: boolean) => void }) {
   const editing = id !== null;
   const [job, setJob] = useState<JobDetail | null>(null);
   const [categories, setCategories] = useState<CategoryRef[] | null>(null);
@@ -253,6 +253,7 @@ export function JobEdit({ profile, id, onEditorModeChange }: { profile: Profile;
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
   const [nextKey, setNextKey] = useState(1);
   /** true: gespeicherte Werte wurden geladen und stehen in den Feldern. */
   const [revealed, setRevealed] = useState(false);

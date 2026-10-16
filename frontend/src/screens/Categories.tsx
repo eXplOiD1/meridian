@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { Modal } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { FormField } from '../components/FormField';
 import { request } from '../lib/api';
@@ -208,6 +209,7 @@ export function Categories({ profile }: { profile: Profile }) {
   const csrf = profile.csrf_token;
   const [list, setList] = useState<CategoryUsage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -233,6 +235,7 @@ export function Categories({ profile }: { profile: Profile }) {
     try {
       await request('POST', '/api/categories/manage', { csrf, body: { name } });
       setName('');
+      setOpen(false);
       await load();
     } catch (caught) {
       const named = fieldErrors(caught).name;
@@ -252,6 +255,9 @@ export function Categories({ profile }: { profile: Profile }) {
         <p className="card__lead">
           {t('Kategorien gruppieren Jobs und begrenzen, was Benutzer sehen und tun dürfen. Umbenennen ändert nichts an Zuweisungen und Freigaben. Löschen geht nur ohne Jobs.')}</p>
         {error !== null && <Alert tone="err">{error}</Alert>}
+        <button type="button" className="btn btn--solid" onClick={() => { setName(''); setFieldError(undefined); setError(null); setOpen(true); }}>{t('Kategorie anlegen')}</button>
+        <Modal open={open} title={t('Kategorie anlegen')} busy={busy} onClose={() => { setOpen(false); setName(''); setFieldError(undefined); setError(null); }}>
+        {error !== null && <Alert tone="err">{error}</Alert>}
         <form onSubmit={(event) => void create(event)}>
           <FormField label={t('Neue Kategorie')} error={fieldError}>
             {(aria) => <div className="row category-create">
@@ -263,6 +269,7 @@ export function Categories({ profile }: { profile: Profile }) {
             </div>}
           </FormField>
         </form>
+        </Modal>
         <div className="table-wrap">
           <table className="table categories-table">
             <thead>

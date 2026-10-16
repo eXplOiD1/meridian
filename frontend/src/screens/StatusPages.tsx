@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
 import { useCallback, useEffect, useState } from 'react';
+import { Modal } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { FormField } from '../components/FormField';
@@ -160,6 +161,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Draft>(draftOf(null, ''));
   const [editing, setEditing] = useState<{ id: number; draft: Draft } | null>(null);
+  const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
@@ -237,10 +239,11 @@ export function StatusPages({ profile }: { profile: Profile }) {
     <>
       <section className="card" aria-label={t('Statusseiten')}>
         <h2>{t('Statusseiten')}</h2>
+        <button type="button" className="btn btn--solid" onClick={() => { setErrors({}); setFormError(null); setCreating(true); }}>{t('Statusseite anlegen')}</button>
         <p className="card__lead">
           {t('Eine Seite zum Weitergeben, auch an Menschen ohne Konto: sie zeigt, ob ausgewählte Jobs und Überwachungen laufen. Der Link ist geheim und nicht erratbar; wer ihn kennt, sieht die Seite. Bei Bedarf einen neuen Link erzeugen, der alte gilt dann sofort nicht mehr.')}</p>
         {loadError !== null && <Alert tone="err">{loadError}</Alert>}
-        {formError !== null && <Alert tone="err">{formError}</Alert>}
+        {!creating && editing === null && formError !== null && <Alert tone="err">{formError}</Alert>}
         {pages !== null && pages.length === 0 && <p className="card__lead">{t('Noch keine Statusseite angelegt.')}</p>}
         {pages !== null && pages.length > 0 && (
           <div className="table-wrap">
@@ -290,8 +293,8 @@ export function StatusPages({ profile }: { profile: Profile }) {
           </div>
         )}
         {editing !== null && (
-          <div className="replace">
-            <h3>{t('Statusseite bearbeiten')}</h3>
+          <Modal open title={t('Statusseite bearbeiten')} busy={busy} onClose={() => { setEditing(null); setErrors({}); setFormError(null); }}>
+            {formError !== null && <Alert tone="err">{formError}</Alert>}
             <PageForm
               draft={editing.draft}
               setDraft={(d) => setEditing({ id: editing.id, draft: d })}
@@ -306,12 +309,12 @@ export function StatusPages({ profile }: { profile: Profile }) {
                 setErrors({});
               }}
             />
-          </div>
+          </Modal>
         )}
       </section>
-      {editing === null && (
-        <section className="card" aria-label={t('Statusseite anlegen')}>
-          <h2>{t('Statusseite anlegen')}</h2>
+      {editing === null && creating && (
+        <Modal open title={t('Statusseite anlegen')} busy={busy} onClose={() => { setCreating(false); setErrors({}); setFormError(null); setDraft(draftOf(null, draft.categoryId)); }}>
+          {formError !== null && <Alert tone="err">{formError}</Alert>}
           <PageForm
             draft={draft}
             setDraft={setDraft}
@@ -320,9 +323,9 @@ export function StatusPages({ profile }: { profile: Profile }) {
             errors={errors}
             busy={busy}
             submitLabel="Anlegen"
-            onSubmit={() => void submit('POST', '/api/status-pages', draft).then((ok) => ok && setDraft(draftOf(null, draft.categoryId)))}
+            onSubmit={() => void submit('POST', '/api/status-pages', draft).then((ok) => { if (ok) { setDraft(draftOf(null, draft.categoryId)); setCreating(false); } })}
           />
-        </section>
+        </Modal>
       )}
     </>
   );

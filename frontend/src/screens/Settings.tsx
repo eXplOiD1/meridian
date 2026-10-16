@@ -4,6 +4,7 @@
 import { ExpandableLead } from '../components/ExpandableLead';
 import { useCallback, useEffect, useId, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
+import { Modal } from '../components/Modal';
 import { Alert } from '../components/Alert';
 import { Confirm } from '../components/Confirm';
 import { NotificationChannels } from '../components/NotificationChannels';
@@ -364,6 +365,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<InternalTarget | null>(null);
 
@@ -396,15 +398,16 @@ function InternalTargets({ csrf }: { csrf: string }) {
   }
 
   function startEdit(target: InternalTarget): void {
+    setOpen(true);
     setEditing(target);
     setErrors({});
     setFormError(null);
     setNotice(null);
     setForm({ kind: target.kind, value: target.value, port: target.port === 0 ? '' : String(target.port), categoryId: target.category === null ? '' : String(target.category.id), note: target.note });
-    document.getElementById('settings-targets-add')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
   function cancelEdit(): void {
+    setOpen(false);
     setEditing(null);
     setErrors({});
     setFormError(null);
@@ -428,6 +431,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
       setTargets((current) => editing === null ? [...(current ?? []), result.target] : current?.map((target) => target.id === editing.id ? result.target : target) ?? current);
       setEditing(null);
       setForm({ ...EMPTY_FORM, kind: form.kind });
+      setOpen(false);
       setNotice(editing === null ? t('Freigabe angelegt. Sie gilt ab dem nächsten Lauf.') : t('Freigabe geändert. Sie gilt ab dem nächsten Lauf.'));
     } catch (caught) {
       if (caught instanceof ApiError && Object.keys(caught.fields).length > 0) {
@@ -528,8 +532,10 @@ function InternalTargets({ csrf }: { csrf: string }) {
         </div>
       )}
 
+      <button type="button" className="btn btn--solid" onClick={() => { cancelEdit(); setNotice(null); setOpen(true); }}>{t('Freigabe hinzufügen')}</button>
+      <Modal open={open} title={t(editing === null ? 'Freigabe hinzufügen' : 'Freigabe bearbeiten')} busy={busy} onClose={cancelEdit}>
       <form className="form targets__form" onSubmit={(event) => void save(event)} aria-labelledby="settings-targets-add">
-        <h3 id="settings-targets-add">{editing === null ? t('Freigabe hinzufügen') : t('Freigabe bearbeiten')}</h3>
+        <h3 className="visually-hidden" id="settings-targets-add">{editing === null ? t('Freigabe hinzufügen') : t('Freigabe bearbeiten')}</h3>
         {formError !== null && <Alert tone="err">{formError}</Alert>}
         <div className="grid-2">
           <FormField label={t('Art')} error={errors.kind}>
@@ -578,6 +584,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
           {editing !== null && <button type="button" className="btn btn--ghost" disabled={busy} onClick={cancelEdit}>{t('Abbrechen')}</button>}
         </div>
       </form>
+      </Modal>
     </section>
   );
 }
@@ -604,6 +611,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<ShellTargetEntry | null>(null);
   const [password, setPassword] = useState('');
@@ -643,6 +651,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
 
   function startEdit(target: ShellTargetEntry): void {
     setPassword('');
+    setOpen(true);
     setEditing(target);
     setErrors({});
     setFormError(null);
@@ -658,6 +667,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
   }
 
   function cancelEdit(): void {
+    setOpen(false);
     setPassword('');
     setEditing(null);
     setErrors({});
@@ -684,6 +694,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       if (editing !== null) {
         const result = await request<{ target: ShellTargetEntry; affected_jobs: number }>('PUT', '/api/settings/shell-targets/' + String(editing.id), { csrf, body });
         setTargets((current) => current?.map((entry) => (entry.id === result.target.id ? result.target : entry)) ?? current);
+        setOpen(false);
         setEditing(null);
         setForm(EMPTY_SHELL_FORM);
         setNotice(
@@ -696,6 +707,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       const result = await request<{ target: ShellTargetEntry }>('POST', '/api/settings/shell-targets', { csrf, body });
       setTargets((current) => [...(current ?? []), result.target]);
       setForm({ ...EMPTY_SHELL_FORM, kind: form.kind });
+      setOpen(false);
       setNotice(t('Ausführungsort angelegt. Er steht ab sofort im Job-Editor zur Wahl.'));
     } catch (caught) {
       if (caught instanceof ApiError && Object.keys(caught.fields).length > 0) {
@@ -811,8 +823,10 @@ function ShellTargets({ csrf }: { csrf: string }) {
         </div>
       )}
 
+      <button type="button" className="btn btn--solid" onClick={() => { cancelEdit(); setNotice(null); setOpen(true); }}>{t('Ausführungsort hinzufügen')}</button>
+      <Modal open={open} title={t(editing === null ? 'Ausführungsort hinzufügen' : 'Ausführungsort bearbeiten')} busy={busy} onClose={cancelEdit}>
       <form className="form targets__form" onSubmit={(event) => void save(event)} aria-labelledby="settings-shell-targets-add">
-        <h3 id="settings-shell-targets-add">{editing === null ? t('Ausführungsort hinzufügen') : t('Ausführungsort bearbeiten')}</h3>
+        <h3 className="visually-hidden" id="settings-shell-targets-add">{editing === null ? t('Ausführungsort hinzufügen') : t('Ausführungsort bearbeiten')}</h3>
         {editing !== null && (
           <p className="hint">
             {t('Die Art lässt sich nicht ändern. Jobs, die auf den bisherigen Namen, Geltungsbereich oder Benutzer zeigen, werden ab dem nächsten Lauf abgelehnt, bis sie angepasst sind.')}</p>
@@ -890,6 +904,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
           )}
         </div>
       </form>
+      </Modal>
     </section>
   );
 }

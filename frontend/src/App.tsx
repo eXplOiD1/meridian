@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
  */
 import { useCallback, useEffect, useState } from 'react';
+import { Modal } from './components/Modal';
 import { Layout } from './components/Layout';
 import { ApiError, PASSWORD_CHANGE_EVENT, request, SESSION_ENDED_EVENT, setCsrfRefresher } from './lib/api';
 import { canManageCategories, canManageSettings, canManageUsers, canSeeUsersArea } from './lib/permissions';
@@ -15,7 +16,7 @@ import { Categories } from './screens/Categories';
 import { JobDetail } from './screens/JobDetail';
 import { JobEdit } from './screens/JobEdit';
 import { HistoryExplorer as History } from './screens/HistoryExplorer';
-import { setLang } from './i18n';
+import { setLang, t } from './i18n';
 import { setTheme } from './theme';
 import { Statistics } from './screens/Statistics';
 import { Automations } from './screens/Automations';
@@ -59,6 +60,8 @@ const HEADINGS: Record<Route['name'], { kicker: string; title: string }> = {
 export function App() {
   const [session, setSession] = useState<Session>({ status: 'loading' });
   const route = useHashRoute();
+  const [editorBusy, setEditorBusy] = useState(false);
+  useEffect(() => { setEditorBusy(false); }, [route.name]);
 
   // Die Sitzung liegt im HttpOnly-Cookie: ob jemand angemeldet ist, erfährt die Seite nur vom Server.
   const refresh = useCallback(async (): Promise<void> => {
@@ -189,7 +192,7 @@ export function App() {
   const effective: Route =
     (usersRoute && !canManageUsers(profile)) ||
     (rolesRoute && !canSeeUsersArea(profile)) || (route.name === 'categories' && !canManageCategories(profile)) ? { name: 'home' } : route;
-  const heading = HEADINGS[effective.name];
+  const heading = HEADINGS[effective.name === 'job-new' ? 'jobs' : effective.name === 'user-new' ? 'users' : effective.name === 'role-new' ? 'roles' : effective.name];
 
   return (
     <UpdateAvailabilityProvider key={profile.user.id} enabled={canManageSettings(profile)}>
@@ -199,19 +202,19 @@ export function App() {
       {effective.name === 'konto' && <Account profile={profile} onChanged={refresh} onCsrfToken={adoptCsrf} />}
       {effective.name === 'settings' && <Settings profile={profile} />}
       {effective.name === 'audit' && <Audit profile={profile} />}
-      {effective.name === 'jobs' && <Jobs profile={profile} />}
+      {(effective.name === 'jobs' || effective.name === 'job-new') && <Jobs profile={profile} />}
       {effective.name === 'history' && <History key={window.location.hash} profile={profile} />}
       {effective.name === 'stats' && <Statistics profile={profile} />}
       {effective.name === 'automations' && <Automations profile={profile} />}
       {effective.name === 'monitors' && <Monitors profile={profile} />}
       {effective.name === 'status-pages' && <StatusPages profile={profile} />}
       {effective.name === 'job' && <JobDetail key={effective.id} profile={profile} id={effective.id} />}
-      {effective.name === 'job-new' && <JobEdit profile={profile} id={null} onEditorModeChange={adoptEditorMode} />}
-      {effective.name === 'users' && <Users profile={profile} roleId={effective.roleId ?? null} />}
-      {effective.name === 'roles' && <Roles profile={profile} />}
-      {effective.name === 'role-new' && <RoleEdit key="new" profile={profile} id={null} />}
+      {effective.name === 'job-new' && <Modal open busy={editorBusy} title={t('Neuer Job')} onClose={() => navigate('jobs')}><JobEdit onBusyChange={setEditorBusy} profile={profile} id={null} onEditorModeChange={adoptEditorMode} /></Modal>}
+      {(effective.name === 'users' || effective.name === 'user-new') && <Users profile={profile} roleId={effective.name === 'users' ? effective.roleId ?? null : null} />}
+      {(effective.name === 'roles' || effective.name === 'role-new') && <Roles profile={profile} />}
+      {effective.name === 'role-new' && <Modal open busy={editorBusy} title={t('Rolle anlegen')} onClose={() => navigate('benutzer/rollen')}><RoleEdit onBusyChange={setEditorBusy} key="new" profile={profile} id={null} /></Modal>}
       {effective.name === 'role' && <RoleEdit key={effective.id} profile={profile} id={effective.id} />}
-      {effective.name === 'user-new' && <UserEdit key="new" profile={profile} id={null} />}
+      {effective.name === 'user-new' && <Modal open busy={editorBusy} title={t('Benutzer anlegen')} onClose={() => navigate('benutzer')}><UserEdit onBusyChange={setEditorBusy} key="new" profile={profile} id={null} /></Modal>}
       {effective.name === 'user' && <UserEdit key={effective.id} profile={profile} id={effective.id} />}
       {effective.name === 'categories' && <Categories profile={profile} />}
       {effective.name === 'job-edit' && <JobEdit key={effective.id} profile={profile} id={effective.id} onEditorModeChange={adoptEditorMode} />}
