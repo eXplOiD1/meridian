@@ -82,13 +82,13 @@ final class ChannelValidator
             ChannelType::Browser => self::browser($input),
         };
 
-        if ($type === ChannelType::Pushover && $secret !== null && $secret !== '') {
+        if ($type->needsUserKey() && $secret !== null && $secret !== '') {
             $user = $input['user_key'] ?? null;
             if (!is_string($user) || preg_match('/^[A-Za-z0-9]{30}$/D', $user) !== 1 || preg_match('/^[A-Za-z0-9]{30}$/D', $secret) !== 1) {
                 throw new InvalidChannel('user_key', 'Pushover: App-Token und User/Group-Key müssen je 30 Buchstaben oder Ziffern haben.');
             }
             $secret = json_encode(['token' => $secret, 'user' => $user], JSON_THROW_ON_ERROR);
-        } elseif ($type === ChannelType::Pushover && array_key_exists('user_key', $input)) {
+        } elseif ($type->needsUserKey() && array_key_exists('user_key', $input)) {
             throw new InvalidChannel('user_key', 'Zum Ändern beide Pushover-Schlüssel neu eingeben.');
         }
         if (($type === ChannelType::Discord || $type === ChannelType::Slack) && $secret !== null && $secret !== '') {
@@ -158,9 +158,6 @@ final class ChannelValidator
         }
         $host = self::host($parts['host'], 'server');
         $port = $parts['port'] ?? ($parts['scheme'] === 'https' ? 443 : 80);
-        if ($port < 1 || $port > 65535) {
-            throw new InvalidChannel('server', 'Server: ungültiger Port.');
-        }
         $topic = $input['topic'] ?? null;
         if (!is_string($topic) || preg_match('/^[A-Za-z0-9_-]{1,64}$/D', $topic) !== 1) {
             throw new InvalidChannel('topic', 'Thema: 1 bis 64 Zeichen aus Buchstaben, Ziffern, _ und -.');
@@ -201,9 +198,6 @@ final class ChannelValidator
         }
         $host = self::host($parts['host'], 'url');
         $port = $parts['port'] ?? ($parts['scheme'] === 'https' ? 443 : 80);
-        if ($port < 1 || $port > 65535) {
-            throw new InvalidChannel('url', 'Adresse: ungültiger Port.');
-        }
         $isDefaultPort = ($parts['scheme'] === 'https' && $port === 443) || ($parts['scheme'] === 'http' && $port === 80);
 
         return ['url' => $parts['scheme'] . '://' . (str_contains($host, ':') ? '[' . $host . ']' : $host) . ($isDefaultPort ? '' : ':' . $port) . $path];

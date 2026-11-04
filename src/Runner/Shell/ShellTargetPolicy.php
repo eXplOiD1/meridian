@@ -39,7 +39,7 @@ final class ShellTargetPolicy
         if ($grants === []) {
             return ShellTargetRefusal::TargetNotAllowed;
         }
-        if ($target->kind === ShellTargetKind::Host) {
+        if ($target->kind !== ShellTargetKind::Docker) {
             return $user === null ? null : ShellTargetRefusal::UserNotAllowed;
         }
         if ($user === null) {
@@ -60,7 +60,7 @@ final class ShellTargetPolicy
      */
     public function resolveUser(ShellTarget $target, ?string $user, ?int $categoryId): ?string
     {
-        if ($target->kind === ShellTargetKind::Host || $this->check($target, $user, $categoryId) !== null) {
+        if ($target->kind !== ShellTargetKind::Docker || $this->check($target, $user, $categoryId) !== null) {
             return null;
         }
 

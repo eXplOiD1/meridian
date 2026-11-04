@@ -97,7 +97,9 @@ final class ChannelStore
             $this->assertNameFree($draft->name, null);
             if ($draft->type === ChannelType::Browser) {
                 $keys = \Minishlink\WebPush\VAPID::createVapidKeys();
-                if (!is_string($keys['publicKey'] ?? null) || !is_string($keys['privateKey'] ?? null)) { throw new \RuntimeException('Browser-Push-Schlüssel konnten nicht erzeugt werden.'); }
+                if (!is_string($keys['publicKey'] ?? null) || !is_string($keys['privateKey'] ?? null)) {
+                    throw new \RuntimeException('Browser-Push-Schlüssel konnten nicht erzeugt werden.');
+                }
                 $draft = new ChannelDraft($draft->name, $draft->type, $draft->config + ['public_key' => $keys['publicKey']], $keys['privateKey'], $draft->isEnabled);
             }
             $now = Timestamp::format($this->clock->now());

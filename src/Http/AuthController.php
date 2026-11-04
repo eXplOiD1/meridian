@@ -60,7 +60,7 @@ final class AuthController
     {
         // Ohne Sitzung gibt es kein Token; die Herkunftsprüfung schützt vor fremden Anmeldeformularen.
         if (!$this->csrf->originMatches($request)) {
-            return self::error(403, 'Ungültige Herkunft der Anfrage.');
+            return ClientIp::originProblem($request, $this->config) ?? self::error(403, 'Ungültige Herkunft der Anfrage.');
         }
 
         // Proxy-Header ohne MERIDIAN_TRUSTED_PROXIES: ablehnen, bevor ein Passwort geprüft wird (Variante A).

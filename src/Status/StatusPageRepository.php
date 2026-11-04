@@ -138,12 +138,18 @@ final class StatusPageRepository
         $rows = $job ? $this->db->fetchAll(
             "SELECT substr(COALESCE(started_at, finished_at), 1, 10) AS day, SUM(status = 'ok') AS ok, SUM(status IN ('failed', 'timeout', 'aborted')) AS bad
              FROM runs WHERE job_id = :id AND trigger <> 'test' AND COALESCE(started_at, finished_at) >= :cutoff
-             AND status IN ('ok', 'failed', 'timeout', 'aborted') GROUP BY day", ['id' => $id, 'cutoff' => $cutoff])
+             AND status IN ('ok', 'failed', 'timeout', 'aborted') GROUP BY day",
+            ['id' => $id, 'cutoff' => $cutoff]
+        )
             : $this->db->fetchAll(
-            "SELECT substr(occurred_at, 1, 10) AS day, SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS ok, SUM(CASE WHEN ok = 0 OR (kind IN ('state', 'alarm') AND state = 'down') THEN 1 ELSE 0 END) AS bad
-             FROM monitor_events WHERE monitor_id = :id AND occurred_at >= :cutoff GROUP BY day", ['id' => $id, 'cutoff' => $cutoff]);
+                "SELECT substr(occurred_at, 1, 10) AS day, SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS ok, SUM(CASE WHEN ok = 0 OR (kind IN ('state', 'alarm') AND state = 'down') THEN 1 ELSE 0 END) AS bad
+             FROM monitor_events WHERE monitor_id = :id AND occurred_at >= :cutoff GROUP BY day",
+                ['id' => $id, 'cutoff' => $cutoff]
+            );
         $byDay = [];
-        foreach ($rows as $row) { $byDay[Row::string($row, 'day')] = [Row::int($row, 'ok'), Row::int($row, 'bad')]; }
+        foreach ($rows as $row) {
+            $byDay[Row::string($row, 'day')] = [Row::int($row, 'ok'), Row::int($row, 'bad')];
+        }
         $out = [];
         for ($offset = 0; $offset < 90; ++$offset) {
             $date = $start->modify('+' . $offset . ' days')->format('Y-m-d');
@@ -163,10 +169,14 @@ final class StatusPageRepository
         $rows = $job ? $this->db->fetchAll(
             "SELECT COALESCE(started_at, finished_at) AS time, CASE WHEN status = 'ok' THEN 'ok' ELSE 'down' END AS state FROM runs
              WHERE job_id = :id AND trigger <> 'test' AND status IN ('ok', 'failed', 'timeout', 'aborted')
-             AND COALESCE(started_at, finished_at) >= :from AND COALESCE(started_at, finished_at) < :to ORDER BY id DESC LIMIT 100", ['id' => $id, 'from' => $from, 'to' => $to])
+             AND COALESCE(started_at, finished_at) >= :from AND COALESCE(started_at, finished_at) < :to ORDER BY id DESC LIMIT 100",
+            ['id' => $id, 'from' => $from, 'to' => $to]
+        )
             : $this->db->fetchAll(
-            "SELECT occurred_at AS time, CASE WHEN ok = 0 THEN 'down' WHEN ok = 1 THEN 'ok' WHEN state = 'up' THEN 'ok' WHEN state = 'down' THEN 'down' WHEN state = 'paused' THEN 'paused' ELSE 'unknown' END AS state FROM monitor_events
-             WHERE monitor_id = :id AND occurred_at >= :from AND occurred_at < :to ORDER BY id DESC LIMIT 100", ['id' => $id, 'from' => $from, 'to' => $to]);
+                "SELECT occurred_at AS time, CASE WHEN ok = 0 THEN 'down' WHEN ok = 1 THEN 'ok' WHEN state = 'up' THEN 'ok' WHEN state = 'down' THEN 'down' WHEN state = 'paused' THEN 'paused' ELSE 'unknown' END AS state FROM monitor_events
+             WHERE monitor_id = :id AND occurred_at >= :from AND occurred_at < :to ORDER BY id DESC LIMIT 100",
+                ['id' => $id, 'from' => $from, 'to' => $to]
+            );
         return array_map(static fn (array $row): array => ['time' => Row::string($row, 'time'), 'state' => Row::string($row, 'state')], $rows);
     }
 

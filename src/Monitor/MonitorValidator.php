@@ -41,7 +41,9 @@ final class MonitorValidator
         $errors = [];
         /** @var mixed $maxResponse */
         $maxResponse = array_key_exists('max_response_ms', $input) ? $input['max_response_ms'] : ($existing->maxResponseMs ?? 5000);
-        if (!is_int($maxResponse)) { throw ValidationFailed::field('max_response_ms', 'Antwortzeit: ganze Zahl von 100 bis 10000 Millisekunden.'); }
+        if (!is_int($maxResponse)) {
+            throw ValidationFailed::field('max_response_ms', 'Antwortzeit: ganze Zahl von 100 bis 10000 Millisekunden.');
+        }
         if ($maxResponse < 100 || $maxResponse > 10000) {
             $errors['max_response_ms'] = 'Antwortzeit: ganze Zahl von 100 bis 10000 Millisekunden.';
         }

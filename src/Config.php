@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 namespace Meridian;
 
+use Meridian\Http\OwnNetworks;
+
 /**
  * Laufzeit-Konfiguration aus Umgebungsvariablen.
  *
@@ -65,11 +67,18 @@ final readonly class Config
             if ($entry === '') {
                 continue;
             }
+            // `auto`: die privaten Docker-Netze, in denen der Container selbst hängt (nie ein Heimnetz, nie die Standardroute).
+            if (strtolower($entry) === 'auto') {
+                array_push($proxies, ...OwnNetworks::detect());
+
+                continue;
+            }
             if (preg_match('/^[0-9a-fA-F:.]+(\/[0-9]{1,3})?$/', $entry) !== 1) {
-                throw new \InvalidArgumentException('MERIDIAN_TRUSTED_PROXIES: kommagetrennte IP-Adressen oder Netze wie 172.19.0.0/16.');
+                throw new \InvalidArgumentException('MERIDIAN_TRUSTED_PROXIES: "auto" oder kommagetrennte IP-Adressen oder Netze wie 172.29.0.0/16.');
             }
             $proxies[] = $entry;
         }
+        $proxies = array_values(array_unique($proxies));
 
         $listenPort = self::DEFAULT_LISTEN_PORT;
         $portText = trim($env['MERIDIAN_LISTEN_PORT'] ?? '');

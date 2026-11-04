@@ -103,20 +103,33 @@ final class NetworkProbe implements Prober
         $duration = 0;
         for ($hop = 0; ; ++$hop) {
             $remaining = $maxResponseMs - max($duration, self::elapsed($started));
-            if ($remaining <= 0) { return ProbeResult::failed('Antwortzeit überschritten (Grenze: ' . $maxResponseMs . ' ms).'); }
+            if ($remaining <= 0) {
+                return ProbeResult::failed('Antwortzeit überschritten (Grenze: ' . $maxResponseMs . ' ms).');
+            }
             $response = $this->transport->send(new TransportRequest('GET', $pinned, [], null, $remaining), new NullHeartbeat());
             $duration += $response->durationMs;
             $location = $response->location();
-            if ($response->error === null && in_array($response->status, [301, 302, 303, 307, 308], true) && $location === null) { return ProbeResult::failed('Weiterleitung ohne gültiges Ziel.'); }
-            if ($response->error !== null || !in_array($response->status, [301, 302, 303, 307, 308], true) || $location === null) break;
-            if ($hop >= 5) { return ProbeResult::failed('Zu viele Weiterleitungen (höchstens 5).'); }
+            if ($response->error === null && in_array($response->status, [301, 302, 303, 307, 308], true) && $location === null) {
+                return ProbeResult::failed('Weiterleitung ohne gültiges Ziel.');
+            }
+            if ($response->error !== null || !in_array($response->status, [301, 302, 303, 307, 308], true) || $location === null) {
+                break;
+            }
+            if ($hop >= 5) {
+                return ProbeResult::failed('Zu viele Weiterleitungen (höchstens 5).');
+            }
             try {
                 $resolved = \GuzzleHttp\Psr7\UriResolver::resolve(new \GuzzleHttp\Psr7\Uri($pinned->url->toUrl()), new \GuzzleHttp\Psr7\Uri($location))->withFragment('');
                 $next = $this->urls->parse((string) $resolved);
-                if ($pinned->url->scheme === 'https' && $next->scheme !== 'https') { return ProbeResult::failed('Weiterleitung von HTTPS auf HTTP ist nicht erlaubt.'); }
+                if ($pinned->url->scheme === 'https' && $next->scheme !== 'https') {
+                    return ProbeResult::failed('Weiterleitung von HTTPS auf HTTP ist nicht erlaubt.');
+                }
                 $pinned = $this->guard->pin($next, $categoryId);
-            } catch (TargetBlocked|TargetUnresolvable $error) { return ProbeResult::failed($error->getMessage()); }
-            catch (\InvalidArgumentException|InvalidUrl) { return ProbeResult::failed('Ungültige Weiterleitung.'); }
+            } catch (TargetBlocked|TargetUnresolvable $error) {
+                return ProbeResult::failed($error->getMessage());
+            } catch (\InvalidArgumentException|InvalidUrl) {
+                return ProbeResult::failed('Ungültige Weiterleitung.');
+            }
         }
         if ($response->error !== null) {
             return ProbeResult::failed(match ($response->error) {
@@ -128,8 +141,12 @@ final class NetworkProbe implements Prober
                 TransportError::Other => 'Übertragung fehlgeschlagen (curl-Fehler ' . ($response->errorCode ?? 0) . ').',
             });
         }
-        if ($response->bodyLimitReached) { return ProbeResult::failed('Antwort zu groß; die Seite konnte nicht vollständig geprüft werden.'); }
-        if (max($duration, self::elapsed($started)) > $maxResponseMs) { return ProbeResult::failed('Antwortzeit überschritten (Grenze: ' . $maxResponseMs . ' ms).'); }
+        if ($response->bodyLimitReached) {
+            return ProbeResult::failed('Antwort zu groß; die Seite konnte nicht vollständig geprüft werden.');
+        }
+        if (max($duration, self::elapsed($started)) > $maxResponseMs) {
+            return ProbeResult::failed('Antwortzeit überschritten (Grenze: ' . $maxResponseMs . ' ms).');
+        }
         foreach ($ranges as [$from, $to]) {
             if ($response->status >= $from && $response->status <= $to) {
                 return ProbeResult::ok(max($duration, self::elapsed($started)));

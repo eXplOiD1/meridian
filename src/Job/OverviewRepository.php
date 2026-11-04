@@ -38,7 +38,9 @@ final class OverviewRepository
             $scope->sqlParameters() + ['from' => $from, 'to' => $to, 'size' => $size],
         );
         $out = [];
-        foreach ($rows as $row) { $out[Row::int($row, 'monitor_id')][] = [Row::int($row, 'bucket'), Row::int($row, 'ok'), Row::int($row, 'bad')]; }
+        foreach ($rows as $row) {
+            $out[Row::int($row, 'monitor_id')][] = [Row::int($row, 'bucket'), Row::int($row, 'ok'), Row::int($row, 'bad')];
+        }
         return $out;
     }
 

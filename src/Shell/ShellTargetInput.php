@@ -23,6 +23,7 @@ final readonly class ShellTargetInput
         public array $users,
         public ?string $defaultUser,
         public string $note,
+        public ?SshProfile $ssh = null,
     ) {
     }
 }

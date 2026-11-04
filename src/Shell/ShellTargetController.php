@@ -41,9 +41,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class ShellTargetController
 {
-    private const MAX_BODY = 4096;
+    private const MAX_BODY = 131072;
 
-    private const FIELDS = ['category_id', 'default_user', 'kind', 'name', 'note', 'users', 'current_password'];
+    private const FIELDS = ['category_id', 'default_user', 'kind', 'name', 'note', 'users', 'current_password', 'ssh'];
 
     public function __construct(
         private readonly SessionAuth $sessionAuth,
@@ -89,9 +89,9 @@ final class ShellTargetController
         }
         $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
-        [$kind, $name, $categoryId, $users, $default, $note, $password] = self::input($request);
+        [$kind, $name, $categoryId, $users, $default, $note, $password, $ssh] = self::input($request);
         try {
-            $input = $this->store->validate($kind, $name, $categoryId, $users, $default, $note);
+            $input = $this->store->validate($kind, $name, $categoryId, $users, $default, $note, $ssh);
             $confirmation = $this->confirm($request, $session->userId, $input, $password);
             if ($confirmation !== null) {
                 return $confirmation;
@@ -115,10 +115,10 @@ final class ShellTargetController
         }
         $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
-        [$kind, $name, $categoryId, $users, $default, $note, $password] = self::input($request);
+        [$kind, $name, $categoryId, $users, $default, $note, $password, $ssh] = self::input($request);
         $id = $request->attributes->getString('id');
         try {
-            $input = $this->store->validate($kind, $name, $categoryId, $users, $default, $note);
+            $input = $this->store->validate($kind, $name, $categoryId, $users, $default, $note, $ssh);
             $old = preg_match('/^[1-9][0-9]{0,17}$/D', $id) === 1 ? $this->store->find((int) $id) : null;
             if ($old === null) {
                 return JsonReply::error(404, 'Ausführungsort nicht gefunden.');
@@ -215,7 +215,7 @@ final class ShellTargetController
     /**
      * Strenge Typen, nur bekannte Felder; nichts wird umgedeutet.
      *
-     * @return array{0: string, 1: string, 2: int|null, 3: array<mixed>, 4: string|null, 5: string, 6: ?string}
+     * @return array{0: string, 1: string, 2: int|null, 3: array<mixed>, 4: string|null, 5: string, 6: ?string, 7: array<mixed>|null}
      *
      * @throws ValidationFailed
      */
@@ -259,8 +259,12 @@ final class ShellTargetController
         if (!is_string($note)) {
             $errors['note'] = 'Die Notiz muss Text sein.';
         }
+        $ssh = $data['ssh'] ?? null;
+        if ($ssh !== null && !is_array($ssh)) {
+            $errors['ssh'] = 'Das SSH-Profil muss ein Objekt oder null sein.';
+        }
         if ($errors !== [] || !is_string($kind) || !is_string($name) || ($category !== null && !is_int($category)) || !is_array($users)
-            || ($default !== null && !is_string($default)) || !is_string($note)) {
+            || ($default !== null && !is_string($default)) || !is_string($note) || ($ssh !== null && !is_array($ssh))) {
             throw new ValidationFailed($errors);
         }
 
@@ -268,7 +272,7 @@ final class ShellTargetController
         if ($password !== null && (!is_string($password) || strlen($password) > AuthService::MAX_PASSWORD)) {
             throw ValidationFailed::field('current_password', 'Das Passwort muss ein Text mit höchstens 1024 Byte sein.');
         }
-        return [$kind, $name, $category, $users, $default, $note, $password];
+        return [$kind, $name, $category, $users, $default, $note, $password, $ssh];
     }
 
     /** Confirmation is server-side and uses the same account/IP lockout as login. Revoking a grant stays possible without it. */
@@ -278,7 +282,7 @@ final class ShellTargetController
         foreach ($input->users as $allowedUser) {
             $root = $root || ShellRules::isRootUser($allowedUser);
         }
-        if ($input->target->kind->value !== 'host' && !$root) {
+        if ($input->target->kind->value === 'docker' && !$root) {
             return null;
         }
         if ($password === null || $password === '') {
@@ -311,6 +315,8 @@ final class ShellTargetController
             'users' => $record->users,
             'default_user' => $record->defaultUser,
             'allows_root' => $record->allowsRoot(),
+            'ssh' => $record->ssh,
+            'has_private_key' => $record->hasPrivateKey,
             'note' => $this->masker->mask($record->note),
             'created_at' => $record->createdAt,
             'created_by' => $record->createdBy === null ? null : ['display_name' => $this->masker->mask($record->createdBy)],

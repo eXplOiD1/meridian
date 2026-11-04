@@ -11,7 +11,7 @@ use Symfony\Component\HttpFoundation\Request;
 
 /**
  * CSRF-Schutz für ändernde Anfragen: ein an die Sitzung gebundenes Token im Header
- * X-CSRF-Token und zusätzlich die Herkunft (Origin bzw. Referer) gegen den eigenen Host.
+ * X-CSRF-Token und zusätzlich die Herkunft (Origin bzw. Referer) gegen die eigene Adresse (Schema, Host und Port).
  */
 final class CsrfGuard
 {
@@ -51,7 +51,7 @@ final class CsrfGuard
     }
 
     /**
-     * Wie {@see originMatches()}, aber ohne Origin und Referer ist das in Ordnung; sind sie da, muss der Host passen.
+     * Wie {@see originMatches()}, aber ohne Origin und Referer ist das in Ordnung; sind sie da, müssen Schema, Host und Port passen.
      */
     public function originMatchesIfPresent(#[\SensitiveParameter] Request $request): bool
     {
@@ -77,8 +77,16 @@ final class CsrfGuard
             return false;
         }
 
-        $host = parse_url($source, PHP_URL_HOST);
+        $parts = parse_url($source);
+        if (!is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
+            return false;
+        }
+        // Schema, Host und Port müssen zur eigenen Adresse passen (Request wertet Proxy-Header nur von vertrauten Proxys aus).
+        $scheme = strtolower($parts['scheme']);
+        if ($scheme !== $request->getScheme() || strtolower($parts['host']) !== strtolower($request->getHost())) {
+            return false;
+        }
 
-        return is_string($host) && strtolower($host) === strtolower($request->getHost());
+        return ($parts['port'] ?? ($scheme === 'https' ? 443 : 80)) === (int) $request->getPort();
     }
 }
