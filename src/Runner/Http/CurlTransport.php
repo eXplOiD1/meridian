@@ -83,7 +83,8 @@ final class CurlTransport implements HttpTransport
             } while ($running > 0);
 
             $info = curl_multi_info_read($mh);
-            $errno = is_array($info) && isset($info['result']) ? $info['result'] : null;
+            $result = is_array($info) ? ($info['result'] ?? null) : null;
+            $errno = is_int($result) ? $result : null;
             $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             $hop->status = $status > 0 ? $status : $hop->status;
             if ($request->target->url->scheme === 'https') {
