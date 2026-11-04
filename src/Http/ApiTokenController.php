@@ -109,7 +109,7 @@ final class ApiTokenController
         if (!is_string($password) || $password === '' || strlen($password) > AuthService::MAX_PASSWORD) {
             $errors['current_password'] = 'Zur Bestätigung das aktuelle Passwort angeben.';
         }
-        if ($errors !== [] || !is_string($name) || !is_bool($readOnly) || !is_string($password) || ($days !== null && !is_int($days))) {
+        if ($errors !== []) {
             throw new ValidationFailed($errors);
         }
         // Erst Eingabe und Grenzen prüfen, dann das Passwort (Fehlversuche zählen in die Sperre der Anmeldung).

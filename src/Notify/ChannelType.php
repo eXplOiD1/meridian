@@ -19,6 +19,12 @@ enum ChannelType: string
     case HomeAssistant = 'homeassistant';
     case Browser = 'browser';
 
+    /** Pushover braucht neben dem App-Token einen zweiten Schlüssel (`user_key`). */
+    public function needsUserKey(): bool
+    {
+        return $this === self::Pushover;
+    }
+
     /** Name des Geheimnisfelds in der Eingabe (Passwort bzw. Token). */
     public function secretField(): string
     {

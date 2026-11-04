@@ -516,10 +516,16 @@ final class Notifier
     private function send(array $row): ?string
     {
         if (Row::string($row, 'kind') === 'automation') {
-            $rule = $this->db->fetchOne('SELECT owner_id,enabled,definition FROM automations WHERE id=:id', ['id'=>Row::int($row,'automation_id')]);
+            $rule = $this->db->fetchOne('SELECT owner_id,enabled,definition FROM automations WHERE id=:id', ['id' => Row::int($row, 'automation_id')]);
             $users = new \Meridian\User\UserRepository($this->db, new \Meridian\Security\PasswordHasher());
-            if ($rule === null || !Row::bool($rule,'enabled') || !(new \Meridian\Security\AccessControl())->can($users->grantsFor(Row::int($rule,'owner_id')), \Meridian\Security\Permission::ManageAutomations)) return SendFailed::DISABLED;
-            try { \Meridian\Automation\Definition::read(\Meridian\Http\JsonBody::object(Row::string($rule,'definition'),16384,8) ?? [],$this->db,$users->grantsFor(Row::int($rule,'owner_id'))); } catch (\Throwable) { return SendFailed::DISABLED; }
+            if ($rule === null || !Row::bool($rule, 'enabled') || !(new \Meridian\Security\AccessControl())->can($users->grantsFor(Row::int($rule, 'owner_id')), \Meridian\Security\Permission::ManageAutomations)) {
+                return SendFailed::DISABLED;
+            }
+            try {
+                \Meridian\Automation\Definition::read(\Meridian\Http\JsonBody::object(Row::string($rule, 'definition'), 16384, 8) ?? [], $this->db, $users->grantsFor(Row::int($rule, 'owner_id')));
+            } catch (\Throwable) {
+                return SendFailed::DISABLED;
+            }
         }
         $channel = $this->channels->find(Row::int($row, 'channel_id'));
         if ($channel === null || !$channel->isEnabled) {

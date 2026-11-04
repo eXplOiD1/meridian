@@ -83,9 +83,9 @@ final class CurlTransport implements HttpTransport
             } while ($running > 0);
 
             $info = curl_multi_info_read($mh);
-            $errno = is_array($info) && isset($info['result']) && is_int($info['result']) ? $info['result'] : null;
-            $status = filter_var(curl_getinfo($ch, CURLINFO_RESPONSE_CODE), FILTER_VALIDATE_INT);
-            $hop->status = is_int($status) && $status > 0 ? $status : $hop->status;
+            $errno = is_array($info) && isset($info['result']) ? $info['result'] : null;
+            $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            $hop->status = $status > 0 ? $status : $hop->status;
             if ($request->target->url->scheme === 'https') {
                 $hop->tlsExpiresAt = self::certificateExpiry(curl_getinfo($ch, CURLINFO_CERTINFO));
             }
@@ -219,12 +219,12 @@ final class CurlTransport implements HttpTransport
                 return true;
             }
             $ip = curl_getinfo($ch, CURLINFO_PRIMARY_IP);
-            $port = filter_var(curl_getinfo($ch, CURLINFO_PRIMARY_PORT), FILTER_VALIDATE_INT);
-            if (!is_string($ip) || $ip === '') {
+            $port = curl_getinfo($ch, CURLINFO_PRIMARY_PORT);
+            if ($ip === '') {
                 return true;
             }
             $hop->peerChecked = true;
-            if (!$hop->allowsPeer($ip, is_int($port) ? $port : 0)) {
+            if (!$hop->allowsPeer($ip, $port)) {
                 $hop->abort = TransportError::PinViolation;
 
                 return false;

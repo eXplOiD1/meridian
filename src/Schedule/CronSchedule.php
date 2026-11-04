@@ -154,9 +154,6 @@ final readonly class CronSchedule
     private function shiftedGapAfter(\DateTimeImmutable $after, \DateTimeImmutable $before): ?\DateTimeImmutable
     {
         $transitions = $this->timezone->getTransitions($after->getTimestamp() - 86400, $before->getTimestamp() + 1);
-        if ($transitions === false) {
-            return null;
-        }
         $expression = $this->expression ?? throw new \LogicException('Cron-Ausdruck fehlt.');
         $previousOffset = null;
         foreach ($transitions as $transition) {
@@ -203,9 +200,6 @@ final readonly class CronSchedule
 
         $timestamp = $local->getTimestamp();
         $transitions = $this->timezone->getTransitions($timestamp - 86400, $timestamp + 1);
-        if ($transitions === false) {
-            return false;
-        }
         $previousOffset = null;
         foreach ($transitions as $transition) {
             $offset = $transition['offset'];
@@ -239,7 +233,7 @@ final readonly class CronSchedule
     {
         $timestamp = $local->getTimestamp();
         $transitions = $this->timezone->getTransitions($timestamp - 86400, $timestamp + 1);
-        if ($transitions === false || $transitions === []) {
+        if ($transitions === []) {
             return false;
         }
 

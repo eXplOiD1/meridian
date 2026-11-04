@@ -146,10 +146,16 @@ final class Kernel
     private function maintenance(#[\SensitiveParameter] Request $request): bool
     {
         $path = $request->getPathInfo();
-        if ($request->getMethod() === 'GET' && in_array($path, ['/api/admin/updates', '/api/health', '/api/auth/me'], true)) { return false; }
-        if (!str_starts_with($path, '/api/') && !str_starts_with($path, '/ping/')) { return false; }
+        if ($request->getMethod() === 'GET' && in_array($path, ['/api/admin/updates', '/api/health', '/api/auth/me'], true)) {
+            return false;
+        }
+        if (!str_starts_with($path, '/api/') && !str_starts_with($path, '/ping/')) {
+            return false;
+        }
         $file = $this->config->dataDir . '/updates/status.json';
-        if (!is_file($file) || is_link($file) || filesize($file) > 8192 || filemtime($file) < time() - 90) { return false; }
+        if (!is_file($file) || is_link($file) || filesize($file) > 8192 || filemtime($file) < time() - 90) {
+            return false;
+        }
         $content = file_get_contents($file);
         $data = $content === false ? null : json_decode($content, true);
         return is_array($data) && (($data['recovery_required'] ?? false) === true || (($data['busy'] ?? false) === true && in_array($data['phase'] ?? '', ['backup', 'installing', 'verifying', 'rollback'], true)));

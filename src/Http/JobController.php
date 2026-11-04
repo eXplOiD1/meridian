@@ -513,7 +513,7 @@ final class JobController
                 $count = $parsed;
             }
         }
-        if ($errors !== [] || !is_string($cron) || !is_string($timezone)) {
+        if ($errors !== []) {
             throw new ValidationFailed($errors);
         }
 

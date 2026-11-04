@@ -227,7 +227,7 @@ final class Worker
         if ($automationId !== null) {
             // An authorizer without database-backed rule provenance cannot approve unattended actions.
             return $startedBy !== null && $this->authorizer instanceof DbRunAuthorizer
-                && $this->authorizer->mayStartAutomation($startedBy,$jobId,$automationId);
+                && $this->authorizer->mayStartAutomation($startedBy, $jobId, $automationId);
         }
         if ($startedBy === null) {
             return $trigger !== RunTrigger::Manual && $trigger !== RunTrigger::Test;
