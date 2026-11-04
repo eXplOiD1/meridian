@@ -244,7 +244,7 @@ final class LocalExecution implements Execution
         if ($ready === false || $ready === 0) {
             return;
         }
-        if ($write !== [] && isset($this->pipes[0])) {
+        if ($write !== []) {
             $this->writeScript();
         }
         foreach ([1 => LiveStream::Out, 2 => LiveStream::Err] as $i => $stream) {

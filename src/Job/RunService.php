@@ -104,7 +104,7 @@ final class RunService
     {
         $row = $this->db->fetchOne(
             "SELECT COUNT(*) AS n FROM runs WHERE started_by = :user AND trigger IN ('manual', 'test') AND scheduled_for > :since AND ((:automation=1 AND automation_id IS NOT NULL) OR (:automation=0 AND automation_id IS NULL))",
-            ['user' => $userId, 'since' => Timestamp::format($now->modify('-1 hour')), 'automation'=>(int)$automation],
+            ['user' => $userId, 'since' => Timestamp::format($now->modify('-1 hour')), 'automation' => (int)$automation],
         );
 
         return $row === null ? 0 : Row::int($row, 'n');

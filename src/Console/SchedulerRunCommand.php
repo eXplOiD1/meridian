@@ -87,8 +87,12 @@ final class SchedulerRunCommand extends Command
 
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
-            pcntl_signal(SIGTERM, function (): void { $this->requestStop(); });
-            pcntl_signal(SIGINT, function (): void { $this->requestStop(); });
+            pcntl_signal(SIGTERM, function (): void {
+                $this->requestStop();
+            });
+            pcntl_signal(SIGINT, function (): void {
+                $this->requestStop();
+            });
         }
 
         $once = $input->getOption('once') === true;

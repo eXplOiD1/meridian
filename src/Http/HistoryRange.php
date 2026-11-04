@@ -1,7 +1,9 @@
 <?php
+
 // Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
 // SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 declare(strict_types=1);
+
 namespace Meridian\Http;
 
 use Meridian\Database\Timestamp;
@@ -15,7 +17,10 @@ final class HistoryRange
         $range = [];
         foreach (['from', 'to'] as $name) {
             $value = $request->query->all()[$name] ?? null;
-            if ($value === null) { $range[] = null; continue; }
+            if ($value === null) {
+                $range[] = null;
+                continue;
+            }
             if (!is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/D', $value) !== 1) {
                 throw ValidationFailed::field($name, 'Zeitpunkt: ISO-8601 mit Zeitzone.');
             }

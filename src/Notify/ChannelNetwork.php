@@ -45,7 +45,7 @@ final class ChannelNetwork
         } catch (InvalidInternalTarget) {
             $release = null;
         }
-        $source = new class($release) implements InternalTargetSource {
+        $source = new class ($release) implements InternalTargetSource {
             public function __construct(private readonly ?InternalTarget $release)
             {
             }

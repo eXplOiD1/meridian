@@ -85,8 +85,12 @@ final class WorkerRunCommand extends Command
 
         if (function_exists('pcntl_async_signals')) {
             pcntl_async_signals(true);
-            pcntl_signal(SIGTERM, function (): void { $this->requestStop(); });
-            pcntl_signal(SIGINT, function (): void { $this->requestStop(); });
+            pcntl_signal(SIGTERM, function (): void {
+                $this->requestStop();
+            });
+            pcntl_signal(SIGINT, function (): void {
+                $this->requestStop();
+            });
         }
 
         if ($input->getOption('child') === true) {
@@ -107,7 +111,9 @@ final class WorkerRunCommand extends Command
             $command,
             WorkerSupervisor::childEnvironment($this->env, $type),
             $concurrency,
-            static function (string $line) use ($output): void { $output->writeln($line, OutputInterface::VERBOSITY_VERBOSE); },
+            static function (string $line) use ($output): void {
+                $output->writeln($line, OutputInterface::VERBOSITY_VERBOSE);
+            },
         );
         $output->writeln(sprintf('Worker-Aufseher für %s mit %d Kind(ern) gestartet.', $type->value, $concurrency), OutputInterface::VERBOSITY_VERBOSE);
         $supervisor->run(fn (): bool => $this->stop);

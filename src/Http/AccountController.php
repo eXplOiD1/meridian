@@ -163,7 +163,7 @@ final class AccountController
         if (!is_string($new) || strlen($new) > AuthService::MAX_PASSWORD) {
             $errors['new_password'] = 'Das Passwort muss ein Text mit höchstens 1024 Byte sein.';
         }
-        if ($errors !== [] || !is_string($old) || !is_string($new)) {
+        if (!is_string($old) || !is_string($new) || $errors !== []) {
             throw new ValidationFailed($errors);
         }
 

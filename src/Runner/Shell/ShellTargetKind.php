@@ -15,6 +15,7 @@ enum ShellTargetKind: string
 {
     case Docker = 'docker';
     case Host = 'host';
+    case Ssh = 'ssh';
 
     /** Allowlist-Muster für den Namen: Docker wie bei Docker selbst (auch Punkt), Host-Profil in Kleinbuchstaben. */
     /**
@@ -24,7 +25,7 @@ enum ShellTargetKind: string
     {
         return match ($this) {
             self::Docker => '/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D',
-            self::Host => '/^[a-z][a-z0-9-]{0,31}$/D',
+            self::Host, self::Ssh => '/^[a-z][a-z0-9-]{0,31}$/D',
         };
     }
 

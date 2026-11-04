@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace Meridian\Shell;
 
 use Meridian\Auth\AuditLog;
+use Meridian\Security\SecretBox;
 use Meridian\Auth\Clock;
 use Meridian\Database\Connection;
 use Meridian\Database\Timestamp;
@@ -28,7 +29,7 @@ final class ShellTargetStore
 {
     public const MAX_NOTE_LENGTH = 200;
 
-    private const SELECT = 'SELECT t.id, t.kind, t.name, t.category_id, c.name AS category_name, t.users_json, t.default_user, t.note, t.created_at, u.display_name AS created_by
+    private const SELECT = 'SELECT t.id, t.kind, t.name, t.category_id, c.name AS category_name, t.users_json, t.default_user, t.note, t.created_at, t.ssh_config_json, (t.ssh_private_key_enc IS NOT NULL) AS has_private_key, u.display_name AS created_by
                   FROM shell_targets t
                   LEFT JOIN categories c ON c.id = t.category_id
                   LEFT JOIN users u ON u.id = t.created_by';
@@ -36,21 +37,23 @@ final class ShellTargetStore
     public function __construct(
         private readonly Connection $db,
         private readonly Clock $clock,
+        private readonly ?SecretBox $box = null,
     ) {
     }
 
     /**
      * Prüft die Eingabe vollständig, bevor geschrieben wird.
      *
+     * @param array<mixed>|null $ssh
      * @param array<mixed> $users
      *
      * @throws InvalidShellTarget
      */
-    public function validate(string $kind, string $name, ?int $categoryId, array $users, ?string $defaultUser, string $note): ShellTargetInput
+    public function validate(string $kind, string $name, ?int $categoryId, array $users, ?string $defaultUser, string $note, #[\SensitiveParameter] ?array $ssh = null): ShellTargetInput
     {
         $kindEnum = ShellTargetKind::tryFrom($kind);
         if ($kindEnum === null) {
-            throw new InvalidShellTarget('kind', 'Art fehlt oder ist unbekannt. Erlaubt sind „docker“ (Container) und „host“ (Host-Profil).');
+            throw new InvalidShellTarget('kind', 'Art fehlt oder ist unbekannt. Erlaubt sind „docker“, „host“ und „ssh“.');
         }
         if (!$kindEnum->isValidName($name)) {
             throw new InvalidShellTarget('name', $kindEnum === ShellTargetKind::Docker
@@ -67,8 +70,9 @@ final class ShellTargetStore
             throw new InvalidShellTarget('note', 'Die Notiz darf höchstens 200 Zeichen lang sein und keine Steuerzeichen (z. B. Zeilenumbrüche) enthalten.');
         }
 
+        if ($kindEnum !== ShellTargetKind::Ssh && $ssh !== null) throw new InvalidShellTarget('ssh','SSH-Verbindungsdaten sind nur bei SSH-Ausführungsorten erlaubt.');
         $list = [];
-        if ($kindEnum === ShellTargetKind::Host) {
+        if ($kindEnum !== ShellTargetKind::Docker) {
             if ($users !== [] || $defaultUser !== null) {
                 throw new InvalidShellTarget('users', 'Host-Profile haben keine Benutzerliste: „users“ leer und „default_user“ null lassen (der Benutzer ist fest meridian-run).');
             }
@@ -90,7 +94,7 @@ final class ShellTargetStore
             }
         }
 
-        return new ShellTargetInput(new ShellTarget($kindEnum, $name), $categoryId, $list, $defaultUser, $note);
+        return new ShellTargetInput(new ShellTarget($kindEnum, $name), $categoryId, $list, $defaultUser, $note, $ssh === null ? null : SshProfile::validate($ssh));
     }
 
     /**
@@ -99,7 +103,7 @@ final class ShellTargetStore
      *
      * @throws InvalidShellTarget doppelte Freigabe
      */
-    public function add(ShellTargetInput $input, ?int $userId, AuditLog $audit): ShellTargetRecord
+    public function add(#[\SensitiveParameter] ShellTargetInput $input, ?int $userId, AuditLog $audit): ShellTargetRecord
     {
         return $this->db->immediate(function () use ($input, $userId, $audit): ShellTargetRecord {
             $exists = $this->db->fetchOne(
@@ -110,8 +114,8 @@ final class ShellTargetStore
                 throw new InvalidShellTarget('name', 'Diesen Ausführungsort gibt es für diesen Geltungsbereich schon (gleiche Art, gleicher Name, global oder gleiche Kategorie). Erst die alte Freigabe entfernen.');
             }
             $this->db->execute(
-                'INSERT INTO shell_targets (kind, name, category_id, users_json, default_user, note, created_by, created_at)
-                 VALUES (:kind, :name, :category, :users, :default, :note, :user, :at)',
+                'INSERT INTO shell_targets (kind, name, category_id, users_json, default_user, note, created_by, created_at, ssh_config_json, ssh_private_key_enc)
+                 VALUES (:kind, :name, :category, :users, :default, :note, :user, :at, :ssh, :ssh_key)',
                 [
                     'kind' => $input->target->kind->value,
                     'name' => $input->target->name,
@@ -121,6 +125,8 @@ final class ShellTargetStore
                     'note' => $input->note,
                     'user' => $userId,
                     'at' => Timestamp::format($this->clock->now()),
+                    'ssh' => $input->ssh === null ? null : json_encode($input->ssh->metadata(), JSON_THROW_ON_ERROR),
+                    'ssh_key' => $this->encryptSshKey($input, true),
                 ],
             );
             $record = $this->find($this->db->lastInsertId());
@@ -143,7 +149,7 @@ final class ShellTargetStore
      *
      * @throws InvalidShellTarget Art geändert oder doppelte Freigabe
      */
-    public function update(int $id, ShellTargetInput $input, ?int $userId, AuditLog $audit): ?array
+    public function update(int $id, #[\SensitiveParameter] ShellTargetInput $input, ?int $userId, AuditLog $audit): ?array
     {
         return $this->db->immediate(function () use ($id, $input, $userId, $audit): ?array {
             $old = $this->find($id);
@@ -161,7 +167,7 @@ final class ShellTargetStore
                 throw new InvalidShellTarget('name', 'Diesen Ausführungsort gibt es für diesen Geltungsbereich schon (gleiche Art, gleicher Name, global oder gleiche Kategorie).');
             }
             $this->db->execute(
-                'UPDATE shell_targets SET name = :name, category_id = :category, users_json = :users, default_user = :default, note = :note WHERE id = :id',
+                'UPDATE shell_targets SET name = :name, category_id = :category, users_json = :users, default_user = :default, note = :note, ssh_config_json = COALESCE(:ssh, ssh_config_json), ssh_private_key_enc = COALESCE(:ssh_key, ssh_private_key_enc) WHERE id = :id',
                 [
                     'name' => $input->target->name,
                     'category' => $input->categoryId,
@@ -169,6 +175,8 @@ final class ShellTargetStore
                     'default' => $input->defaultUser,
                     'note' => $input->note,
                     'id' => $id,
+                    'ssh' => $input->ssh === null ? null : json_encode($input->ssh->metadata(), JSON_THROW_ON_ERROR),
+                    'ssh_key' => $this->encryptSshKey($input, false),
                 ],
             );
             $new = $this->find($id);
@@ -192,6 +200,16 @@ final class ShellTargetStore
      * Zahl der Shell-Jobs, die auf diesen Ort zeigen (Art und Name; bei einer Kategorie nur Jobs dieser Kategorie).
      * Ohne Entschlüsselung: gelesen wird nur `config_json` (keine Geheimnisse).
      */
+    private function encryptSshKey(#[\SensitiveParameter] ShellTargetInput $input, bool $creating): ?string
+    {
+        if ($input->target->kind !== ShellTargetKind::Ssh) return null;
+        if ($creating && ($input->ssh === null || $input->ssh->privateKey() === null)) throw new InvalidShellTarget('ssh.private_key','Für den SSH-Ausführungsort einen privaten Schlüssel angeben.');
+        $key=$input->ssh?->privateKey();
+        if ($key===null) return null;
+        if ($this->box===null) throw new InvalidShellTarget('ssh.private_key','SSH-Schlüssel können hier nicht verschlüsselt werden.');
+        return $this->box->encrypt($key);
+    }
+
     public function jobsUsing(ShellTargetRecord $record): int
     {
         $row = $this->db->fetchOne(
@@ -304,6 +322,14 @@ final class ShellTargetStore
             return null;
         }
 
-        return new ShellTargetRecord($grant->id, $target, $grant->categoryId, $categoryName, $grant->users, $grant->defaultUser, $note, $createdAt, $createdBy);
+        $ssh = null;
+        if ($kind === ShellTargetKind::Ssh) {
+            try {
+                $metadata = json_decode(is_string($row['ssh_config_json']??null) ? $row['ssh_config_json'] : '',true,8,JSON_THROW_ON_ERROR);
+                if (!is_array($metadata)) return null;
+                $ssh = SshProfile::validate($metadata)->metadata();
+            } catch (\JsonException|InvalidShellTarget) { return null; }
+        }
+        return new ShellTargetRecord($grant->id, $target, $grant->categoryId, $categoryName, $grant->users, $grant->defaultUser, $note, $createdAt, $createdBy, $ssh, ($row['has_private_key']??0)===1);
     }
 }

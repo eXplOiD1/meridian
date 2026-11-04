@@ -69,16 +69,20 @@ final class JobService
             $this->access->require($grants, $permission, $draft->categoryName);
             $id = $this->jobs->insert($draft, $userId);
             if ($automationId !== null) {
-                if ($this->db->fetchOne('SELECT id FROM automations WHERE id=:id AND owner_id=:owner',['id'=>$automationId,'owner'=>$userId]) === null) { throw new \LogicException('Automation owner mismatch.'); }
-                $this->db->execute('UPDATE jobs SET automation_only=1,next_run_at=NULL WHERE id=:id',['id'=>$id]);
-                $this->db->execute('INSERT INTO automation_action_jobs(job_id,automation_id) VALUES(:job,:rule)',['job'=>$id,'rule'=>$automationId]);
+                if ($this->db->fetchOne('SELECT id FROM automations WHERE id=:id AND owner_id=:owner', ['id' => $automationId,'owner' => $userId]) === null) {
+                    throw new \LogicException('Automation owner mismatch.');
+                }
+                $this->db->execute('UPDATE jobs SET automation_only=1,next_run_at=NULL WHERE id=:id', ['id' => $id]);
+                $this->db->execute('INSERT INTO automation_action_jobs(job_id,automation_id) VALUES(:job,:rule)', ['job' => $id,'rule' => $automationId]);
             }
             $this->audit->record($userId, 'job.created', 'job:' . $id . ' ' . $draft->name);
 
             return $id;
         };
         $id = $this->db->inTransaction() ? $work() : $this->db->immediate($work);
-        if ($automationId === null) { $this->reschedule($id); }
+        if ($automationId === null) {
+            $this->reschedule($id);
+        }
 
         return $this->jobs->findVisible($id, $editScope);
     }

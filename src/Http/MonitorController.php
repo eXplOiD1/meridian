@@ -58,10 +58,14 @@ final class MonitorController
     public function history(#[\SensitiveParameter] Request $request): Response
     {
         $auth = $this->authenticate($request, false);
-        if ($auth instanceof Response) { return $auth; }
+        if ($auth instanceof Response) {
+            return $auth;
+        }
         [, $grants] = $auth;
         $scope = $this->access->scope($grants, Permission::ViewJobs);
-        if ($scope->isEmpty()) { throw new AccessDenied(Permission::ViewJobs); }
+        if ($scope->isEmpty()) {
+            throw new AccessDenied(Permission::ViewJobs);
+        }
         [$from, $to] = HistoryRange::parse($request);
         $params = $request->query->all();
         $ids = [];
