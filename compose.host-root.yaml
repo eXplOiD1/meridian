@@ -94,7 +94,8 @@ services:
       # Replace before first deployment / Vor der Ersteinrichtung ersetzen.
       MERIDIAN_ADMIN_PASSWORD: "dummy_passwort-bitte-aendern"
       MERIDIAN_ENV: ${MERIDIAN_ENV:-prod}
-      MERIDIAN_TRUSTED_PROXIES: 172.19.0.0/16
+      # auto = das Docker-Netz dieses Stacks (der Reverse-Proxy auf dem Host kommt über dessen Gateway). Anderer Proxy: seine IP/sein Netz eintragen.
+      MERIDIAN_TRUSTED_PROXIES: auto
       MERIDIAN_HTTP_WORKERS: ${MERIDIAN_HTTP_WORKERS:-2}
     volumes:
     - meridian-data:/var/lib/meridian

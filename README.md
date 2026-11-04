@@ -113,13 +113,13 @@ docker compose up -d
 
 ```yaml
 MERIDIAN_ADMIN_USER: "admin"
-MERIDIAN_ADMIN_PASSWORD: "BEISPIEL-passwort-bitte-aendern"
-MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"
+MERIDIAN_ADMIN_PASSWORD: "dummy_passwort-bitte-aendern"
+MERIDIAN_TRUSTED_PROXIES: "auto"
 ```
 
 Before first start, choose your username and replace the example password with your own password of at least eight characters. Keep the quotes. No `.env` file or additional stack variables are needed. Meridian is available at `http://<host>:8090`; `MERIDIAN_PORT` controls the published port.
 
-`MERIDIAN_TRUSTED_PROXIES` specifies which reverse proxies may supply the forwarded client IP. Its default is `172.19.0.0/16`; this does not create that Docker network. If your proxy uses another network, enter its actual IP or network. Separate multiple entries with commas. Trust only known proxies, preferably an individual IP. Without a reverse proxy, set it to `""`.
+`MERIDIAN_TRUSTED_PROXIES` specifies which reverse proxies may supply the forwarded client IP. Its default is `auto`: Meridian then trusts the private Docker network(s) of its own container (only `172.16.0.0/12`, never a home network), which covers a reverse proxy on the same Docker host. If your proxy runs elsewhere, enter its actual IP or network instead; separate multiple entries with commas and trust only known proxies, preferably an individual IP. Without a reverse proxy, set it to `""`. If a login over `https://` fails with the message that the reverse proxy is not set up, `docker logs meridian-web` names the address that has to be added and the proxy must send `X-Forwarded-Proto`.
 
 #### Updates through the admin UI
 
@@ -247,7 +247,7 @@ With 2FA enabled, a correct password returns 401 and `"totp_required": true`; re
 
 Sessions use an HttpOnly, SameSite=Strict cookie. HTTPS additionally uses Secure and the name `__Host-meridian_session`. Plain HTTP login works, for example `http://nas:8090` in a trusted home network, but omits Secure and shows a warning that passwords/sessions can be read on the network. Use an HTTPS proxy outside a trusted network. Failed logins lock after five attempts per username or 50 per IP, with increasing lock time up to 15 minutes.
 
-**Reverse proxy:** Set its IP/network in `MERIDIAN_TRUSTED_PROXIES`. Compose defaults to `"172.19.0.0/16"`; adjust to the real network and redeploy. On systemd set `/etc/meridian/meridian.env` and restart the web service. Forwarded login headers (`X-Forwarded-For` or `Forwarded`) without trusted proxies configured are rejected with 503; otherwise every client would share the proxy's failed-login counter. Headers are trusted only from approved proxies; forged headers cannot change the counted IP. Restrict direct access to Meridian so requests go through the proxy. To unlock: `docker compose exec web php bin/meridian auth:unlock <username-or-ip>`.
+**Reverse proxy:** Set its IP/network in `MERIDIAN_TRUSTED_PROXIES`. Compose defaults to `"auto"` (the container's own private Docker network); enter the proxy's IP/network if it runs elsewhere, then redeploy. The proxy must send `X-Forwarded-Proto` for HTTPS, otherwise the login origin check rejects the `https://` origin. On systemd set `/etc/meridian/meridian.env` and restart the web service. Forwarded login headers (`X-Forwarded-For` or `Forwarded`) without trusted proxies configured are rejected with 503; otherwise every client would share the proxy's failed-login counter. Headers are trusted only from approved proxies; forged headers cannot change the counted IP. Restrict direct access to Meridian so requests go through the proxy. To unlock: `docker compose exec web php bin/meridian auth:unlock <username-or-ip>`.
 
 **Always blocked HTTP targets:** the Docker socket proxy (`docker-proxy`, extra comma-separated names in `MERIDIAN_DOCKER_PROXY_HOSTS`, and internal Docker API ports 2375/2376) and Meridian's own listener on loopback/local addresses. `MERIDIAN_LISTEN_PORT` defaults to 8080. If the listener changes, for example `--listen :9000`, set the matching value for web and scheduler.
 
@@ -438,13 +438,13 @@ Für eine Neuinstallation unter `services.web.environment` beispielsweise diese 
 
 ```yaml
 MERIDIAN_ADMIN_USER: "admin"
-MERIDIAN_ADMIN_PASSWORD: "BEISPIEL-passwort-bitte-aendern"
-MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"
+MERIDIAN_ADMIN_PASSWORD: "dummy_passwort-bitte-aendern"
+MERIDIAN_TRUSTED_PROXIES: "auto"
 ```
 
 Vor dem ersten Start den Benutzernamen nach Wunsch und das Beispielpasswort unbedingt durch ein eigenes Passwort mit mindestens acht Zeichen ersetzen. Die Anführungszeichen beibehalten. Dafür ist keine `.env`-Datei und keine zusätzliche Stack-Variable nötig. Erreichbar ist Meridian unter `http://<host>:8090` (Port über `MERIDIAN_PORT`).
 
-`MERIDIAN_TRUSTED_PROXIES` legt fest, von welchen Reverse-Proxys Meridian die weitergeleitete Client-IP übernimmt. Standardmäßig ist das Netz `172.19.0.0/16` eingetragen; dadurch wird dieses Netz nicht automatisch für Docker eingerichtet. Liegt dein Proxy in einem anderen Netz, den Wert durch seine IP oder sein tatsächliches Netz ersetzen. Mehrere Einträge mit Komma trennen. Nur vertrauenswürdige Proxy-Adressen eintragen, möglichst eine einzelne IP. Ohne Reverse-Proxy den Wert auf `""` setzen.
+`MERIDIAN_TRUSTED_PROXIES` legt fest, von welchen Reverse-Proxys Meridian die weitergeleitete Client-IP übernimmt. Standardmäßig steht `auto` darin: Meridian vertraut dann den privaten Docker-Netzen des eigenen Containers (nur `172.16.0.0/12`, nie einem Heimnetz). Das deckt einen Reverse-Proxy auf demselben Docker-Host ab. Läuft dein Proxy woanders, stattdessen seine IP oder sein Netz eintragen; mehrere Einträge mit Komma trennen und nur vertrauenswürdige Adressen eintragen, möglichst eine einzelne IP. Ohne Reverse-Proxy den Wert auf `""` setzen. Scheitert die Anmeldung über `https://` mit dem Hinweis, dass der Reverse-Proxy nicht eingerichtet ist, nennt `docker logs meridian-web` die Adresse, die eingetragen werden muss; der Proxy muss `X-Forwarded-Proto` senden.
 
 #### Aktualisieren
 
@@ -607,7 +607,7 @@ Außerhalb eines vertrauenswürdigen Heimnetzes Meridian hinter einem HTTPS-Prox
 Nach 5 Fehlversuchen pro Benutzername (50 pro IP) wird gesperrt, die Sperre wächst bis 15 Minuten.
 
 **Hinter einem Reverse-Proxy** (z. B. Nginx Proxy Manager) dessen IP oder Netz in `MERIDIAN_TRUSTED_PROXIES` eintragen.
-In den Compose-Dateien ist dafür bereits `MERIDIAN_TRUSTED_PROXIES: "172.19.0.0/16"` eingetragen; an das tatsächliche Proxy-Netz anpassen und Meridian neu bereitstellen. Bei der systemd-Installation den Wert in `/etc/meridian/meridian.env` setzen und den Web-Dienst neu starten. Kommt eine Anmeldung mit einem Header
+In den Compose-Dateien steht dafür bereits `MERIDIAN_TRUSTED_PROXIES: "auto"` (das private Docker-Netz des Containers); liegt der Proxy woanders, seine IP oder sein Netz eintragen und Meridian neu bereitstellen. Der Proxy muss für HTTPS `X-Forwarded-Proto` senden, sonst lehnt die Herkunftsprüfung der Anmeldung die `https://`-Herkunft ab (503 mit Hinweis, die Adresse des Absenders steht im Log). Bei der systemd-Installation den Wert in `/etc/meridian/meridian.env` setzen und den Web-Dienst neu starten. Kommt eine Anmeldung mit einem Header
 `X-Forwarded-For` oder `Forwarded` an, ohne dass `MERIDIAN_TRUSTED_PROXIES` gesetzt ist, lehnt Meridian sie ab
 (HTTP 503 mit Hinweis): Sonst sähe die Sperre nach Fehlversuchen nur die IP des Proxys, und alle Clients würden
 gemeinsam gesperrt. `X-Forwarded-For` gilt nur, wenn die Verbindung von einem eingetragenen Proxy kommt; ein
