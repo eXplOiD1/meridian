@@ -14,17 +14,71 @@ import subprocess
 import tempfile
 import time
 import threading
+import urllib.error
 import urllib.request
 
-REPO = "https://api.github.com/repos/eXplOiD1/meridian/commits/main"
 SHA = re.compile(r"^[0-9a-f]{40}$")
+# Access tokens (GitHub github_pat_/ghp_..., GitLab glpat-...): fixed alphabet, so a damaged or foreign file is rejected.
+TOKEN = re.compile(r"^[A-Za-z0-9_.-]{20,255}$")
+# Update source: chosen by the operator in the updater container, never by the application or a client.
+REPO_PATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*){1,4}$")
+HTTPS_BASE = re.compile(r"^https://[a-z0-9][a-z0-9.-]*(:[0-9]{1,5})?$")
+REGISTRY = re.compile(r"^[a-z0-9][a-z0-9.-]*(:[0-9]{1,5})?(/[a-z0-9][a-z0-9_.-]*)+$")
 SERVICES = ["web", "scheduler", "worker-http", "worker-shell", "sandbox"]
 UNITS = ["meridian-web", "meridian-scheduler", "meridian-worker-http", "meridian-worker-shell"]
 WORKERS = UNITS[1:]
 
 
+def private_directory():
+    return pathlib.Path(os.environ.get("MERIDIAN_UPDATE_PRIVATE", "/var/lib/meridian-updater"))
+
+
+def source():
+    """Fixed update source from the container environment: (kind, commit URL prefix, image registry prefix)."""
+    kind = os.environ.get("MERIDIAN_UPDATE_SOURCE") or "github"
+    repo = os.environ.get("MERIDIAN_UPDATE_REPO") or "eXplOiD1/meridian"
+    if kind not in ("github", "gitlab") or not REPO_PATH.fullmatch(repo):
+        raise ValueError("invalid update source")
+    if kind == "github":
+        api = "https://api.github.com/repos/" + repo + "/commits/"
+        registry = "ghcr.io/" + repo.split("/")[0].lower()
+    else:
+        base = os.environ.get("MERIDIAN_UPDATE_GITLAB_URL") or "https://gitlab.com"
+        if not HTTPS_BASE.fullmatch(base):
+            raise ValueError("invalid update source")
+        api = base + "/api/v4/projects/" + repo.replace("/", "%2F") + "/repository/commits/"
+        # gitlab.com has a fixed registry host; a self-hosted GitLab must name its registry explicitly.
+        registry = "registry.gitlab.com/" + repo.lower() if base == "https://gitlab.com" else ""
+    registry = os.environ.get("MERIDIAN_UPDATE_REGISTRY") or registry
+    if not REGISTRY.fullmatch(registry):
+        raise ValueError("invalid update source")
+    return kind, api, registry
+
+
+def read_token(private):
+    """Read-only token for a private repository, stored in the root-private volume; None when absent."""
+    try:
+        descriptor = os.open(pathlib.Path(private) / "repo-token", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(descriptor, "r") as stream:
+        info = os.fstat(stream.fileno())
+        # Only a regular file that group and others cannot access.
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 512 or info.st_mode & 0o077:
+            raise RuntimeError("invalid token file")
+        token = stream.read(512).strip()
+    if not TOKEN.fullmatch(token):
+        raise RuntimeError("invalid token file")
+    return token
+
+
 def command(args, timeout=600, env=None):
     # No shell, no untrusted arguments and no command output in the public status.
+    if env is None and args and args[0] == "docker":
+        # A registry login (docker login ghcr.io / registry.gitlab.com) lives in the root-private volume, never in the image or the environment.
+        login = private_directory() / "docker"
+        if login.is_dir():
+            env = {**os.environ, "DOCKER_CONFIG": str(login)}
     result = subprocess.run(args, capture_output=True, timeout=timeout, env=env)
     if result.returncode:
         print("Meridian updater: command failed:", args[0], args[1] if len(args) > 1 else "", flush=True)
@@ -32,17 +86,27 @@ def command(args, timeout=600, env=None):
     return result.stdout.decode("utf-8", errors="strict").strip()
 
 
-def latest_revision(channel='main'):
+def latest_revision(channel='main', token=None):
     if channel not in ('main', 'beta'):
         raise ValueError('invalid update channel')
-    url = REPO.rsplit('/', 1)[0] + '/' + channel
-    # Request only the SHA: commit JSON includes patches and can exceed the read limit.
-    request = urllib.request.Request(url, headers={"User-Agent": "Meridian-Updater", "Accept": "application/vnd.github.sha"})
+    kind, api, _ = source()
+    url = api + channel
+    # GitHub: request only the SHA, because commit JSON includes patches and can exceed the read limit.
+    accept = "application/vnd.github.sha" if kind == "github" else "application/json"
+    request = urllib.request.Request(url, headers={"User-Agent": "Meridian-Updater", "Accept": accept})
+    if token:
+        # Unredirected: the token is sent to this one URL and never follows a redirect elsewhere.
+        request.add_unredirected_header("Authorization", "Bearer " + token)
     with urllib.request.urlopen(request, timeout=20) as response:
         if response.geturl() != url:
             raise RuntimeError("unexpected redirect")
-        revision = response.read(128).decode('ascii').strip()
-    if not SHA.fullmatch(revision):
+        body = response.read(128 if kind == "github" else 65536).decode('ascii' if kind == "github" else 'utf-8').strip()
+    if kind == "gitlab":
+        # GitLab answers with the commit as JSON (without diffs); only its id is used.
+        data = json.loads(body)
+        body = data.get("id", "") if isinstance(data, dict) else ""
+    revision = body
+    if not isinstance(revision, str) or not SHA.fullmatch(revision):
         raise RuntimeError("invalid revision")
     return revision
 
@@ -207,9 +271,12 @@ class Updater:
                 os.close(descriptor)
             os.unlink("request.json", dir_fd=self.fd)
 
+    def revision(self):
+        return latest_revision(self.state.get('channel', 'main'), read_token(self.private))
+
     def check(self):
         self.publish("checking", "Updates werden geprüft.", True)
-        revision = latest_revision(self.state.get('channel', 'main'))
+        revision = self.revision()
         self.state.update(current=self.current(), latest=revision, checked_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
         self.state["available"] = revision != self.state["current"]
         if self.mode == "docker" and self.state["available"]:
@@ -221,7 +288,7 @@ class Updater:
                     images.append(("meridian", "host-sha-"))
             for image, prefix in images:
                 try:
-                    command(["docker", "manifest", "inspect", "ghcr.io/exploid1/" + image + ":" + prefix + revision], 30)
+                    command(["docker", "manifest", "inspect", source()[2] + "/" + image + ":" + prefix + revision], 30)
                 except Exception:
                     self.state["available"] = False
                     self.last_check = time.time() - 21300
@@ -265,7 +332,7 @@ class Updater:
             actual = command(["docker", "inspect", "--format", '{{index .Config.Labels "com.docker.compose.project"}}', "meridian-" + service])
             if actual != project:
                 raise RuntimeError("unexpected stack")
-        images = {service: "ghcr.io/exploid1/" + ("meridian-sandbox" if service == "sandbox" else "meridian") + ":" + ("host-" if service == "host-bridge" else "") + "sha-" + revision for service in services}
+        images = {service: source()[2] + "/" + ("meridian-sandbox" if service == "sandbox" else "meridian") + ":" + ("host-" if service == "host-bridge" else "") + "sha-" + revision for service in services}
         self.publish("downloading", "Update wird heruntergeladen.")
         for image in sorted(set(images.values())):
             command(["docker", "pull", image], 1800)
@@ -418,7 +485,7 @@ class Updater:
 
     def install(self):
         # Resolve the approved channel again. Clients cannot choose commits or repositories.
-        revision = latest_revision(self.state.get('channel', 'main'))
+        revision = self.revision()
         if revision != self.state["latest"]:
             self.check()
             return
@@ -469,9 +536,14 @@ class Updater:
                 else:
                     self.publish()
             except Exception as error:
-                print("Meridian updater: operation failed during", self.state.get("phase"), type(error).__name__, flush=True)
+                code = error.code if isinstance(error, urllib.error.HTTPError) else ""
+                print("Meridian updater: operation failed during", self.state.get("phase"), type(error).__name__, code, flush=True)
                 self.last_check = time.time()
-                self.publish("failed", "Vorgang fehlgeschlagen. Update-Dienst und Sicherungen prüfen; vor einem neuen Versuch erneut nach Updates suchen.", False)
+                if self.state.get("phase") == "checking" and code in (401, 403, 404):
+                    # Private repository without a (valid) token: say so instead of the generic message.
+                    self.publish("failed", "Das Repository verweigert den Zugriff. Zugangs-Token für das private Repository prüfen (siehe Betriebshandbuch).", False)
+                else:
+                    self.publish("failed", "Vorgang fehlgeschlagen. Update-Dienst und Sicherungen prüfen; vor einem neuen Versuch erneut nach Updates suchen.", False)
             time.sleep(5)
 
 

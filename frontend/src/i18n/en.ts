@@ -1215,6 +1215,7 @@ export const EN: Record<string, string> = {
   "Update verfügbar.": "Update available.",
   "Meridian ist aktuell.": "Meridian is up to date.",
   "Neue Version gefunden; Docker-Images sind noch nicht verfügbar.": "New version found; Docker images are not available yet.",
+  "Das Repository verweigert den Zugriff. Zugangs-Token für das private Repository prüfen (siehe Betriebshandbuch).": "The repository denied access. Check the access token for the private repository (see the operations manual).",
   "Update wird vorbereitet.": "Preparing update.",
   "Update wird heruntergeladen.": "Downloading update.",
   "Jobs werden beendet und eine Sicherung wird erstellt.": "Stopping jobs and creating a backup.",
