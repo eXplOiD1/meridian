@@ -95,7 +95,17 @@ sudo bash deploy/install.sh
 ### Privates Repository (GitHub oder GitLab)
 
 Der Update-Dienst fragt den Stand und die Images ohne Anmeldung ab. Ist das Repository privat, braucht er einen Lesezugang.
-Die Quelle legst du in der Umgebung des Update-Containers fest (nie in der Oberfläche):
+
+**In der Oberfläche:** Einstellungen → Updates → „Update-Quelle“ (nur Benutzer mit dem Recht „Einstellungen“, standardmäßig Admin).
+Dort stehen Quelle (GitHub oder GitLab), Repository, bei selbst gehostetem GitLab die Adresse, die Image-Registry, der Registry-Benutzername und
+das Zugriffstoken. Gespeichert wird nur nach Bestätigung mit deinem Passwort und mit Eintrag im Audit-Log. Das Token ist nur schreibend:
+Es wird an den Update-Dienst übergeben, dort im privaten Volume abgelegt und nie wieder angezeigt (nur „ein Token ist gespeichert“).
+Mit dem Benutzernamen meldet sich der Dienst bei der Registry an (dasselbe Token als Passwort), deshalb braucht das Token Lesezugriff auf
+Repository **und** Pakete (GitHub: klassisches Token mit `repo` und `read:packages`; GitLab: `read_api` und `read_registry`). Sind nur das Repository
+privat und die Images öffentlich, genügt ein Token nur für das Repository und kein Benutzername. Die gespeicherte Quelle hat Vorrang vor den
+Variablen unten. Das Formular gibt es erst, wenn der Update-Dienst die aktuelle Version läuft (er meldet dann seine Quelle).
+
+**Ohne Oberfläche** (Umgebung des Update-Containers, Standardwerte):
 
 | Variable | Bedeutung |
 |---|---|

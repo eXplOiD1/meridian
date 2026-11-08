@@ -165,7 +165,7 @@ final class AppFactory
         (new CategoryController($sessionAuth, $csrf, $users, $access, new CategoryService($db, $audit, $clock), $masker))->register($kernel);
         // Globale Einstellungen (settings.manage, nur Admin).
         (new SettingsController($sessionAuth, $csrf, $users, $access, new SettingsService($db, $audit, $clock), $masker))->register($kernel);
-        (new \Meridian\Update\UpdateController($sessionAuth, $csrf, $users, $access, $audit, $config->dataDir . '/updates'))->register($kernel);
+        (new \Meridian\Update\UpdateController($sessionAuth, $csrf, $users, $access, $audit, $config->dataDir . '/updates', $auth, $config))->register($kernel);
 
         return $kernel;
     }
