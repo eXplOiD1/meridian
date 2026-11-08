@@ -87,7 +87,7 @@ export interface JobSummary {
 }
 
 export interface ShellTargetRef {
-  kind: 'docker' | 'host';
+  kind: ShellKind;
   name: string;
 }
 
@@ -303,9 +303,12 @@ export interface SessionRow {
   client_ip: string | null;
 }
 
+/** Art eines Ausführungsorts: Container, Host-Profil oder SSH-Server. */
+export type ShellKind = 'docker' | 'host' | 'ssh';
+
 /** Auswahl im Job-Editor (GET /api/shell/targets). */
 export interface ShellTargetOption {
-  kind: 'docker' | 'host';
+  kind: ShellKind;
   name: string;
   users: string[];
   default_user: string | null;
@@ -315,7 +318,7 @@ export interface ShellTargetOption {
 /** Verwaltete Freigabe (GET /api/settings/shell-targets). */
 export interface ShellTargetEntry {
   id: number;
-  kind: 'docker' | 'host';
+  kind: ShellKind;
   name: string;
   category: CategoryRef | null;
   users: string[];
@@ -324,6 +327,9 @@ export interface ShellTargetEntry {
   note: string;
   created_at: string;
   created_by: { display_name: string } | null;
+  /** Nur bei `ssh`: Verbindungsdaten ohne Schlüssel. */
+  ssh?: { host: string; port: number; username: string; host_key: string } | null;
+  has_private_key?: boolean;
 }
 
 export interface LogChunk {

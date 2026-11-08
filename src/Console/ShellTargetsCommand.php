@@ -48,7 +48,7 @@ final class ShellTargetsCommand extends Command
     {
         $this
             ->addArgument('action', InputArgument::REQUIRED, 'list, add, update oder remove')
-            ->addArgument('first', InputArgument::OPTIONAL, 'add: Art (docker oder host); update/remove: Nummer des Ausführungsorts')
+            ->addArgument('first', InputArgument::OPTIONAL, 'add: Art (docker, host oder ssh); update/remove: Nummer des Ausführungsorts')
             ->addArgument('second', InputArgument::OPTIONAL, 'add: Container-Name (docker) oder Profilname (host)')
             ->addOption('category', null, InputOption::VALUE_REQUIRED, 'Nur für Jobs dieser Kategorie (Name); ohne Angabe global')
             ->addOption('user', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Erlaubter Benutzer im Container (mehrfach möglich; nur docker)')

@@ -103,6 +103,8 @@ services:
       TZ: Europe/Berlin
       MERIDIAN_TIMEZONE: Europe/Berlin
       MERIDIAN_DOCKER_PROXY: unix:///run/meridian-docker/docker.sock
+      # SSH-Ausführungsorte: nur mit 1 und ausgehendem Netz (MERIDIAN_SHELL_NETWORK=bridge) nutzbar.
+      MERIDIAN_SSH_ENABLE: ${MERIDIAN_SSH_ENABLE:-0}
     volumes:
     - meridian-data:/var/lib/meridian
     - meridian-secrets:/etc/meridian:ro
@@ -118,7 +120,7 @@ services:
     - worker:run
     - --type=shell
     - --child
-    network_mode: none
+    network_mode: ${MERIDIAN_SHELL_NETWORK:-none}
     init: true
     stop_grace_period: 40s
     healthcheck:

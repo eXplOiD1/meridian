@@ -8,6 +8,8 @@ declare(strict_types=1);
 namespace Meridian\Runner\Shell;
 
 use Meridian\Database\Connection;
+use Meridian\Shell\SshProfile;
+use Meridian\Shell\InvalidShellTarget;
 
 /**
  * Liest die Freigaben aus `shell_targets`. Nur lesen: Hintergrundprozesse schreiben keine Freigaben.
@@ -23,7 +25,7 @@ final class DbShellTargetSource implements ShellTargetSource
     {
         // `category_id = NULL` ist nie wahr: ohne Kategorie bleiben nur die globalen Freigaben.
         $rows = $this->db->fetchAll(
-            'SELECT id, category_id, users_json, default_user FROM shell_targets
+            'SELECT id, category_id, users_json, default_user, ssh_config_json, ssh_private_key_enc FROM shell_targets
               WHERE kind = :kind AND name = :name AND (category_id IS NULL OR category_id = :category)
               ORDER BY id',
             ['kind' => $target->kind->value, 'name' => $target->name, 'category' => $categoryId],
@@ -31,12 +33,46 @@ final class DbShellTargetSource implements ShellTargetSource
         $grants = [];
         foreach ($rows as $row) {
             $grant = self::grant($target, $row);
-            if ($grant !== null) {
-                $grants[] = $grant;
+            if ($grant === null) {
+                continue;
             }
+            if ($target->kind === ShellTargetKind::Ssh) {
+                // Ohne lesbare Verbindungsdaten und Schlüssel ist ein SSH-Ort nie nutzbar.
+                $connection = self::connection($row);
+                if ($connection === null) {
+                    continue;
+                }
+                $grant = new ShellTargetGrant($grant->id, $grant->target, $grant->categoryId, $grant->users, $grant->defaultUser, $connection);
+            }
+            $grants[] = $grant;
         }
 
         return $grants;
+    }
+
+    /**
+     * Verbindungsdaten eines SSH-Orts aus der Zeile; null, wenn etwas fehlt oder nicht mehr gültig ist.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function connection(array $row): ?SshConnection
+    {
+        $json = $row['ssh_config_json'] ?? null;
+        $enc = $row['ssh_private_key_enc'] ?? null;
+        if (!is_string($json) || !is_string($enc) || $enc === '') {
+            return null;
+        }
+        try {
+            $metadata = json_decode($json, true, 4, JSON_THROW_ON_ERROR);
+            if (!is_array($metadata)) {
+                return null;
+            }
+            $profile = SshProfile::validate($metadata);
+
+            return new SshConnection($profile->host, $profile->port, $profile->username, $profile->hostKey, $enc);
+        } catch (\JsonException | InvalidShellTarget | \InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**

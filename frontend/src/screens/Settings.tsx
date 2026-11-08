@@ -589,7 +589,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
   );
 }
 
-const EMPTY_SHELL_FORM = { kind: 'docker', name: '', categoryId: '', users: '', defaultUser: '', note: '' };
+const EMPTY_SHELL_FORM = { kind: 'docker', name: '', categoryId: '', users: '', defaultUser: '', note: '', sshHost: '', sshPort: '22', sshUser: '', sshHostKey: '', sshPrivateKey: '' };
 
 function shellScopeLabel(target: ShellTargetEntry): string {
   return target.category === null ? t('Global (alle Kategorien)') : t('Kategorie „{name}“', { name: target.category.name });
@@ -646,6 +646,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
   }
 
   const docker = form.kind === 'docker';
+  const ssh = form.kind === 'ssh';
   const users = splitUsers(form.users);
   const rootChosen = docker && (users.some((user) => /^(root|0+)(:|$)/.test(user)) || /^(root|0+)(:|$)/.test(form.defaultUser.trim()));
   const needsPassword = !docker || rootChosen || editing?.allows_root === true;
@@ -664,6 +665,11 @@ function ShellTargets({ csrf }: { csrf: string }) {
       users: target.users.join(', '),
       defaultUser: target.default_user ?? '',
       note: target.note,
+      sshHost: target.ssh?.host ?? '',
+      sshPort: String(target.ssh?.port ?? 22),
+      sshUser: target.ssh?.username ?? '',
+      sshHostKey: target.ssh?.host_key ?? '',
+      sshPrivateKey: '',
     });
   }
 
@@ -689,6 +695,18 @@ function ShellTargets({ csrf }: { csrf: string }) {
       users: docker ? users : [],
       default_user: docker && form.defaultUser.trim() !== '' ? form.defaultUser.trim() : null,
       note: form.note.trim(),
+      ...(ssh
+        ? {
+            ssh: {
+              host: form.sshHost.trim(),
+              port: /^\d+$/.test(form.sshPort.trim()) ? Number.parseInt(form.sshPort.trim(), 10) : form.sshPort.trim(),
+              username: form.sshUser.trim(),
+              host_key: form.sshHostKey.trim(),
+              // Der Schlüssel geht nur beim Anlegen oder Ersetzen mit; leer lässt den gespeicherten stehen.
+              ...(form.sshPrivateKey.trim() !== '' ? { private_key: form.sshPrivateKey } : {}),
+            },
+          }
+        : {}),
       ...(needsPassword ? { current_password: password } : {}),
     };
     try {
@@ -719,6 +737,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       }
     } finally {
       setPassword('');
+      setForm((current) => (current.sshPrivateKey === '' ? current : { ...current, sshPrivateKey: '' }));
       setBusy(false);
     }
   }
@@ -775,13 +794,18 @@ function ShellTargets({ csrf }: { csrf: string }) {
             <tbody>
               {targets.map((target) => (
                 <tr key={target.id}>
-                  <td data-label="Art">{target.kind === 'docker' ? 'Container' : 'Host'}</td>
+                  <td data-label="Art">{target.kind === 'docker' ? 'Container' : target.kind === 'ssh' ? 'SSH' : 'Host'}</td>
                   <td data-label="Name" className="mono">
                     {target.name}
                   </td>
                   <td data-label="Gilt für">{shellScopeLabel(target)}</td>
                   <td data-label="Benutzer">
-                    {target.kind === 'host' ? (
+                    {target.kind === 'ssh' ? (
+                      <span className="mono">
+                        {target.ssh?.username}@{target.ssh?.host}
+                        {target.ssh !== null && target.ssh !== undefined && target.ssh.port !== 22 ? ':' + String(target.ssh.port) : ''}
+                      </span>
+                    ) : target.kind === 'host' ? (
                       <span className="hint">{t('fest (Host-Dienst)')}</span>
                     ) : (
                       <>
@@ -839,13 +863,14 @@ function ShellTargets({ csrf }: { csrf: string }) {
               <select {...aria} className="input" name="shell-kind" value={form.kind} disabled={editing !== null} onChange={(e) => set('kind', e.target.value)}>
                 <option value="docker">{t('Docker-Container')}</option>
                 <option value="host">{t('Host-Profil')}</option>
+                <option value="ssh">{t('SSH-Server')}</option>
               </select>
             )}
           </FormField>
           <FormField
-            label={docker ? 'Name des Containers' : 'Name des Host-Profils'}
+            label={docker ? 'Name des Containers' : ssh ? 'Name des SSH-Ortes' : 'Name des Host-Profils'}
             error={errors.name}
-            hint={docker ? t('Genau der Containername, z. B. nextcloud.') : 'z. B. default'}
+            hint={docker ? t('Genau der Containername, z. B. nextcloud.') : ssh ? t('Frei gewählter Name für diesen Server, z. B. web01.') : 'z. B. default'}
           >
             {(aria) => <input {...aria} className="input input--mono" name="shell-name" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.name} onChange={(e) => set('name', e.target.value)} />}
           </FormField>
@@ -872,10 +897,36 @@ function ShellTargets({ csrf }: { csrf: string }) {
           ) : (
             <div className="field">
               <span className="field__label">{t('Benutzer')}</span>
-              <span className="hint">{t('Host-Profile verwenden den fest eingestellten Benutzer des Host-Dienstes. Unter Docker muss die Host-Bridge im Stack enthalten sein; der vollständige Host-Root-Stack bringt sie bereits mit.')}</span>
+              <span className="hint">{ssh ? t('SSH-Orte melden sich mit dem unten eingetragenen Benutzer und Schlüssel an.') : t('Host-Profile verwenden den fest eingestellten Benutzer des Host-Dienstes. Unter Docker muss die Host-Bridge im Stack enthalten sein; der vollständige Host-Root-Stack bringt sie bereits mit.')}</span>
             </div>
           )}
         </div>
+        {ssh && (
+          <>
+            <Alert tone="warn">{t('Das Skript läuft auf dem Server, nicht in Meridian. Der Worker braucht dafür ausgehendes Netz (MERIDIAN_SSH_ENABLE=1, MERIDIAN_SHELL_NETWORK). Verwende einen eigenen Schlüssel ohne Passphrase mit möglichst wenigen Rechten auf dem Server.')}</Alert>
+            <div className="grid-2">
+              <FormField label={t('Server')} error={errors['ssh.host']} hint={t('Hostname oder IP-Adresse, z. B. web01.example.org.')}>
+                {(aria) => <input {...aria} className="input input--mono" name="ssh-host" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshHost} onChange={(e) => set('sshHost', e.target.value)} />}
+              </FormField>
+              <FormField label={t('Port')} error={errors['ssh.port']}>
+                {(aria) => <input {...aria} className="input input--short input--mono" name="ssh-port" inputMode="numeric" autoComplete="off" value={form.sshPort} onChange={(e) => set('sshPort', e.target.value)} />}
+              </FormField>
+            </div>
+            <FormField label={t('Benutzer auf dem Server')} error={errors['ssh.username']}>
+              {(aria) => <input {...aria} className="input input--mono" name="ssh-username" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshUser} onChange={(e) => set('sshUser', e.target.value)} />}
+            </FormField>
+            <FormField label={t('Öffentlicher Server-Schlüssel')} error={errors['ssh.host_key']} hint={t('Der geprüfte Schlüssel des Servers, z. B. ssh-ed25519 AAAA… (ssh-keyscan -t ed25519 Server; Fingerabdruck vorher prüfen). Meridian verbindet sich nur mit genau diesem Schlüssel.')}>
+              {(aria) => <input {...aria} className="input input--mono" name="ssh-host-key" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshHostKey} onChange={(e) => set('sshHostKey', e.target.value)} />}
+            </FormField>
+            <FormField
+              label={t('Privater Schlüssel')}
+              error={errors['ssh.private_key']}
+              hint={editing !== null && editing.has_private_key === true ? t('Ein Schlüssel ist hinterlegt und wird nie angezeigt. Nur ausfüllen, um ihn zu ersetzen.') : t('OpenSSH- oder PEM-Schlüssel ohne Passphrase. Wird verschlüsselt gespeichert und nie wieder angezeigt.')}
+            >
+              {(aria) => <textarea {...aria} className="input input--mono" name="ssh-private-key" rows={4} required={editing === null} autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshPrivateKey} onChange={(e) => set('sshPrivateKey', e.target.value)} />}
+            </FormField>
+          </>
+        )}
         {docker && (
           <FormField label={t('Erlaubte Benutzer')} error={errors.users} hint={t('Durch Komma oder Leerzeichen getrennt, 1 bis 10 Einträge, Kleinbuchstaben oder numerische ID (z. B. www-data 1001).')}>
             {(aria) => <input {...aria} className="input input--mono" name="shell-users" autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.users} onChange={(e) => set('users', e.target.value)} />}

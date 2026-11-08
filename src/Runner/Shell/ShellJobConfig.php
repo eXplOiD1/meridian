@@ -92,7 +92,7 @@ final readonly class ShellJobConfig
         if ($kind === null || !is_string($name) || !$kind->isValidName($name) || $interpreter === null
             || ($user !== null && (!is_string($user) || !ShellRules::isValidUser($user)))
             || ($workdir !== null && (!is_string($workdir) || !ShellRules::isValidWorkdir($workdir)))
-            || ($kind === ShellTargetKind::Host && ($user !== null || $workdir !== null))
+            || (($kind === ShellTargetKind::Host || $kind === ShellTargetKind::Ssh) && ($user !== null || $workdir !== null))
             || ($kind === ShellTargetKind::Docker && $user === null)
             || !is_int($timeout) || $timeout < 1 || $timeout > 86400
             || !is_int($count) || $count < 0 || $count > ShellRules::MAX_ENV_VARIABLES
