@@ -107,6 +107,32 @@ sudo env MERIDIAN_ENABLE_SHELL=1 bash deploy/install.sh
 
 Das legt den Benutzer `meridian-run` an (ohne Zugriff auf Schlüssel und Datenbank), aktiviert `meridian-shell.socket` und `meridian-worker-shell` und trägt `MERIDIAN_SHELL_HOST_SOCKETS` ein. Danach in Meridian unter Einstellungen → Ausführungsorte `host default` freigeben. Jeder Lauf bekommt einen eigenen Prozess als `meridian-run` mit fester Umgebung; Installation und Freigaben: [README](../README.md#betrieb-auf-linux-mit-systemd).
 
+## Shell-Jobs auf einem Server per SSH
+
+Ein Ausführungsort der Art **SSH-Server** führt das Skript auf einem anderen Rechner aus: Meridian startet lokal nur den `ssh`-Client und schickt das Skript samt Umgebungsvariablen über die Verbindung an `sh -s` bzw. `bash -s`.
+
+**Einrichten**
+
+1. Auf dem Zielserver einen eigenen Benutzer und ein eigenes Schlüsselpaar ohne Passphrase anlegen, den öffentlichen Schlüssel in `~/.ssh/authorized_keys` eintragen und die Rechte des Benutzers auf das Nötige beschränken.
+2. Den Server-Schlüssel holen und den Fingerabdruck prüfen: `ssh-keyscan -t ed25519 server.example.org`.
+3. In Meridian unter Einstellungen → Ausführungsorte „SSH-Server“ anlegen: Server, Port, Benutzer, öffentlicher Server-Schlüssel und privater Schlüssel. Der private Schlüssel wird verschlüsselt gespeichert und nie wieder angezeigt. Beim Bearbeiten lässt ein leeres Feld den gespeicherten Schlüssel stehen.
+4. SSH ist ab Werk aus, weil der Shell-Worker ohne Netz läuft:
+   - **Docker:** in `.env` `MERIDIAN_SSH_ENABLE=1` und `MERIDIAN_SHELL_NETWORK=bridge` setzen, dann `docker compose up -d`.
+   - **systemd:** `MERIDIAN_SSH_ENABLE=1` in die Umgebung von `meridian-worker-shell` eintragen und per Drop-in `IPAddressDeny=any` sowie `RestrictAddressFamilies=AF_UNIX` für diese Unit aufheben (`sudo systemctl edit meridian-worker-shell`, `[Service]` mit leerem `IPAddressDeny=` und `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6`).
+
+**Was Meridian absichert**
+
+- Der Server-Schlüssel ist festgehalten (`StrictHostKeyChecking=yes`, eigene `known_hosts`, keine Benutzerkonfiguration). Ändert sich der Server-Schlüssel, schlägt der Lauf fehl, bis ein Administrator den neuen einträgt.
+- Nur Schlüssel-Anmeldung, kein Passwort, kein Agent, keine Weiterleitungen, kein Terminal.
+- Der private Schlüssel liegt nur für die Dauer des Laufs in einem privaten Verzeichnis (0700, Datei 0600) im temporären Verzeichnis des Workers (Docker: tmpfs) und wird danach gelöscht. Er steht nie in Umgebung, Argumenten, Logs oder Antworten.
+- Benutzer und Arbeitsverzeichnis sind beim SSH-Ort fest; ein Job kann sie nicht überschreiben.
+
+**Grenzen**
+
+- Wird ein Lauf abgebrochen oder überschreitet er das Zeitlimit, trennt Meridian die Verbindung. Ein schon gestarteter Befehl kann auf dem Server weiterlaufen; der Lauf weist darauf hin.
+- Exit-Code 255 bedeutet meist, dass die Verbindung selbst scheiterte (Erreichbarkeit, Server-Schlüssel, Benutzer, Schlüssel).
+- Der Shell-Worker darf mit `MERIDIAN_SHELL_NETWORK=bridge` ausgehend jedes Ziel erreichen. Lege SSH-Orte deshalb nur für Server an, für die das gewollt ist, und begrenze sie über Kategorien.
+
 ## Prüfliste nach dem Einrichten
 
 - [ ] Schlüsseldatei getrennt abgelegt (nicht neben den Sicherungen)

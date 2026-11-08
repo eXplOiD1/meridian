@@ -21,6 +21,8 @@ final readonly class ShellTargetGrant
         public ?int $categoryId,
         public array $users,
         public ?string $defaultUser,
+        /** Nur bei `ssh`: Verbindungsdaten mit verschlüsseltem Schlüssel; sonst null. */
+        public ?SshConnection $ssh = null,
     ) {
     }
 

@@ -68,6 +68,23 @@ final class ShellTargetPolicy
     }
 
     /**
+     * Verbindungsdaten des SSH-Orts aus der passenden Freigabe (die der Kategorie vor der globalen); sonst null.
+     */
+    public function connectionFor(ShellTarget $target, ?int $categoryId): ?SshConnection
+    {
+        if ($target->kind !== ShellTargetKind::Ssh || $this->check($target, null, $categoryId) !== null) {
+            return null;
+        }
+        foreach ($this->matching($target, $categoryId) as $grant) {
+            if ($grant->ssh !== null) {
+                return $grant->ssh;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @return list<ShellTargetGrant> Freigaben der Kategorie zuerst, dann die globalen
      */
     public function grantsFor(ShellTarget $target, ?int $categoryId): array

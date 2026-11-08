@@ -163,8 +163,8 @@ final class ShellJobValidator
 
             return null;
         }
-        if ($target?->kind === ShellTargetKind::Host) {
-            $errors['shell.user'] = 'Bei Host-Ausführungsorten ist der Benutzer im Host-Dienst fest eingestellt. „user“ null lassen.';
+        if ($target?->kind === ShellTargetKind::Host || $target?->kind === ShellTargetKind::Ssh) {
+            $errors['shell.user'] = 'Bei Host- und SSH-Ausführungsorten ist der Benutzer fest eingestellt (Host-Dienst bzw. SSH-Zugang). „user“ null lassen.';
 
             return null;
         }
@@ -178,7 +178,7 @@ final class ShellJobValidator
      */
     private function workdir(array $shell, ?ShellJobConfig $old, ?ShellTarget $target, array &$errors): ?string
     {
-        $isHost = $target?->kind === ShellTargetKind::Host;
+        $isHost = $target?->kind === ShellTargetKind::Host || $target?->kind === ShellTargetKind::Ssh;
         if (!array_key_exists('workdir', $shell)) {
             return $isHost ? null : $old?->workdir;
         }
@@ -192,7 +192,7 @@ final class ShellJobValidator
             return null;
         }
         if ($isHost) {
-            $errors['shell.workdir'] = 'Bei Host-Ausführungsorten ist das Arbeitsverzeichnis fest. „workdir“ null lassen.';
+            $errors['shell.workdir'] = 'Bei Host- und SSH-Ausführungsorten ist das Arbeitsverzeichnis fest (Heimatverzeichnis des SSH-Benutzers bzw. Host-Dienst). „workdir“ null lassen.';
 
             return null;
         }

@@ -28,7 +28,7 @@ RUN npm run build
 # --- Laufzeit -------------------------------------------------------------
 FROM dunglas/frankenphp:1-php8.4-alpine
 
-RUN apk add --no-cache iputils \
+RUN apk add --no-cache iputils openssh-client-default \
  && install-php-extensions pdo_sqlite sodium pcntl opcache mbstring gmp \
  && addgroup -S -g 1000 meridian \
  && adduser -S -u 1000 -G meridian -h /var/lib/meridian meridian \

@@ -11,7 +11,7 @@ import { t } from '../i18n';
 export const SESSION_ENDED_EVENT = 'meridian:session-ended';
 
 /** Der Server verlangt zuerst ein eigenes Passwort (Pflichtwechsel): Profil neu laden, dann zeigt die App nur diesen Schritt. */
-export const PASSWORD_CHANGE_EVENT = 'meridian:password-change-required';
+export const OWN_LOGIN_CHANGE_EVENT = 'meridian:password-change-required';
 
 /** Meldung, wenn das CSRF-Token veraltet war und die App es neu geladen hat. Die Anfrage wird nie automatisch wiederholt. */
 export const CSRF_REFRESHED_MESSAGE = 'Sitzung aktualisiert, bitte erneut absenden.';
@@ -113,7 +113,7 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path
       window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
     }
     if (response.status === 403 && isRecord(data) && data.password_change_required === true) {
-      window.dispatchEvent(new Event(PASSWORD_CHANGE_EVENT));
+      window.dispatchEvent(new Event(OWN_LOGIN_CHANGE_EVENT));
     }
     let message = isRecord(data) && typeof data.error === 'string' ? t(data.error) : t('Unerwarteter Fehler ({status}).', { status: response.status });
     const csrfFailed = response.status === 403 && isRecord(data) && data.csrf_failed === true;

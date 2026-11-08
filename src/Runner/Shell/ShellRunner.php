@@ -51,6 +51,10 @@ final class ShellRunner implements Runner
     public const NOTE_NO_INTERPRETER = 'Interpreter im Container nicht gefunden.';
     /** Host profile without configured transport: fail immediately without retry. */
     public const NOTE_HOST_UNAVAILABLE = 'Host-Ausführung nicht eingerichtet: Docker-Host-Zugriff aktivieren oder meridian-shell.socket einrichten und MERIDIAN_SHELL_HOST_SOCKETS im Shell-Worker setzen.';
+    public const NOTE_SSH_DISABLED = 'SSH-Ausführung nicht eingerichtet: MERIDIAN_SSH_ENABLE=1 und ausgehendes Netz (MERIDIAN_SHELL_NETWORK) im Shell-Worker setzen.';
+    public const NOTE_SSH_FAILED = 'SSH-Verbindung gescheitert (Exit-Code 255): Erreichbarkeit, Server-Schlüssel, Benutzer und hinterlegten privaten Schlüssel des Ausführungsorts prüfen.';
+    public const NOTE_SSH_NO_INTERPRETER = 'Interpreter auf dem Server nicht gefunden.';
+    public const NOTE_SSH_DISCONNECT = 'Die Verbindung wurde getrennt; ein schon gestarteter Befehl kann auf dem Server weiterlaufen.';
     public const NOTE_NO_DOCKER = 'Docker-Proxy nicht eingerichtet: MERIDIAN_DOCKER_PROXY auf unix:///… setzen (docs/decisions/0004 E10).';
 
     /**
@@ -98,9 +102,11 @@ final class ShellRunner implements Runner
 
         $executor = $this->executors[$config->target->kind->value] ?? null;
         if ($executor === null) {
-            return $config->target->kind === ShellTargetKind::Docker
-                ? RunResult::failed('', self::NOTE_NO_DOCKER)
-                : RunResult::failed('', self::NOTE_HOST_UNAVAILABLE, retryable: false);
+            return match ($config->target->kind) {
+                ShellTargetKind::Docker => RunResult::failed('', self::NOTE_NO_DOCKER),
+                ShellTargetKind::Ssh => RunResult::failed('', self::NOTE_SSH_DISABLED, retryable: false),
+                default => RunResult::failed('', self::NOTE_HOST_UNAVAILABLE, retryable: false),
+            };
         }
 
         if (!$heartbeat->beat()) {
@@ -114,6 +120,10 @@ final class ShellRunner implements Runner
         } catch (\Throwable) {
             // Schlüssel falsch, Wert beschädigt: feste Meldung, nie die der Ausnahme.
             return RunResult::failed('', InvalidShellPayload::unreadable()->getMessage(), retryable: false);
+        }
+        $connection = $this->policy->connectionFor($config->target, $job->categoryId);
+        if ($config->target->kind === ShellTargetKind::Ssh && $connection === null) {
+            return RunResult::failed('', ExecFailed::INVALID_SPEC, retryable: false);
         }
         // Sofort, vor jeder Ausgabe (§5.3 Schritt 3).
         $payload->registerIn($masker);
@@ -131,6 +141,7 @@ final class ShellRunner implements Runner
                 ExecSpec::newNonce(),
                 $payload->script(),
                 $payload->env(),
+                $connection,
             );
             $execution = $executor->start($spec);
         } catch (ExecFailed $e) {
@@ -138,13 +149,13 @@ final class ShellRunner implements Runner
         }
         unset($spec, $payload);
 
-        return $this->supervise($request->runId, $execution, $timeout, $notes, $heartbeat, $masker, $live);
+        return $this->supervise($request->runId, $config->target->kind, $execution, $timeout, $notes, $heartbeat, $masker, $live);
     }
 
     /**
      * @param list<string> $notes
      */
-    private function supervise(int $runId, Execution $execution, int $timeout, array $notes, Heartbeat $heartbeat, SecretMasker $masker, LiveLog $live): RunResult
+    private function supervise(int $runId, ShellTargetKind $kind, Execution $execution, int $timeout, array $notes, Heartbeat $heartbeat, SecretMasker $masker, LiveLog $live): RunResult
     {
         $collector = new OutputCollector();
         $maskers = ['out' => new StreamMasker($masker), 'err' => new StreamMasker($masker)];
@@ -236,18 +247,21 @@ final class ShellRunner implements Runner
         }
         $live->flush();
 
-        return $this->result($execution, $stop, $failure, $timeout, $collector, $notes)->withOutputBytes($collector->rawBytes());
+        return $this->result($kind, $execution, $stop, $failure, $timeout, $collector, $notes)->withOutputBytes($collector->rawBytes());
     }
 
     /**
      * @param 'abort'|'timeout'|'flood'|null $stop
      * @param list<string>                   $notes
      */
-    private function result(Execution $execution, ?string $stop, ?ExecFailed $failure, int $timeout, OutputCollector $collector, array $notes): RunResult
+    private function result(ShellTargetKind $kind, Execution $execution, ?string $stop, ?ExecFailed $failure, int $timeout, OutputCollector $collector, array $notes): RunResult
     {
         $output = $collector->text();
         $note = static fn (string ...$more): string => implode(' ', [...$more, ...$notes]);
 
+        if ($kind === ShellTargetKind::Ssh && ($stop === 'abort' || $stop === 'timeout')) {
+            $notes[] = self::NOTE_SSH_DISCONNECT;
+        }
         if ($stop === 'abort') {
             // Der Worker ersetzt das je nach Grund durch „Abgebrochen durch Benutzer“ bzw. Worker beendet.
             return RunResult::aborted($output, $note(self::NOTE_ABORTED));
@@ -273,8 +287,11 @@ final class ShellRunner implements Runner
         if ($code === null) {
             return RunResult::failed($output, $note(ExecFailed::CONNECTION_LOST));
         }
+        if ($kind === ShellTargetKind::Ssh && $code === 255) {
+            return RunResult::failed($output, $note(self::NOTE_SSH_FAILED), $code);
+        }
         if (($code === 126 || $code === 127) && $collector->rawBytes() === 0) {
-            return RunResult::failed($output, $note(self::NOTE_NO_INTERPRETER), $code, retryable: false);
+            return RunResult::failed($output, $note($kind === ShellTargetKind::Ssh ? self::NOTE_SSH_NO_INTERPRETER : self::NOTE_NO_INTERPRETER), $code, retryable: false);
         }
 
         return RunResult::failed($output, $note('Beendet mit Exit-Code ' . $code . '.'), $code);

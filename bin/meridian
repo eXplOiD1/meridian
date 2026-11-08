@@ -63,6 +63,7 @@ use Meridian\Notify\TelegramSender;
 use Meridian\Notify\WebhookSender;
 use Meridian\Runner\Shell\Docker\ShellWorkerMaintenance;
 use Meridian\Runner\Shell\HostSocketExecutor;
+use Meridian\Runner\Shell\Ssh\SshExecutor;
 use Meridian\Runner\Shell\HostSockets;
 use Meridian\Runner\Shell\ShellRunner;
 use Meridian\Runner\Shell\ShellTargetPolicy;
@@ -167,6 +168,10 @@ if (is_dir($config->dataDir)) {
             }
             if (!$hostSockets->isEmpty()) {
                 $executors['host'] = new HostSocketExecutor($hostSockets);
+            }
+            // SSH nur ausdrücklich eingeschaltet: Der Worker braucht dafür ausgehendes Netz (MERIDIAN_SHELL_NETWORK).
+            if (($env['MERIDIAN_SSH_ENABLE'] ?? '') === '1') {
+                $executors['ssh'] = new SshExecutor(new SecretBox(KeyLoader::load($env)), sys_get_temp_dir(), setsid: is_executable('/usr/bin/setsid') ? '/usr/bin/setsid' : '/bin/setsid');
             }
             $runners->register(JobType::Shell, new ShellRunner(
                 new DbShellJobSource($db),

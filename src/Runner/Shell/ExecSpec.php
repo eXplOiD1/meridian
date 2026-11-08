@@ -41,10 +41,12 @@ final class ExecSpec implements \JsonSerializable
         public readonly string $nonce,
         #[\SensitiveParameter] string $script,
         #[\SensitiveParameter] array $env,
+        public readonly ?SshConnection $ssh = null,
     ) {
         if (preg_match(self::NONCE, $nonce) !== 1 || !$target->kind->isValidName($target->name)
             || ($user !== null && !ShellRules::isValidUser($user)) || ($workdir !== null && !ShellRules::isValidWorkdir($workdir))
-            || preg_match('/^[a-z]{1,16}$/D', $trigger) !== 1 || $runId < 1 || $jobId < 1) {
+            || preg_match('/^[a-z]{1,16}$/D', $trigger) !== 1 || $runId < 1 || $jobId < 1
+            || ($target->kind === ShellTargetKind::Ssh) !== ($ssh !== null)) {
             throw ExecFailed::invalidSpec();
         }
         foreach ($env as [$name]) {

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from './components/Modal';
 import { Layout } from './components/Layout';
-import { ApiError, PASSWORD_CHANGE_EVENT, request, SESSION_ENDED_EVENT, setCsrfRefresher } from './lib/api';
+import { ApiError, OWN_LOGIN_CHANGE_EVENT, request, SESSION_ENDED_EVENT, setCsrfRefresher } from './lib/api';
 import { canManageCategories, canManageSettings, canManageUsers, canSeeUsersArea } from './lib/permissions';
 import { UpdateAvailabilityProvider } from './components/UpdateAvailability';
 import type { Route } from './lib/useHashRoute';
@@ -131,8 +131,8 @@ export function App() {
     const required = (): void => {
       void refresh();
     };
-    window.addEventListener(PASSWORD_CHANGE_EVENT, required);
-    return () => window.removeEventListener(PASSWORD_CHANGE_EVENT, required);
+    window.addEventListener(OWN_LOGIN_CHANGE_EVENT, required);
+    return () => window.removeEventListener(OWN_LOGIN_CHANGE_EVENT, required);
   }, [refresh]);
 
   // Neues CSRF-Token aus einer Antwort (Passwortwechsel ersetzt die Sitzung) direkt übernehmen.

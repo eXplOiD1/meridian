@@ -41,17 +41,17 @@ export function targetKey(kind: string, name: string): string {
   return kind + ':' + name;
 }
 
-export function splitTarget(key: string): { kind: 'docker' | 'host'; name: string } | null {
+export function splitTarget(key: string): { kind: 'docker' | 'host' | 'ssh'; name: string } | null {
   const at = key.indexOf(':');
   const kind = key.slice(0, at);
-  if (at < 1 || (kind !== 'docker' && kind !== 'host')) {
+  if (at < 1 || (kind !== 'docker' && kind !== 'host' && kind !== 'ssh')) {
     return null;
   }
   return { kind, name: key.slice(at + 1) };
 }
 
 export function shellTargetLabel(kind: string, name: string): string {
-  return kind === 'docker' ? 'Container ' + name : 'Host · ' + name;
+  return kind === 'docker' ? 'Container ' + name : kind === 'ssh' ? 'SSH · ' + name : 'Host · ' + name;
 }
 
 export function shellFormFromJob(shell: ShellDetail | null | undefined): ShellForm {
