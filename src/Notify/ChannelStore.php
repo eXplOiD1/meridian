@@ -166,7 +166,11 @@ final class ChannelStore
                 $changed[] = 'enabled';
             }
             if ($draft->secret !== null) {
-                $changed[] = $draft->secret === '' ? 'secret_removed' : 'secret_replaced';
+                if ($draft->secret === '') {
+                    $changed[] = 'secret_removed';
+                } else {
+                    $changed[] = 'secret_replaced';
+                }
             }
             $audit->record($userId, 'notification.channel_updated', 'channel:' . $id . ' ' . $draft->name . ($changed === [] ? '' : '; geändert: ' . implode(', ', $changed)));
 
