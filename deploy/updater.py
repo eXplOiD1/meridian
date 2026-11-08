@@ -33,32 +33,59 @@ def private_directory():
     return pathlib.Path(os.environ.get("MERIDIAN_UPDATE_PRIVATE", "/var/lib/meridian-updater"))
 
 
-def source():
-    """Fixed update source from the container environment: (kind, commit URL prefix, image registry prefix)."""
-    kind = os.environ.get("MERIDIAN_UPDATE_SOURCE") or "github"
-    repo = os.environ.get("MERIDIAN_UPDATE_REPO") or "eXplOiD1/meridian"
+NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+USERNAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@-]{0,99}$")
+
+
+def resolve(kind, repo, gitlab_url="", registry=""):
+    """Validate one update source and derive (kind, commit URL prefix, image registry prefix)."""
     if kind not in ("github", "gitlab") or not REPO_PATH.fullmatch(repo):
         raise ValueError("invalid update source")
     if kind == "github":
         api = "https://api.github.com/repos/" + repo + "/commits/"
-        registry = "ghcr.io/" + repo.split("/")[0].lower()
+        derived = "ghcr.io/" + repo.split("/")[0].lower()
     else:
-        base = os.environ.get("MERIDIAN_UPDATE_GITLAB_URL") or "https://gitlab.com"
+        base = gitlab_url or "https://gitlab.com"
         if not HTTPS_BASE.fullmatch(base):
             raise ValueError("invalid update source")
         api = base + "/api/v4/projects/" + repo.replace("/", "%2F") + "/repository/commits/"
         # gitlab.com has a fixed registry host; a self-hosted GitLab must name its registry explicitly.
-        registry = "registry.gitlab.com/" + repo.lower() if base == "https://gitlab.com" else ""
-    registry = os.environ.get("MERIDIAN_UPDATE_REGISTRY") or registry
+        derived = "registry.gitlab.com/" + repo.lower() if base == "https://gitlab.com" else ""
+    registry = registry or derived
     if not REGISTRY.fullmatch(registry):
         raise ValueError("invalid update source")
     return kind, api, registry
 
 
+def stored_source(private=None):
+    """Source saved from the settings page (source.json in the root-private volume); {} when none was saved."""
+    try:
+        descriptor = os.open((pathlib.Path(private) if private else private_directory()) / "source.json", os.O_RDONLY | NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return {}
+    with os.fdopen(descriptor, "r") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 2048 or info.st_mode & 0o077:
+            raise RuntimeError("invalid source file")
+        data = json.loads(stream.read(2048))
+    if not isinstance(data, dict) or not all(isinstance(value, str) for value in data.values()):
+        raise RuntimeError("invalid source file")
+    return data
+
+
+def source():
+    """Update source: the saved one, else the container environment, else the default (kind, commit URL prefix, registry prefix)."""
+    stored = stored_source()
+    if stored:
+        return resolve(stored.get("kind", ""), stored.get("repo", ""), stored.get("gitlab_url", ""), stored.get("registry", ""))
+    return resolve(os.environ.get("MERIDIAN_UPDATE_SOURCE") or "github", os.environ.get("MERIDIAN_UPDATE_REPO") or "eXplOiD1/meridian",
+                   os.environ.get("MERIDIAN_UPDATE_GITLAB_URL") or "", os.environ.get("MERIDIAN_UPDATE_REGISTRY") or "")
+
+
 def read_token(private):
     """Read-only token for a private repository, stored in the root-private volume; None when absent."""
     try:
-        descriptor = os.open(pathlib.Path(private) / "repo-token", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        descriptor = os.open(pathlib.Path(private) / "repo-token", os.O_RDONLY | NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
         return None
     with os.fdopen(descriptor, "r") as stream:
@@ -72,14 +99,15 @@ def read_token(private):
     return token
 
 
-def command(args, timeout=600, env=None):
+def command(args, timeout=600, env=None, stdin=None):
     # No shell, no untrusted arguments and no command output in the public status.
     if env is None and args and args[0] == "docker":
         # A registry login (docker login ghcr.io / registry.gitlab.com) lives in the root-private volume, never in the image or the environment.
         login = private_directory() / "docker"
         if login.is_dir():
             env = {**os.environ, "DOCKER_CONFIG": str(login)}
-    result = subprocess.run(args, capture_output=True, timeout=timeout, env=env)
+    # stdin carries a secret (never an argument), so it cannot show up in the process list.
+    result = subprocess.run(args, capture_output=True, timeout=timeout, env=env, input=stdin)
     if result.returncode:
         print("Meridian updater: command failed:", args[0], args[1] if len(args) > 1 else "", flush=True)
         raise RuntimeError("deployment command failed")
@@ -139,6 +167,12 @@ class Updater:
         if channel not in ('main', 'beta'):
             raise RuntimeError('invalid persisted update channel')
         self.state['channel'] = channel
+        self.pending_source = {}
+        try:
+            self.state['source'] = self.source_info()
+        except (ValueError, RuntimeError, OSError):
+            # A damaged source file must not stop the updater: it then shows no source and the check fails visibly.
+            self.state['source'] = {}
         self.last_check = 0
         self.publish_lock = threading.Lock()
         try:
@@ -256,20 +290,83 @@ class Updater:
             return None
         try:
             info = os.fstat(descriptor)
-            if not stat.S_ISREG(info.st_mode) or info.st_size > 1024 or info.st_uid != self.uid:
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 4096 or info.st_uid != self.uid:
                 raise ValueError("invalid request file")
             with os.fdopen(descriptor, "r") as stream:
                 descriptor = -1
                 data = json.load(stream)
-            if set(data) != {"action", "id"} or data["action"] not in ("check", "install", "channel_main", "channel_beta") or not isinstance(data["id"], str) or not re.fullmatch(r"[0-9a-f]{32}", data["id"]):
+            if not isinstance(data, dict) or not isinstance(data.get("id"), str) or not re.fullmatch(r"[0-9a-f]{32}", data["id"]):
                 raise ValueError("invalid request")
-            return data["action"]
+            if set(data) == {"action", "id"} and info.st_size <= 1024 and data["action"] in ("check", "install", "channel_main", "channel_beta"):
+                return data["action"]
+            if set(data) == {"action", "id", "source"} and data["action"] == "source" and isinstance(data["source"], dict):
+                self.pending_source = data["source"]
+                return "source"
+            raise ValueError("invalid request")
         except (ValueError, TypeError):
             return None
         finally:
             if descriptor != -1:
                 os.close(descriptor)
             os.unlink("request.json", dir_fd=self.fd)
+
+    def source_info(self):
+        """Public part of the update source (never the token): shown on the settings page."""
+        stored = stored_source(self.private)
+        kind, _, registry = source()
+        has_token = (self.private / "repo-token").is_file()
+        return {"kind": kind, "repo": stored.get("repo") or os.environ.get("MERIDIAN_UPDATE_REPO") or "eXplOiD1/meridian",
+                "gitlab_url": stored.get("gitlab_url", ""), "registry": registry, "username": stored.get("username", ""), "has_token": has_token, "saved": bool(stored)}
+
+    @staticmethod
+    def write_private(path, content):
+        """Write a root-private file atomically (0600); a reader never sees a half-written secret."""
+        temp = path.with_name(path.name + ".tmp")
+        temp.unlink(missing_ok=True)
+        descriptor = os.open(temp, os.O_CREAT | os.O_EXCL | os.O_WRONLY | NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "w") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp, path)
+
+    def apply_source(self, data):
+        """Save the update source chosen on the settings page. Every value is validated again here; nothing is logged."""
+        allowed = {"kind", "repo", "gitlab_url", "registry", "username", "token", "clear_token"}
+        if set(data) - allowed or not all(isinstance(value, (str, bool)) for value in data.values()):
+            raise ValueError("invalid source request")
+        kind, repo = data.get("kind", ""), data.get("repo", "")
+        gitlab_url, registry, username, token = (data.get(name, "") for name in ("gitlab_url", "registry", "username", "token"))
+        clear = data.get("clear_token") is True
+        if not all(isinstance(value, str) for value in (kind, repo, gitlab_url, registry, username, token)):
+            raise ValueError("invalid source request")
+        if kind == "github":
+            gitlab_url = ""
+        _, _, effective_registry = resolve(kind, repo, gitlab_url, registry)
+        if username and not USERNAME.fullmatch(username):
+            raise ValueError("invalid source request")
+        if token and (clear or not TOKEN.fullmatch(token)):
+            raise ValueError("invalid source request")
+        secret = None if clear else (token or read_token(self.private))
+        if username and not secret:
+            raise ValueError("invalid source request")
+        docker_config = self.private / "docker"
+        if secret and username:
+            # Log in first: a wrong user or token changes nothing. The token goes through stdin, not through an argument.
+            docker_config.mkdir(mode=0o700, exist_ok=True)
+            os.chmod(docker_config, 0o700)
+            command(["docker", "login", effective_registry.split("/")[0], "--username", username, "--password-stdin"], 60, stdin=secret.encode("ascii"))
+        else:
+            shutil.rmtree(docker_config, ignore_errors=True)
+        if clear:
+            (self.private / "repo-token").unlink(missing_ok=True)
+            username = ""
+        elif token:
+            self.write_private(self.private / "repo-token", token + "\n")
+        self.write_private(self.private / "source.json", json.dumps({"kind": kind, "repo": repo, "gitlab_url": gitlab_url, "registry": registry, "username": username}))
+        self.state["source"] = self.source_info()
+        self.state.update(latest="", available=False)
+        self.check()
 
     def revision(self):
         return latest_revision(self.state.get('channel', 'main'), read_token(self.private))
@@ -527,7 +624,16 @@ class Updater:
                     time.sleep(5)
                     continue
                 action = self.request()
-                if action in ('channel_main', 'channel_beta'):
+                if action == 'source':
+                    try:
+                        self.apply_source(self.pending_source)
+                    except ValueError:
+                        # Rejected input is a user error, not a failed deployment: say so and change nothing.
+                        self.last_check = time.time()
+                        self.publish("ready", "Die Update-Quelle wurde abgelehnt. Eingaben prüfen; gespeichert wurde nichts.", False)
+                    finally:
+                        self.pending_source = {}
+                elif action in ('channel_main', 'channel_beta'):
                     self.select_channel(action.removeprefix('channel_'))
                 elif action == "install" and self.state["available"]:
                     self.install()

@@ -6,8 +6,10 @@ import { t } from '../i18n';
 import { Alert } from './Alert';
 import { Confirm } from './Confirm';
 import { useUpdateAvailability } from './UpdateAvailability';
+import { UpdateSource } from './UpdateSource';
+import type { UpdateSourceInfo } from './UpdateSource';
 
-interface UpdateStatus { configured: boolean; channel?: 'main' | 'beta'; mode?: string; current?: string; latest?: string; checked_at?: string; available?: boolean; busy?: boolean; pending?: boolean; phase?: string; message?: string }
+interface UpdateStatus { configured: boolean; channel?: 'main' | 'beta'; mode?: string; current?: string; latest?: string; checked_at?: string; available?: boolean; busy?: boolean; pending?: boolean; phase?: string; message?: string; source?: UpdateSourceInfo }
 export function SystemUpdates({ csrf }: { csrf: string }) {
   const { report } = useUpdateAvailability();
   const [status, setStatus] = useState<UpdateStatus | null>(null);
@@ -29,7 +31,8 @@ export function SystemUpdates({ csrf }: { csrf: string }) {
   }
   const disabled = sending || !status?.configured || status.busy || status.pending;
   const working = Boolean(sending || status?.busy || status?.pending);
-  return <section className="card">
+  return <>
+  <section className="card">
     <h2>{t('System-Updates')}</h2>
     <p className="hint">{t('Updates aus dem gewählten Kanal werden durch einen getrennten Update-Dienst installiert. Vorher wird eine Sicherung erstellt. Während des Neustarts ist Meridian kurz nicht erreichbar.')}</p>
     {error && <Alert tone="warn">{error}</Alert>}
@@ -46,5 +49,7 @@ export function SystemUpdates({ csrf }: { csrf: string }) {
     {!working && status?.phase === 'success' && <Alert tone="ok">{t('Update erfolgreich installiert.')}</Alert>}
     {!working && status?.phase === 'failed' && <Alert tone="warn">{status.message ? t(status.message) : t('Update fehlgeschlagen.')}</Alert>}
     <div className="row"><button className="btn btn--ghost" disabled={disabled} onClick={() => void action('check')}>{t('Updates prüfen')}</button>{!working && status?.available && status.phase !== 'failed' && <Confirm actionsBelow label={t('Jetzt aktualisieren')} question={t('Laufende Jobs werden beendet, Daten und Schlüssel gesichert und Meridian neu gestartet. Währenddessen ist die Oberfläche kurz nicht erreichbar.')} confirmLabel={t('Jetzt aktualisieren')} disabled={disabled} onConfirm={() => void action('install')} />}</div>
-  </section>;
+  </section>
+  <UpdateSource csrf={csrf} info={status?.source} disabled={Boolean(disabled)} onSaved={() => { setStatus(previous => previous ? { ...previous, pending: true } : previous); report({ configured: true, pending: true }); }} />
+  </>;
 }
