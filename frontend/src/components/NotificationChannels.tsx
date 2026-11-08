@@ -302,7 +302,7 @@ export function NotificationChannels({ csrf }: { csrf: string }) {
                       </>
                     )}
                   </td>
-                  <td className="targets__action-cell">
+                  <td className="row-actions">
                     <div className="row targets__actions">
                       <button
                         type="button"

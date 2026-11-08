@@ -32,7 +32,8 @@ $identity = static function (string $name): int {
 };
 $uid = $identity('MERIDIAN_HOST_UID');
 $gid = $identity('MERIDIAN_HOST_GID');
-$workRoot = '/proc/1/root/tmp/meridian-host-' . bin2hex(random_bytes(16));
+$hostRoot = '/proc/1/root';
+$workRoot = $hostRoot . '/tmp/meridian-host-' . bin2hex(random_bytes(16));
 $executor = new DockerHostExecutor($uid, $gid, $workRoot, getenv('MERIDIAN_HOST_ALLOW_ROOT') === '1');
 $directory = '/run/meridian-host';
 if ((!is_dir($directory) && !mkdir($directory, 0750)) || is_link($directory)

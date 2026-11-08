@@ -188,7 +188,7 @@ sudo -u meridian env MERIDIAN_DATA_DIR=/var/lib/meridian php /opt/meridian/bin/m
 | Command | Purpose |
 | --- | --- |
 | `list` | Lists commands. `<command> --help` explains arguments/options. |
-| `user:create <name> [--name="Display name"] [--role=Admin\|Operator\|Beobachter]` | Creates a user, prompting privately for a password of at least eight characters. Default role: `Beobachter`. Role identifiers remain as shown. |
+| `user:create <name> [--name="Display name"] [--role=Admin\|Operator\|Beobachter]` | Creates a user; the password (at least eight characters) is requested privately. Default role: `Beobachter`. Role identifiers remain as shown. |
 | `user:password <name>` | Resets a password, removes mandatory one-time-password change/expiry, ends all user sessions and unlocks the account. Existing 2FA remains enabled. Deleted users are rejected. |
 | `category:create <name>` | Creates a category: 1–64 letters, digits, spaces, `_`, `.` or `-`, starting with a letter/digit. Case-insensitive duplicates are rejected. Category-restricted users need an assignment to see it. |
 | `category:rename <name> <new-name>` | Finds the category case-insensitively and renames it using the same rules. Jobs, assignments and approvals remain. |
@@ -226,7 +226,7 @@ docker exec -it meridian-web php bin/meridian shell:targets update 3 --user=www-
 docker exec -it meridian-web php bin/meridian shell:targets remove 3
 ```
 
-Without `--category`, an execution approval is global; otherwise it applies only to that category. Without `--default-user`, the only approved user is the default. `update` changes only supplied fields (`--name`, `--category=NAME` or `--global`, `--user`, `--default-user`, `--note`). The target type stays fixed. Jobs using an old target/user are rejected from their next run. Shell scripts and environment variables are secrets: they cannot be read after saving and are replaced as a whole.
+Without `--category`, an execution approval is global; otherwise it applies only to that category. Without `--default-user`, the only approved user is the default. `update` changes only supplied fields (`--name`, `--category=NAME` or `--global`, `--user`, `--default-user`, `--note`). The target type stays fixed. Jobs using an old target/user are rejected from their next run. Shell scripts and environment variables are stored encrypted: they cannot be read after saving and are replaced as a whole.
 
 Passwords are prompted privately, never passed as arguments where shell history/process lists could expose them. Commands changing users or locks write audit events.
 
@@ -234,12 +234,12 @@ Passwords are prompted privately, never passed as arguments where shell history/
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /api/auth/login` | Accepts `{"username":"...","password":"..."}`, sets session cookie and returns user, roles and CSRF token. |
+| `POST /api/auth/login` | Accepts a JSON body with `username` and `password`, sets session cookie and returns user, roles and CSRF token. |
 | `GET /api/auth/me` | Returns current user, role permissions and session CSRF token. |
 | `POST /api/auth/logout` | Ends session; requires `X-CSRF-Token`. |
 | `POST /api/auth/2fa/setup` | Begins 2FA setup; returns secret and `otpauth://` address once. |
-| `POST /api/auth/2fa/enable` | Confirms with `{"password":"...","code":"123456"}` and returns eight recovery codes once. |
-| `POST /api/auth/2fa/disable` | Disables 2FA with `{"password":"...","code":"..."}`. |
+| `POST /api/auth/2fa/enable` | Confirms with the current password and the six-digit code from the app, and returns eight recovery codes once. |
+| `POST /api/auth/2fa/disable` | Disables 2FA; the JSON body carries the current password and a code. |
 | `GET /api/audit` | Newest-first audit log, requiring `users.manage`. Parameters: `limit` (1–200), `before_id`, `action`. |
 | `POST /api/users/unlock` | Unlocks `{"username":"..."}` or `{"ip":"..."}`; requires `users.manage` and CSRF. |
 
@@ -588,12 +588,12 @@ sondern immer verdeckt abgefragt. Jeder dieser Befehle, der Benutzer oder Sperre
 
 | Endpunkt | Zweck |
 |---|---|
-| `POST /api/auth/login` | `{"username": "...", "password": "..."}`, setzt das Sitzungs-Cookie, liefert Benutzer, Rollen und CSRF-Token |
+| `POST /api/auth/login` | JSON mit `username` und `password`, setzt das Sitzungs-Cookie, liefert Benutzer, Rollen und CSRF-Token |
 | `GET /api/auth/me` | Benutzer, Rollen mit Rechten und CSRF-Token der laufenden Sitzung |
 | `POST /api/auth/logout` | beendet die Sitzung (Header `X-CSRF-Token` nötig) |
 | `POST /api/auth/2fa/setup` | startet die Einrichtung der Zwei-Faktor-Anmeldung, liefert das Secret und die `otpauth://`-Adresse (einmalig) |
-| `POST /api/auth/2fa/enable` | `{"password": "...", "code": "123456"}` bestätigt die Einrichtung und liefert 8 Wiederherstellungscodes (einmalig) |
-| `POST /api/auth/2fa/disable` | `{"password": "...", "code": "..."}` schaltet 2FA ab |
+| `POST /api/auth/2fa/enable` | JSON mit Passwort und sechsstelligem Code bestätigt die Einrichtung und liefert 8 Wiederherstellungscodes (einmalig) |
+| `POST /api/auth/2fa/disable` | JSON mit Passwort und Code schaltet 2FA ab |
 | `GET /api/audit` | Audit-Log (neueste zuerst), nur mit Recht `users.manage`. Parameter: `limit` (1 bis 200), `before_id`, `action` |
 | `POST /api/users/unlock` | `{"username": "..."}` oder `{"ip": "..."}` hebt eine Sperre auf (`users.manage`, CSRF nötig) |
 

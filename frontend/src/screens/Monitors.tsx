@@ -278,7 +278,7 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
         <legend className="field__label">{t('Benachrichtigen über …')}</legend>
         {(['all', 'selected', 'none'] as const).map((mode) => (
           <label key={mode} className="check">
-            <input type="radio" name="monitor-notify-channels" checked={draft.notifyChannels === mode} onChange={() => setDraft({ ...draft, notifyChannels: mode })} />
+            <input type="radio" name="notify-mode" checked={draft.notifyChannels === mode} onChange={() => setDraft({ ...draft, notifyChannels: mode })} />
             <span>{mode === 'all' ? t('alle Kanäle') : mode === 'selected' ? t('nur ausgewählte Kanäle') : t('keine Kanäle')}</span>
           </label>
         ))}

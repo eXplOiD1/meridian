@@ -63,7 +63,7 @@ final class StatusPageRenderer
             foreach ($item['history'] ?? [] as $day) {
                 $dayClass = $day['bad'] > 0 ? ($day['ok'] > 0 ? 'mixed' : 'down') : ($day['ok'] > 0 ? 'ok' : 'unknown');
                 $caption = $day['day'] . ' (UTC) · ' . ($english ? 'successful: ' : 'erfolgreich: ') . $day['ok'] . ' · ' . ($english ? 'failed: ' : 'fehlgeschlagen: ') . $day['bad'];
-                $history .= '<a class="history-day history-day--' . $dayClass . '" href="?lang=' . $language . '&amp;item=' . $position . '&amp;day=' . $day['day'] . '#events-' . $position . '" title="' . self::e($caption) . '" aria-label="' . self::e($caption) . '"></a>';
+                $history .= '<a class="history-day history-day--' . $dayClass . '" href="?lang=' . $language . '&amp;item=' . $position . '&amp;day=' . self::e($day['day']) . '#events-' . $position . '" title="' . self::e($caption) . '" aria-label="' . self::e($caption) . '"></a>';
             }
             if ($history !== '') {
                 $history = '<div class="history-bars">' . $history . '</div><p class="history-caption">' . ($english ? '90 days · UTC · green: successful, amber: mixed, red: failed, grey: no observations. Click a day for events.' : '90 Tage · UTC · Grün: erfolgreich, Orange: gemischt, Rot: fehlgeschlagen, Grau: keine Beobachtungen. Tag anklicken für Ereignisse.') . '</p>';

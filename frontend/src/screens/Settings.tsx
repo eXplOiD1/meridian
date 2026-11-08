@@ -506,7 +506,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
                     {formatTime(target.created_at)}
                     {target.created_by !== null && <span className="hint"> · {target.created_by.display_name}</span>}
                   </td>
-                  <td className="targets__action-cell">
+                  <td className="row-actions">
                     <div className="targets__actions">
                       <button type="button" className="btn btn--ghost" disabled={busy} aria-label={t('Freigabe {name} bearbeiten', { name: target.value })} onClick={() => startEdit(target)}>{t('Bearbeiten')}</button>
                       <Confirm
@@ -796,7 +796,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
                     {formatTime(target.created_at)}
                     {target.created_by !== null && <span className="hint"> · {target.created_by.display_name}</span>}
                   </td>
-                  <td className="targets__action-cell">
+                  <td className="row-actions">
                     <div className="targets__actions">
                       <button type="button" className="btn btn--ghost" disabled={busy} aria-label={t('Ausführungsort {name} bearbeiten', { name: target.name })} onClick={() => startEdit(target)}>
                         {t('Bearbeiten')}</button>

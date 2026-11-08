@@ -70,7 +70,9 @@ final class ShellTargetStore
             throw new InvalidShellTarget('note', 'Die Notiz darf höchstens 200 Zeichen lang sein und keine Steuerzeichen (z. B. Zeilenumbrüche) enthalten.');
         }
 
-        if ($kindEnum !== ShellTargetKind::Ssh && $ssh !== null) throw new InvalidShellTarget('ssh','SSH-Verbindungsdaten sind nur bei SSH-Ausführungsorten erlaubt.');
+        if ($kindEnum !== ShellTargetKind::Ssh && $ssh !== null) {
+            throw new InvalidShellTarget('ssh', 'SSH-Verbindungsdaten sind nur bei SSH-Ausführungsorten erlaubt.');
+        }
         $list = [];
         if ($kindEnum !== ShellTargetKind::Docker) {
             if ($users !== [] || $defaultUser !== null) {
@@ -202,11 +204,19 @@ final class ShellTargetStore
      */
     private function encryptSshKey(#[\SensitiveParameter] ShellTargetInput $input, bool $creating): ?string
     {
-        if ($input->target->kind !== ShellTargetKind::Ssh) return null;
-        if ($creating && ($input->ssh === null || $input->ssh->privateKey() === null)) throw new InvalidShellTarget('ssh.private_key','Für den SSH-Ausführungsort einen privaten Schlüssel angeben.');
-        $key=$input->ssh?->privateKey();
-        if ($key===null) return null;
-        if ($this->box===null) throw new InvalidShellTarget('ssh.private_key','SSH-Schlüssel können hier nicht verschlüsselt werden.');
+        if ($input->target->kind !== ShellTargetKind::Ssh) {
+            return null;
+        }
+        if ($creating && ($input->ssh === null || $input->ssh->privateKey() === null)) {
+            throw new InvalidShellTarget('ssh.private_key', 'Für den SSH-Ausführungsort einen privaten Schlüssel angeben.');
+        }
+        $key = $input->ssh?->privateKey();
+        if ($key === null) {
+            return null;
+        }
+        if ($this->box === null) {
+            throw new InvalidShellTarget('ssh.private_key', 'SSH-Schlüssel können hier nicht verschlüsselt werden.');
+        }
         return $this->box->encrypt($key);
     }
 
@@ -325,11 +335,15 @@ final class ShellTargetStore
         $ssh = null;
         if ($kind === ShellTargetKind::Ssh) {
             try {
-                $metadata = json_decode(is_string($row['ssh_config_json']??null) ? $row['ssh_config_json'] : '',true,8,JSON_THROW_ON_ERROR);
-                if (!is_array($metadata)) return null;
+                $metadata = json_decode(is_string($row['ssh_config_json'] ?? null) ? $row['ssh_config_json'] : '', true, 8, JSON_THROW_ON_ERROR);
+                if (!is_array($metadata)) {
+                    return null;
+                }
                 $ssh = SshProfile::validate($metadata)->metadata();
-            } catch (\JsonException|InvalidShellTarget) { return null; }
+            } catch (\JsonException|InvalidShellTarget) {
+                return null;
+            }
         }
-        return new ShellTargetRecord($grant->id, $target, $grant->categoryId, $categoryName, $grant->users, $grant->defaultUser, $note, $createdAt, $createdBy, $ssh, ($row['has_private_key']??0)===1);
+        return new ShellTargetRecord($grant->id, $target, $grant->categoryId, $categoryName, $grant->users, $grant->defaultUser, $note, $createdAt, $createdBy, $ssh, ($row['has_private_key'] ?? 0) === 1);
     }
 }
