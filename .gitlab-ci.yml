@@ -1,0 +1,59 @@
+# Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
+#
+# Baut die Container-Images in die Registry dieses GitLab-Projekts, mit denselben Namen und Tags wie
+# .github/workflows/container.yml (ghcr.io). Der Update-Dienst findet sie dann unter
+#   $CI_REGISTRY_IMAGE/meridian:sha-<Commit>, .../meridian-sandbox:sha-<Commit>,
+#   .../meridian:updater-sha-<Commit>, .../meridian:host-sha-<Commit>.
+# Die Prüfungen (Tests, Compose-Läufe) macht Deploy-Gate vor dem Push; diese Pipeline baut nur.
+# Voraussetzung: Container Registry im Projekt aktiv; mehrarchitektonische Builds laufen über buildx und QEMU im Docker-in-Docker-Dienst.
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "beta"'
+
+stages: [build]
+
+variables:
+  DOCKER_TLS_CERTDIR: "/certs"
+
+.image:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  # Auf main entstehen latest und main, auf beta candidate; auf beiden der unveränderliche sha-Tag.
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" --username "$CI_REGISTRY_USER" --password-stdin
+    - docker run --privileged --rm tonistiigi/binfmt --install arm64
+    - docker buildx create --use --name meridian
+    - |
+      set -eu
+      repository="$CI_REGISTRY_IMAGE/$IMAGE"
+      tags="--tag $repository:${TAG_PREFIX}sha-$CI_COMMIT_SHA"
+      if [ "$CI_COMMIT_BRANCH" = main ]; then
+        tags="$tags --tag $repository:${TAG_PREFIX}latest --tag $repository:${TAG_PREFIX}main"
+      else
+        tags="$tags --tag $repository:${TAG_PREFIX}candidate"
+      fi
+      # shellcheck disable=SC2086
+      docker buildx build --platform linux/amd64,linux/arm64 --file "$DOCKERFILE" \
+        --build-arg MERIDIAN_REVISION="$CI_COMMIT_SHA" \
+        --label org.opencontainers.image.revision="$CI_COMMIT_SHA" \
+        --label org.opencontainers.image.source="$CI_PROJECT_URL" \
+        $tags --push .
+
+image-meridian:
+  extends: .image
+  variables: { IMAGE: meridian, DOCKERFILE: docker/Dockerfile, TAG_PREFIX: "" }
+
+image-sandbox:
+  extends: .image
+  variables: { IMAGE: meridian-sandbox, DOCKERFILE: docker/Dockerfile.sandbox, TAG_PREFIX: "" }
+
+image-updater:
+  extends: .image
+  variables: { IMAGE: meridian, DOCKERFILE: docker/Dockerfile.updater, TAG_PREFIX: "updater-" }
+
+image-host:
+  extends: .image
+  variables: { IMAGE: meridian, DOCKERFILE: docker/Dockerfile.host, TAG_PREFIX: "host-" }
