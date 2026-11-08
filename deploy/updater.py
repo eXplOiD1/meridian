@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Alexander von Pidoll. All rights reserved.
 # SPDX-License-Identifier: LicenseRef-Meridian-Proprietary
 """Privileged deployment helper. Only fixed check/install requests, no client commands."""
+import base64
 import datetime
 import fcntl
 import json
@@ -80,6 +81,25 @@ def source():
         return resolve(stored.get("kind", ""), stored.get("repo", ""), stored.get("gitlab_url", ""), stored.get("registry", ""))
     return resolve(os.environ.get("MERIDIAN_UPDATE_SOURCE") or "github", os.environ.get("MERIDIAN_UPDATE_REPO") or "eXplOiD1/meridian",
                    os.environ.get("MERIDIAN_UPDATE_GITLAB_URL") or "", os.environ.get("MERIDIAN_UPDATE_REGISTRY") or "")
+
+
+def clone_access(token=None):
+    """Clone URL of the configured source and, for a private repository, the git environment carrying the token.
+
+    The token reaches git only through the environment (never an argument or the URL), so it is not visible in the process list.
+    """
+    kind, api, _ = source()
+    if kind == "github":
+        url = "https://github.com/" + api.removeprefix("https://api.github.com/repos/").removesuffix("/commits/") + ".git"
+        user = "x-access-token"
+    else:
+        base, rest = api.split("/api/v4/projects/", 1)
+        url = base + "/" + rest.removesuffix("/repository/commits/").replace("%2F", "/") + ".git"
+        user = "oauth2"
+    if not token:
+        return url, None
+    header = "Authorization: Basic " + base64.b64encode((user + ":" + token).encode("ascii")).decode("ascii")
+    return url, {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "http.extraHeader", "GIT_CONFIG_VALUE_0": header}
 
 
 def read_token(private):
@@ -520,7 +540,8 @@ class Updater:
         self.publish("downloading", "Update wird heruntergeladen.")
         with tempfile.TemporaryDirectory(dir=self.private) as temp:
             source = pathlib.Path(temp) / "source"
-            command(["git", "clone", "--no-checkout", "https://github.com/eXplOiD1/meridian.git", str(source)], 300)
+            url, git_env = clone_access(read_token(self.private))
+            command(["git", "clone", "--no-checkout", url, str(source)], 300, env=git_env)
             command(["git", "-C", str(source), "checkout", "--detach", revision], 60)
             command(["npm", "--prefix", str(source / "frontend"), "ci", "--no-audit", "--no-fund"], 600)
             command(["npm", "--prefix", str(source / "frontend"), "run", "build"], 600)

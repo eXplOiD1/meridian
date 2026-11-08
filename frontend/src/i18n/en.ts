@@ -1233,6 +1233,7 @@ export const EN: Record<string, string> = {
   "Zur Bestätigung. Die Änderung wird im Audit-Log festgehalten.": "For confirmation. The change is recorded in the audit log.",
   "Gespeichert. Der Update-Dienst prüft jetzt mit der neuen Quelle.": "Saved. The update service is now checking with the new source.",
   "Quelle speichern": "Save source",
+  "Beim Wechsel der Quelle dieselbe Registry auch als MERIDIAN_REGISTRY in der Compose-Umgebung eintragen, sonst startet ein erneutes Bereitstellen wieder mit den alten Images.": "When switching the source, also set the same registry as MERIDIAN_REGISTRY in the Compose environment, otherwise a redeploy starts with the old images again.",
   "Die Update-Quelle wurde abgelehnt. Eingaben prüfen; gespeichert wurde nichts.": "The update source was rejected. Check the entries; nothing was saved.",
   "Das Repository verweigert den Zugriff. Zugangs-Token für das private Repository prüfen (siehe Betriebshandbuch).": "The repository denied access. Check the access token for the private repository (see the operations manual).",
   "Update wird vorbereitet.": "Preparing update.",

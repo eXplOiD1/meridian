@@ -147,15 +147,15 @@ DOCKER_CONFIG=/var/lib/meridian-updater/docker docker login ghcr.io -u BENUTZER
    GitHub-Pipeline in die Registry des Projekts (`$CI_REGISTRY_IMAGE/meridian`, `…/meridian-sandbox`, jeweils mit `sha-<Commit>`;
    `updater-` und `host-` als Tag-Präfix an `meridian`). Die Container Registry muss im Projekt aktiv sein, und die Pipeline braucht
    einen Runner mit Docker-in-Docker (privilegiert).
-3. **Compose auf die GitLab-Images stellen** (Datei `.env` neben der `compose.yaml`):
+3. **Compose auf die GitLab-Images stellen** mit einer einzigen Variable (Datei `.env` neben der `compose.yaml`):
    ```
-   MERIDIAN_IMAGE=registry.gitlab.com/gruppe/projekt/meridian:latest
-   MERIDIAN_SANDBOX_IMAGE=registry.gitlab.com/gruppe/projekt/meridian-sandbox:latest
-   MERIDIAN_UPDATER_IMAGE=registry.gitlab.com/gruppe/projekt/meridian:updater-latest
+   MERIDIAN_REGISTRY=registry.gitlab.com/gruppe/projekt
    ```
-   Beim Host-Profil zusätzlich `MERIDIAN_HOST_IMAGE=…/meridian:host-latest`.
+   Sie gilt für alle Images (`meridian`, `meridian-sandbox`, Updater, Host). Die einzelnen Variablen `MERIDIAN_IMAGE`,
+   `MERIDIAN_SANDBOX_IMAGE`, `MERIDIAN_UPDATER_IMAGE` und `MERIDIAN_HOST_IMAGE` haben weiterhin Vorrang, z. B. für `candidate`.
 4. **Update-Quelle** in der Oberfläche auf GitLab stellen: Repository `gruppe/projekt`, bei selbst gehostetem GitLab die Adresse und die
-   Registry (`MERIDIAN_UPDATE_REGISTRY`).
+   Registry (dieselbe wie `MERIDIAN_REGISTRY`). Trage sie auch in `MERIDIAN_REGISTRY` ein; sonst startet ein erneutes Bereitstellen der
+   Compose-Datei wieder mit den alten Images.
 5. **Zugang bei privatem Projekt:** Die Registry eines privaten GitLab-Projekts ist immer privat (anders als bei GitHub lässt sich ein
    Paket nicht einzeln öffentlich stellen). Lege ein Projekt-Zugriffstoken (`read_api`) und ein Deploy-Token (`read_registry`) an und melde
    den Docker-Host einmal an (`docker login registry.gitlab.com`). Ist das Projekt öffentlich, braucht nichts davon ein Token.

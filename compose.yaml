@@ -5,7 +5,7 @@
 name: meridian
 services:
   updater:
-    image: ${MERIDIAN_UPDATER_IMAGE:-ghcr.io/exploid1/meridian:updater-latest}
+    image: ${MERIDIAN_UPDATER_IMAGE:-${MERIDIAN_REGISTRY:-ghcr.io/exploid1}/meridian:updater-latest}
     pull_policy: always
     container_name: meridian-updater
     restart: unless-stopped
@@ -52,7 +52,7 @@ services:
       start_period: 90s
       retries: 3
   web:
-    image: ${MERIDIAN_IMAGE:-ghcr.io/exploid1/meridian:latest}
+    image: ${MERIDIAN_IMAGE:-${MERIDIAN_REGISTRY:-ghcr.io/exploid1}/meridian:latest}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -101,7 +101,7 @@ services:
       start_period: 30s
       retries: 3
   worker-shell:
-    image: ${MERIDIAN_IMAGE:-ghcr.io/exploid1/meridian:latest}
+    image: ${MERIDIAN_IMAGE:-${MERIDIAN_REGISTRY:-ghcr.io/exploid1}/meridian:latest}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -140,7 +140,7 @@ services:
       updater:
         condition: service_healthy
   sandbox:
-    image: ${MERIDIAN_SANDBOX_IMAGE:-ghcr.io/exploid1/meridian-sandbox:latest}
+    image: ${MERIDIAN_SANDBOX_IMAGE:-${MERIDIAN_REGISTRY:-ghcr.io/exploid1}/meridian-sandbox:latest}
     pull_policy: always
     container_name: meridian-sandbox
     restart: unless-stopped
