@@ -92,6 +92,42 @@ cd frontend && npm ci && npm run build && cd ..
 sudo bash deploy/install.sh
 ```
 
+### Privates Repository (GitHub oder GitLab)
+
+Der Update-Dienst fragt den Stand und die Images ohne Anmeldung ab. Ist das Repository privat, braucht er einen Lesezugang.
+Die Quelle legst du in der Umgebung des Update-Containers fest (nie in der Oberfläche):
+
+| Variable | Bedeutung |
+|---|---|
+| `MERIDIAN_UPDATE_SOURCE` | `github` (Standard) oder `gitlab` |
+| `MERIDIAN_UPDATE_REPO` | `besitzer/name`, bei GitLab auch mit Untergruppen `gruppe/untergruppe/name` |
+| `MERIDIAN_UPDATE_GITLAB_URL` | nur selbst gehostetes GitLab, `https://…`, ohne Pfad (Standard `https://gitlab.com`) |
+| `MERIDIAN_UPDATE_REGISTRY` | Präfix der Images, z. B. `ghcr.io/besitzer` oder `registry.gitlab.com/gruppe/projekt`; bei selbst gehostetem GitLab Pflicht |
+
+Die Images heißen `<Präfix>/meridian:sha-<Stand>` und `<Präfix>/meridian-sandbox:sha-<Stand>`; deine Pipeline muss sie dort veröffentlichen.
+
+**Zugang einmalig im Update-Container einrichten** (Terminal des Containers `meridian-updater`). Beides liegt im privaten
+Volume des Dienstes und nie in der Umgebung oder im Image:
+
+```sh
+# 1. Token zum Lesen des Repositorys (nur eine Zeile)
+umask 077
+printf '%s\n' 'HIER_TOKEN' > /var/lib/meridian-updater/repo-token
+# 2. Anmeldung an der Image-Registry (Token mit Leserecht auf Pakete)
+mkdir -p /var/lib/meridian-updater/docker
+DOCKER_CONFIG=/var/lib/meridian-updater/docker docker login ghcr.io -u BENUTZER
+```
+
+- **GitHub:** für `repo-token` ein fein abgestuftes Token nur auf dieses Repository mit „Contents: Read-only“. Für die Registry ein
+  klassisches Token mit `read:packages` (GitHub kennt für `ghcr.io` keine fein abgestuften Tokens).
+- **GitLab:** für `repo-token` ein Projekt-Zugriffstoken (Rolle Guest/Reporter, Bereich `read_api`). Für die Registry ein
+  Deploy-Token mit `read_registry`; Anmeldung an `registry.gitlab.com` (oder deiner Registry).
+- Der Docker-Host selbst muss bei derselben Registry angemeldet sein, damit `docker compose pull` und der Start des
+  Update-Containers die privaten Images laden können.
+- Meldet die Oberfläche „Das Repository verweigert den Zugriff“, fehlt `repo-token` oder er ist abgelaufen oder zu eng. Die
+  Protokollzeile `operation failed during checking HTTPError 404` im Container nennt den Statuscode.
+- Das Token wird nur an die eine Adresse der Prüfung gesendet, folgt keiner Weiterleitung und steht nie in Status, Protokoll oder Antwort.
+
 **Zurück zur alten Version:** Migrationen laufen nur vorwärts. Wer zurück will, spielt die Sicherung von vor dem Update ein
 (Abschnitt Wiederherstellung) und startet die alte Version.
 
