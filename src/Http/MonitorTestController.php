@@ -150,19 +150,7 @@ final class MonitorTestController
 
     private function retryAfter(int $userId): ?int
     {
-        $now = $this->clock->now();
-        $row = $this->db->fetchOne(
-            'SELECT COUNT(*) AS n, MIN(CAST(strftime(\'%s\', created_at) AS INTEGER)) AS oldest FROM audit_log
-              WHERE user_id = :user AND action = :action AND julianday(created_at) > julianday(:since)',
-            ['user' => $userId, 'action' => self::AUDIT_ACTION, 'since' => Timestamp::format($now->modify('-1 hour'))],
-        );
-        if ($row === null || Row::int($row, 'n') < self::MAX_PER_HOUR) {
-            return null;
-        }
-        $oldest = Row::intOrNull($row, 'oldest');
-        $seconds = $oldest === null ? 3600 : $oldest + 3600 - $now->getTimestamp();
-
-        return max(1, min(3600, $seconds));
+        return AuditRateLimit::retryAfter($this->db, $this->clock, $userId, self::MAX_PER_HOUR, self::AUDIT_ACTION);
     }
 
     /**
@@ -189,13 +177,7 @@ final class MonitorTestController
         if (trim($request->getContent()) === '') {
             return [];
         }
-        $data = JsonBody::object($request->getContent(), self::MAX_BODY, 2);
-        if ($data === null) {
-            throw ValidationFailed::field('body', 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).');
-        }
-        if ($data !== [] && array_is_list($data)) {
-            throw ValidationFailed::field('body', 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).');
-        }
+        $data = JsonBody::objectOrFail($request->getContent(), self::MAX_BODY, 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).', 2);
 
         return $data;
     }

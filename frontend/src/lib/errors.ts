@@ -22,3 +22,36 @@ export function fieldErrors(error: unknown): Record<string, string> {
 export function isStatus(error: unknown, status: number): boolean {
   return error instanceof ApiError && error.status === status;
 }
+
+/** Fehler beim Speichern: bei 422 die Feldfehler und ein Sammelhinweis, sonst die Meldung des Servers. */
+export function reportSaveError(
+  error: unknown,
+  setErrors: (errors: Record<string, string>) => void,
+  setFormError: (message: string | null) => void,
+): void {
+  if (isStatus(error, 422)) {
+    setErrors(fieldErrors(error));
+    setFormError(t('Bitte die markierten Felder korrigieren.'));
+  } else {
+    setFormError(errorMessage(error));
+  }
+}
+
+/** Führt eine Aktion mit Ladeanzeige aus, lädt danach neu und zeigt einen Fehler als Meldung des Formulars. */
+export async function runAction(
+  run: () => Promise<void>,
+  reload: () => Promise<void>,
+  setBusy: (busy: boolean) => void,
+  setFormError: (message: string | null) => void,
+): Promise<void> {
+  setBusy(true);
+  setFormError(null);
+  try {
+    await run();
+    await reload();
+  } catch (caught) {
+    setFormError(errorMessage(caught));
+  } finally {
+    setBusy(false);
+  }
+}

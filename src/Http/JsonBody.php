@@ -31,6 +31,26 @@ final class JsonBody
     }
 
     /**
+     * Wie {@see self::object()}, wirft aber bei ungültigem Inhalt und bei einer Liste statt eines Objekts
+     * (`[]` bleibt ein leeres Objekt) eine {@see ValidationFailed} mit der Meldung für das Feld `body`.
+     *
+     * @param string $message sagt dem Aufrufer, was erwartet wird (Größe, Tiefe), und enthält nie den Inhalt
+     *
+     * @return array<mixed>
+     *
+     * @throws ValidationFailed
+     */
+    public static function objectOrFail(#[\SensitiveParameter] string $body, int $maxBytes, string $message, int $depth = 4): array
+    {
+        $data = self::object($body, $maxBytes, $depth);
+        if ($data === null || ($data !== [] && array_is_list($data))) {
+            throw ValidationFailed::field('body', $message);
+        }
+
+        return $data;
+    }
+
+    /**
      * @return array<mixed>|null
      */
     private static function onlyArray(#[\SensitiveParameter] mixed $value): ?array

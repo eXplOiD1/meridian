@@ -600,14 +600,7 @@ final class JobController
     private static function body(#[\SensitiveParameter] Request $request): array
     {
         // Bis 320 KiB wegen des Skripts eines Shell-Jobs; für HTTP-Jobs begrenzt der Validator auf 160 KiB.
-        $data = JsonBody::object($request->getContent(), JobValidator::MAX_SHELL_BODY_BYTES, 5);
-        $message = 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 160 KiB, höchstens 5 Ebenen tief).';
-        if ($data === null) {
-            throw ValidationFailed::field('body', $message);
-        }
-        if ($data !== [] && array_is_list($data)) {
-            throw ValidationFailed::field('body', $message);
-        }
+        $data = JsonBody::objectOrFail($request->getContent(), JobValidator::MAX_SHELL_BODY_BYTES, 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 160 KiB, höchstens 5 Ebenen tief).', 5);
 
         return $data;
     }

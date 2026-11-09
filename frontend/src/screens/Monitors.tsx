@@ -5,10 +5,11 @@ import { useId, useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Modal, ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
+import { CategoryOptions } from '../components/CategoryOptions';
 import { Confirm } from '../components/Confirm';
 import { FormField } from '../components/FormField';
 import { ApiError, request } from '../lib/api';
-import { errorMessage } from '../lib/errors';
+import { errorMessage, reportSaveError, runAction } from '../lib/errors';
 import { formatTime } from '../lib/format';
 import { canEditHttp } from '../lib/permissions';
 import type { CategoryRef, Monitor, MonitorKind, MonitorState, NotificationChannelName, Profile } from '../types';
@@ -200,12 +201,7 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
         <FormField label={t('Kategorie')} error={errors.category_id}>
           {(aria) => (
             <select {...aria} className="input" name="monitor-category" value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}>
-              {categories.length === 0 && <option value="">{t('Keine')}</option>}
-              {categories.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                </option>
-              ))}
+              <CategoryOptions categories={categories} />
             </select>
           )}
         </FormField>
@@ -390,12 +386,7 @@ export function Monitors({ profile }: { profile: Profile }) {
       await load();
       return true;
     } catch (caught) {
-      if (caught instanceof ApiError && caught.status === 422) {
-        setErrors(caught.fields);
-        setFormError(t('Bitte die markierten Felder korrigieren.'));
-      } else {
-        setFormError(errorMessage(caught));
-      }
+      reportSaveError(caught, setErrors, setFormError);
       return false;
     } finally {
       setBusy(false);
@@ -432,12 +423,7 @@ export function Monitors({ profile }: { profile: Profile }) {
       const reply = await request<{ ok: boolean; latency_ms: number | null; note: string | null }>('POST', path, { csrf, body });
       setTestResult({ source: key === 'form' ? 'form' : 'row', label, ok: reply.ok, latency: reply.latency_ms, note: reply.note });
     } catch (caught) {
-      if (caught instanceof ApiError && caught.status === 422) {
-        setErrors(caught.fields);
-        setFormError(t('Bitte die markierten Felder korrigieren.'));
-      } else {
-        setFormError(errorMessage(caught));
-      }
+      reportSaveError(caught, setErrors, setFormError);
     } finally {
       setTesting(null);
     }
@@ -451,16 +437,7 @@ export function Monitors({ profile }: { profile: Profile }) {
   }
 
   async function act(run: () => Promise<void>): Promise<void> {
-    setBusy(true);
-    setFormError(null);
-    try {
-      await run();
-      await load();
-    } catch (caught) {
-      setFormError(errorMessage(caught));
-    } finally {
-      setBusy(false);
-    }
+    await runAction(run, load, setBusy, setFormError);
   }
 
   return (

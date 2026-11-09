@@ -271,14 +271,7 @@ final class AccountController
      */
     private static function body(#[\SensitiveParameter] Request $request, array $fields): array
     {
-        $data = JsonBody::object($request->getContent(), self::MAX_BODY);
-        $message = 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).';
-        if ($data === null) {
-            throw ValidationFailed::field('body', $message);
-        }
-        if ($data !== [] && array_is_list($data)) {
-            throw ValidationFailed::field('body', $message);
-        }
+        $data = JsonBody::objectOrFail($request->getContent(), self::MAX_BODY, 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).');
         $errors = [];
         foreach ($fields as $field) {
             if (!array_key_exists($field, $data)) {
