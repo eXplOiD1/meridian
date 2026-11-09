@@ -328,7 +328,7 @@ export interface ShellTargetEntry {
   created_at: string;
   created_by: { display_name: string } | null;
   /** Nur bei `ssh`: Verbindungsdaten ohne Schlüssel. */
-  ssh?: { host: string; port: number; username: string; host_key: string } | null;
+  ssh?: { host: string; port: number; username: string; host_key: string; public_key?: string } | null;
   has_private_key?: boolean;
 }
 

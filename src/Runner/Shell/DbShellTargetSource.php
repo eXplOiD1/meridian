@@ -67,7 +67,7 @@ final class DbShellTargetSource implements ShellTargetSource
             if (!is_array($metadata)) {
                 return null;
             }
-            $profile = SshProfile::validate($metadata);
+            $profile = SshProfile::validate($metadata, true);
 
             return new SshConnection($profile->host, $profile->port, $profile->username, $profile->hostKey, $enc);
         } catch (\JsonException | InvalidShellTarget | \InvalidArgumentException) {

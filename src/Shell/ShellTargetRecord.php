@@ -16,7 +16,7 @@ use Meridian\Runner\Shell\ShellTarget;
 final readonly class ShellTargetRecord
 {
     /**
-     * @param array{host:string,port:int,username:string,host_key:string}|null $ssh
+     * @param array{host:string,port:int,username:string,host_key:string,public_key?:string}|null $ssh
      * @param list<string> $users
      */
     public function __construct(

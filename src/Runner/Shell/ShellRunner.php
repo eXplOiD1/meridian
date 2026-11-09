@@ -51,7 +51,7 @@ final class ShellRunner implements Runner
     public const NOTE_NO_INTERPRETER = 'Interpreter im Container nicht gefunden.';
     /** Host profile without configured transport: fail immediately without retry. */
     public const NOTE_HOST_UNAVAILABLE = 'Host-Ausführung nicht eingerichtet: Docker-Host-Zugriff aktivieren oder meridian-shell.socket einrichten und MERIDIAN_SHELL_HOST_SOCKETS im Shell-Worker setzen.';
-    public const NOTE_SSH_DISABLED = 'SSH-Ausführung nicht eingerichtet: MERIDIAN_SSH_ENABLE=1 und ausgehendes Netz (MERIDIAN_SHELL_NETWORK) im Shell-Worker setzen.';
+    public const NOTE_SSH_DISABLED = 'SSH-Ausführung nicht eingerichtet: MERIDIAN_SSH_ENABLE=1 und ausgehendes Netz im Shell-Worker setzen (Docker: MERIDIAN_SHELL_NETWORK=bridge; systemd: Netzsperre der Unit aufheben, siehe Betriebshandbuch).';
     public const NOTE_SSH_FAILED = 'SSH-Verbindung gescheitert (Exit-Code 255): Erreichbarkeit, Server-Schlüssel, Benutzer und hinterlegten privaten Schlüssel des Ausführungsorts prüfen.';
     public const NOTE_SSH_NO_INTERPRETER = 'Interpreter auf dem Server nicht gefunden.';
     public const NOTE_SSH_DISCONNECT = 'Die Verbindung wurde getrennt; ein schon gestarteter Befehl kann auf dem Server weiterlaufen.';

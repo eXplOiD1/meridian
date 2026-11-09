@@ -27,7 +27,7 @@ final class ExecFailed extends \RuntimeException
     public const NO_PROCESS_GROUP = 'Keine eigene Prozessgruppe (setsid): Lauf aus Sicherheitsgründen nicht gestartet.';
     public const INFRASTRUCTURE = 'Meridians eigene Container sind als Ausführungsort gesperrt: Job auf einen anderen Container umstellen.';
     public const API_TOO_OLD = 'Docker-API zu alt (mindestens 1.41): Docker auf dem Server aktualisieren.';
-    public const SSH_NOT_INSTALLED = 'SSH-Ausführung nicht eingerichtet: Im Meridian-Image fehlt der SSH-Client (openssh-client) oder setsid.';
+    public const SSH_NOT_INSTALLED = 'SSH-Ausführung nicht eingerichtet: Auf diesem Rechner fehlt der SSH-Client (openssh-client) oder setsid. Docker: Image prüfen; systemd: openssh-client installieren.';
     public const SSH_KEY_UNREADABLE = 'Der private SSH-Schlüssel des Ausführungsorts ist nicht lesbar: Hauptschlüssel prüfen oder den Schlüssel unter Einstellungen → Ausführungsorte neu hinterlegen.';
     public const INVALID_SPEC = 'Ungültige Angaben zum Ausführungsort (Name, Benutzer oder Arbeitsverzeichnis): Job neu speichern.';
 
