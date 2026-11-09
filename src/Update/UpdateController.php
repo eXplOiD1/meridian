@@ -114,20 +114,10 @@ final class UpdateController
         if (!isset($status['source']) || !is_array($status['source'])) {
             return JsonReply::error(409, 'Zuerst den Update-Dienst auf die aktuelle Version bringen.');
         }
-        $id = bin2hex(random_bytes(16));
-        $temp = $this->directory . '/request-' . $id . '.tmp';
-        $payload = json_encode(['action' => 'source', 'id' => $id, 'source' => $source], JSON_THROW_ON_ERROR);
-        // Create the file private first, then write: the token is never readable by group or others.
-        if (@touch($temp) === false || @chmod($temp, 0600) === false || file_put_contents($temp, $payload, LOCK_EX) !== strlen($payload)) {
-            @unlink($temp);
-            return JsonReply::error(500, 'Update-Anfrage konnte nicht gespeichert werden.');
-        }
-        try {
-            if (!@link($temp, $this->directory . '/request.json')) {
-                return JsonReply::error(409, 'Eine Update-Anfrage wartet bereits.');
-            }
-        } finally {
-            unlink($temp);
+        // Der Token darf nie für Gruppe oder andere lesbar sein: Datei zuerst privat anlegen, dann schreiben.
+        $failure = $this->queue('source', ['source' => $source], true);
+        if ($failure !== null) {
+            return $failure;
         }
         $this->audit->record($user, 'update.source_requested', $source['kind'] . ' ' . $source['repo'] . (isset($source['token']) ? ' (neues Token)' : '') . (isset($source['clear_token']) ? ' (Token entfernt)' : ''));
         return JsonReply::json(['queued' => true], 202);
@@ -212,10 +202,31 @@ final class UpdateController
         if ($action === 'install' && (($status['available'] ?? false) !== true || ($status['phase'] ?? '') === 'failed')) {
             return JsonReply::error(409, 'Zuerst nach einem verfügbaren Update suchen.');
         }
+        $failure = $this->queue($action, [], false);
+        if ($failure !== null) {
+            return $failure;
+        }
+        $this->audit->record($user, 'update.' . $action . '_requested', str_starts_with($action, 'channel_') ? substr($action, 8) : (in_array($status['channel'] ?? null, ['main', 'beta'], true) ? $status['channel'] : 'main'));
+        return JsonReply::json(['queued' => true], 202);
+    }
+
+    /**
+     * Legt die Anfrage für den Update-Dienst als `request.json` ab (erst eine eigene Datei, dann ein harter Link: eine
+     * wartende Anfrage wird nie überschrieben). Gibt bei Erfolg null zurück, sonst die Fehlerantwort.
+     *
+     * @param array<string, mixed> $extra weitere Felder der Anfrage
+     * @param bool                 $private Datei mit 0600 anlegen (die Anfrage enthält einen Token)
+     */
+    private function queue(string $action, #[\SensitiveParameter] array $extra, bool $private): ?Response
+    {
         $id = bin2hex(random_bytes(16));
         $temp = $this->directory . '/request-' . $id . '.tmp';
-        $payload = json_encode(['action' => $action, 'id' => $id], JSON_THROW_ON_ERROR);
-        if (file_put_contents($temp, $payload, LOCK_EX) !== strlen($payload)) {
+        $payload = json_encode(['action' => $action, 'id' => $id] + $extra, JSON_THROW_ON_ERROR);
+        $written = (!$private || (@touch($temp) !== false && @chmod($temp, 0600) !== false))
+            && file_put_contents($temp, $payload, LOCK_EX) === strlen($payload);
+        if (!$written) {
+            @unlink($temp);
+
             return JsonReply::error(500, 'Update-Anfrage konnte nicht gespeichert werden.');
         }
         try {
@@ -225,7 +236,7 @@ final class UpdateController
         } finally {
             unlink($temp);
         }
-        $this->audit->record($user, 'update.' . $action . '_requested', str_starts_with($action, 'channel_') ? substr($action, 8) : (in_array($status['channel'] ?? null, ['main', 'beta'], true) ? $status['channel'] : 'main'));
-        return JsonReply::json(['queued' => true], 202);
+
+        return null;
     }
 }

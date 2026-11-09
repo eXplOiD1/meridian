@@ -51,6 +51,38 @@ final class JsonBody
     }
 
     /**
+     * Prüft die Feldnamen eines Anfragekörpers: fehlende Pflichtfelder und unbekannte Felder → {@see ValidationFailed}.
+     * Die Meldungen nennen nur Feldnamen, nie Werte.
+     *
+     * @param array<mixed> $data
+     * @param list<string> $required
+     * @param list<string> $optional
+     *
+     * @throws ValidationFailed
+     */
+    public static function requireFields(#[\SensitiveParameter] array $data, array $required, array $optional = []): void
+    {
+        $allowed = [...$required, ...$optional];
+        $errors = [];
+        foreach ($required as $field) {
+            if (!array_key_exists($field, $data)) {
+                $errors[$field] = 'Pflichtfeld fehlt.';
+            }
+        }
+        if ($errors === []) {
+            foreach (array_keys($data) as $key) {
+                if (!in_array((string) $key, $allowed, true)) {
+                    $errors['body'] = 'Unbekannte Felder im Anfragekörper. Erlaubt: ' . ($allowed === [] ? 'keine' : implode(', ', $allowed)) . '.';
+                    break;
+                }
+            }
+        }
+        if ($errors !== []) {
+            throw new ValidationFailed($errors);
+        }
+    }
+
+    /**
      * @return array<mixed>|null
      */
     private static function onlyArray(#[\SensitiveParameter] mixed $value): ?array

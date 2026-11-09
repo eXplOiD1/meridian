@@ -16,7 +16,16 @@ export function SystemUpdates({ csrf }: { csrf: string }) {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const initialCheck = useRef(false);
-  const load = useCallback(async () => { try { const next = await request<UpdateStatus>('GET', '/api/admin/updates'); setStatus(next); report(next); setError(null); } catch { setError(t('Update-Dienst vorübergehend nicht erreichbar. Die Seite verbindet sich erneut.')); } }, [report]);
+  const load = useCallback(async () => {
+    try {
+      const next = await request<UpdateStatus>('GET', '/api/admin/updates');
+      setStatus(next);
+      report(next);
+      setError(null);
+    } catch {
+      setError(t('Update-Dienst vorübergehend nicht erreichbar. Die Seite verbindet sich erneut.'));
+    }
+  }, [report]);
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 5000); return () => clearInterval(timer); }, [load]);
   useEffect(() => {
     if (!status?.configured || initialCheck.current) return;

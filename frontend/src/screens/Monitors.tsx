@@ -304,6 +304,11 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
   );
 }
 
+/** Felder, die nur eine Prüfung einer Web-Adresse hat (für Speichern und Testlauf gleich). */
+function httpCheckFields(draft: Draft): { expected_status: string; max_response_ms: number } {
+  return { expected_status: draft.expectedStatus.trim(), max_response_ms: Math.round(Number(draft.maxResponse) * 1000) };
+}
+
 function payload(draft: Draft, editing: boolean): { body: Record<string, unknown> } | { error: Record<string, string> } {
   const interval = toSeconds(draft.value, draft.unit);
   const active = draft.kind !== 'heartbeat';
@@ -328,7 +333,7 @@ function payload(draft: Draft, editing: boolean): { body: Record<string, unknown
   if (active) {
     body.fail_after = failAfter;
     if (draft.target.trim() !== '') body.target = draft.target.trim();
-    if (draft.kind === 'http') { body.expected_status = draft.expectedStatus.trim(); body.max_response_ms = Math.round(Number(draft.maxResponse) * 1000); }
+    if (draft.kind === 'http') Object.assign(body, httpCheckFields(draft));
   } else {
     body.grace_seconds = grace;
   }
@@ -432,7 +437,7 @@ export function Monitors({ profile }: { profile: Profile }) {
   function testBody(d: Draft): Record<string, unknown> {
     const body: Record<string, unknown> = {};
     if (d.target.trim() !== '') body.target = d.target.trim();
-    if (d.kind === 'http') { body.expected_status = d.expectedStatus.trim(); body.max_response_ms = Math.round(Number(d.maxResponse) * 1000); }
+    if (d.kind === 'http') Object.assign(body, httpCheckFields(d));
     return body;
   }
 

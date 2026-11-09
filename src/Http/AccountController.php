@@ -272,23 +272,7 @@ final class AccountController
     private static function body(#[\SensitiveParameter] Request $request, array $fields): array
     {
         $data = JsonBody::objectOrFail($request->getContent(), self::MAX_BODY, 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).');
-        $errors = [];
-        foreach ($fields as $field) {
-            if (!array_key_exists($field, $data)) {
-                $errors[$field] = 'Pflichtfeld fehlt.';
-            }
-        }
-        if ($errors === []) {
-            foreach (array_keys($data) as $key) {
-                if (!in_array((string) $key, $fields, true)) {
-                    $errors['body'] = 'Unbekannte Felder im Anfragekörper. Erlaubt: ' . implode(', ', $fields) . '.';
-                    break;
-                }
-            }
-        }
-        if ($errors !== []) {
-            throw new ValidationFailed($errors);
-        }
+        JsonBody::requireFields($data, $fields);
 
         return $data;
     }

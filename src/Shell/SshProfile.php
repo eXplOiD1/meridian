@@ -57,7 +57,7 @@ final class SshProfile
         if (!is_string($user) || preg_match('/^[A-Za-z_][A-Za-z0-9_.-]{0,31}$/D', $user) !== 1) {
             throw new InvalidShellTarget('ssh.username', 'Gültigen SSH-Benutzernamen angeben.');
         }
-        if (!is_string($hostKey) || strlen($hostKey) > 8192 || preg_match('/^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521)) ([A-Za-z0-9+\/=]+)(?: [^\r\n\0]{0,200})?$/D', trim($hostKey), $parts) !== 1
+        if (!is_string($hostKey) || strlen($hostKey) > 8192 || preg_match('/^(' . SshKeyPair::TYPE_PATTERN . ') ([A-Za-z0-9+\/=]+)(?: [^\r\n\0]{0,200})?$/D', trim($hostKey), $parts) !== 1
             || base64_decode($parts[2], true) === false) {
             throw new InvalidShellTarget('ssh.host_key', 'Den geprüften öffentlichen Server-Schlüssel als „ssh-ed25519 AAAA…“ (oder RSA/ECDSA) angeben.');
         }
@@ -87,7 +87,7 @@ final class SshProfile
         $public = null;
         if ($stored) {
             $public = $data['public_key'] ?? null;
-            if ($public !== null && (!is_string($public) || preg_match('/^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521)) [A-Za-z0-9+\/=]+$/D', $public) !== 1)) {
+            if ($public !== null && (!is_string($public) || preg_match('/^(' . SshKeyPair::TYPE_PATTERN . ') [A-Za-z0-9+\/=]+$/D', $public) !== 1)) {
                 throw new InvalidShellTarget('ssh.public_key', 'Gespeicherter öffentlicher Schlüssel ist ungültig.');
             }
         } elseif ($key !== null) {

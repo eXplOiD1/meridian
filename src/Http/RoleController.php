@@ -203,23 +203,7 @@ final class RoleController
     {
         $data = JsonBody::objectOrFail($request->getContent(), self::MAX_BODY, 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 8 KiB).', 4);
 
-        $errors = [];
-        foreach ($required as $key) {
-            if (!array_key_exists($key, $data)) {
-                $errors[$key] = 'Pflichtfeld fehlt.';
-            }
-        }
-        if ($errors === []) {
-            foreach (array_keys($data) as $key) {
-                if (!in_array((string) $key, [...$required, ...$optional], true)) {
-                    $errors['body'] = 'Unbekannte Felder im Anfragekörper. Erlaubt: ' . ([...$required, ...$optional] === [] ? 'keine' : implode(', ', [...$required, ...$optional])) . '.';
-                    break;
-                }
-            }
-        }
-        if ($errors !== []) {
-            throw new ValidationFailed($errors);
-        }
+        JsonBody::requireFields($data, $required, $optional);
 
         return $data;
     }
