@@ -192,6 +192,14 @@ final class ShellTargetStore
             if ($old->allowsRoot() !== $new->allowsRoot()) {
                 $hints[] = $new->allowsRoot() ? 'root freigegeben' : 'root-Freigabe entfernt';
             }
+            if ($old->ssh !== null && $new->ssh !== null) {
+                // Nur welche Felder sich geändert haben, nie die Werte.
+                foreach (['host' => 'Server', 'port' => 'Port', 'username' => 'SSH-Benutzer', 'host_key' => 'Server-Schlüssel', 'public_key' => 'Anmelde-Schlüssel erneuert'] as $field => $label) {
+                    if (($old->ssh[$field] ?? null) !== ($new->ssh[$field] ?? null)) {
+                        $hints[] = $field === 'public_key' ? $label : $label . ' geändert';
+                    }
+                }
+            }
             $audit->record($userId, 'shell.target_updated', '#' . $id . ' ' . $old->describe() . ' → ' . $new->describe() . ($hints === [] ? '' : ' [' . implode(', ', $hints) . ']'));
 
             return ['record' => $new, 'affected_jobs' => $this->jobsUsing($old)];
