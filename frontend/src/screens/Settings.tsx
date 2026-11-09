@@ -11,6 +11,7 @@ import { NotificationChannels } from '../components/NotificationChannels';
 import { SystemUpdates } from '../components/SystemUpdates';
 import { UpdateAvailableDot, useUpdateAvailability } from '../components/UpdateAvailability';
 import { FormField } from '../components/FormField';
+import { SshPublicKey } from '../components/SshPublicKey';
 import { ApiError, request } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { formatTime } from '../lib/format';
@@ -589,7 +590,7 @@ function InternalTargets({ csrf }: { csrf: string }) {
   );
 }
 
-const EMPTY_SHELL_FORM = { kind: 'docker', name: '', categoryId: '', users: '', defaultUser: '', note: '', sshHost: '', sshPort: '22', sshUser: '', sshHostKey: '', sshPrivateKey: '' };
+const EMPTY_SHELL_FORM = { kind: 'docker', name: '', categoryId: '', users: '', defaultUser: '', note: '', sshHost: '', sshPort: '22', sshUser: '', sshHostKey: '', sshPrivateKey: '', sshKeyMode: 'generate' };
 
 function shellScopeLabel(target: ShellTargetEntry): string {
   return target.category === null ? t('Global (alle Kategorien)') : t('Kategorie „{name}“', { name: target.category.name });
@@ -612,6 +613,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [keyNotice, setKeyNotice] = useState<{ name: string; key: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<ShellTargetEntry | null>(null);
@@ -670,6 +672,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       sshUser: target.ssh?.username ?? '',
       sshHostKey: target.ssh?.host_key ?? '',
       sshPrivateKey: '',
+      sshKeyMode: target.has_private_key === true ? 'keep' : 'generate',
     });
   }
 
@@ -688,6 +691,8 @@ function ShellTargets({ csrf }: { csrf: string }) {
     setErrors({});
     setFormError(null);
     setNotice(null);
+    setKeyNotice(null);
+    const generated = ssh && form.sshKeyMode === 'generate';
     const body = {
       kind: form.kind,
       name: form.name.trim(),
@@ -702,8 +707,9 @@ function ShellTargets({ csrf }: { csrf: string }) {
               port: /^\d+$/.test(form.sshPort.trim()) ? Number.parseInt(form.sshPort.trim(), 10) : form.sshPort.trim(),
               username: form.sshUser.trim(),
               host_key: form.sshHostKey.trim(),
-              // Der Schlüssel geht nur beim Anlegen oder Ersetzen mit; leer lässt den gespeicherten stehen.
-              ...(form.sshPrivateKey.trim() !== '' ? { private_key: form.sshPrivateKey } : {}),
+              // Meridian erzeugt das Paar (der private Teil bleibt im Server), oder ein eigener Schlüssel wird eingefügt;
+              // „behalten“ schickt nichts und lässt den gespeicherten Schlüssel stehen.
+              ...(form.sshKeyMode === 'generate' ? { generate_key: true } : form.sshKeyMode === 'paste' && form.sshPrivateKey.trim() !== '' ? { private_key: form.sshPrivateKey } : {}),
             },
           }
         : {}),
@@ -713,6 +719,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       if (editing !== null) {
         const result = await request<{ target: ShellTargetEntry; affected_jobs: number }>('PUT', '/api/settings/shell-targets/' + String(editing.id), { csrf, body });
         setTargets((current) => current?.map((entry) => (entry.id === result.target.id ? result.target : entry)) ?? current);
+        if (generated && result.target.ssh?.public_key !== undefined) setKeyNotice({ name: result.target.name, key: result.target.ssh.public_key });
         setOpen(false);
         setEditing(null);
         setForm(EMPTY_SHELL_FORM);
@@ -725,6 +732,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       }
       const result = await request<{ target: ShellTargetEntry }>('POST', '/api/settings/shell-targets', { csrf, body });
       setTargets((current) => [...(current ?? []), result.target]);
+      if (generated && result.target.ssh?.public_key !== undefined) setKeyNotice({ name: result.target.name, key: result.target.ssh.public_key });
       setForm({ ...EMPTY_SHELL_FORM, kind: form.kind });
       setOpen(false);
       setNotice(t('Ausführungsort angelegt. Er steht ab sofort im Job-Editor zur Wahl.'));
@@ -773,6 +781,13 @@ function ShellTargets({ csrf }: { csrf: string }) {
 
       {loadError !== null && <Alert tone="err">{loadError}</Alert>}
       {notice !== null && <Alert tone="ok">{notice}</Alert>}
+      {keyNotice !== null && (
+        <div className="card">
+          <h3>{t('Nächster Schritt: Schlüssel auf dem Server eintragen')}</h3>
+          <p className="hint">{t('Ohne diesen Eintrag lehnt der Server die Anmeldung von „{name}“ ab.', { name: keyNotice.name })}</p>
+          <SshPublicKey publicKey={keyNotice.key} />
+        </div>
+      )}
       {targets === null && loadError === null && <p className="hint">{t('Lädt …')}</p>}
       {targets !== null && (
         <div className="table-wrap">
@@ -909,13 +924,10 @@ function ShellTargets({ csrf }: { csrf: string }) {
               <p><strong>{t('1. Server-Schlüssel (öffentlich)')}</strong> {t('Er sagt Meridian, dass es wirklich mit deinem Server spricht. Auf dem Server:')}</p>
               <p><code>cat /etc/ssh/ssh_host_ed25519_key.pub</code></p>
               <p className="hint">{t('Die ganze Zeile einfügen (ssh-ed25519 AAAA…). Ein Kommentar am Ende, z. B. root@server, ist erlaubt und wird nicht gespeichert. Von einem anderen Rechner geht ssh-keyscan -t ed25519 SERVER; dann den Fingerabdruck mit ssh-keygen -lf prüfen und mit dem Fingerabdruck auf dem Server vergleichen (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub). Nie ungeprüft einfügen.')}</p>
-              <p><strong>{t('2. Eigenes Schlüsselpaar für Meridian')}</strong> {t('Auf deinem Rechner oder auf dem Server:')}</p>
-              <p><code>ssh-keygen -t ed25519 -N "" -C meridian -f meridian_key</code></p>
-              <p className="hint">{t('Das erzeugt meridian_key (privat) und meridian_key.pub (öffentlich). Den ganzen Inhalt von meridian_key (von -----BEGIN bis -----END) bei „Privater Schlüssel“ einfügen. Ohne Passphrase, weil geplante Jobs keine eingeben können.')}</p>
-              <p><strong>{t('3. Öffentlichen Teil auf dem Server erlauben')}</strong> {t('Auf dem Server als der Benutzer, der die Jobs ausführen soll:')}</p>
-              <p><code>cat meridian_key.pub &gt;&gt; ~/.ssh/authorized_keys</code></p>
-              <p className="hint">{t('Der Ordner ~/.ssh braucht die Rechte 700, die Datei authorized_keys 600.')}</p>
-              <p><strong>{t('4. Aufräumen')}</strong> {t('Lösche meridian_key danach vom Rechner. Meridian speichert ihn verschlüsselt und zeigt ihn nie wieder. Nimm einen Benutzer mit möglichst wenigen Rechten, nicht root.')}</p>
+              <p><strong>{t('2. Schlüssel für die Anmeldung')}</strong> {t('Am einfachsten lässt du Meridian das Schlüsselpaar erzeugen (Voreinstellung). Der private Teil bleibt verschlüsselt in Meridian, du musst nichts kopieren. Nach dem Speichern zeigt Meridian den öffentlichen Teil mit einem fertigen Befehl.')}</p>
+              <p><strong>{t('3. Öffentlichen Teil auf dem Server erlauben')}</strong> {t('Den angezeigten Befehl auf dem Server als der Benutzer ausführen, der die Jobs ausführen soll. Er trägt den öffentlichen Schlüssel in ~/.ssh/authorized_keys ein.')}</p>
+              <p className="hint">{t('Wer einen eigenen Schlüssel mitbringen will: ssh-keygen -t ed25519 -N "" -f meridian_key erzeugt ihn; „Eigenen privaten Schlüssel einfügen“ wählen und den Inhalt von meridian_key einfügen, meridian_key.pub gehört auf den Server.')}</p>
+              <p><strong>{t('4. Aufräumen')}</strong> {t('Nimm für Meridian einen Benutzer mit möglichst wenigen Rechten, nicht root. Eigene Schlüsseldateien nach dem Einfügen vom Rechner löschen.')}</p>
             </details>
             <div className="grid-2">
               <FormField label={t('Server')} error={errors['ssh.host']} hint={t('Hostname oder IP-Adresse, z. B. web01.example.org.')}>
@@ -931,13 +943,20 @@ function ShellTargets({ csrf }: { csrf: string }) {
             <FormField label={t('Öffentlicher Server-Schlüssel')} error={errors['ssh.host_key']} hint={t('Der geprüfte Schlüssel des Servers, z. B. ssh-ed25519 AAAA… (ssh-keyscan -t ed25519 Server; Fingerabdruck vorher prüfen). Meridian verbindet sich nur mit genau diesem Schlüssel.')}>
               {(aria) => <input {...aria} className="input input--mono" name="ssh-host-key" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshHostKey} onChange={(e) => set('sshHostKey', e.target.value)} />}
             </FormField>
-            <FormField
-              label={t('Privater Schlüssel')}
-              error={errors['ssh.private_key']}
-              hint={editing !== null && editing.has_private_key === true ? t('Ein Schlüssel ist hinterlegt und wird nie angezeigt. Nur ausfüllen, um ihn zu ersetzen.') : t('OpenSSH- oder PEM-Schlüssel ohne Passphrase. Wird verschlüsselt gespeichert und nie wieder angezeigt.')}
-            >
-              {(aria) => <textarea {...aria} className="input input--mono" name="ssh-private-key" rows={4} required={editing === null} autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshPrivateKey} onChange={(e) => set('sshPrivateKey', e.target.value)} />}
-            </FormField>
+            <fieldset className="field">
+              <legend className="field__label">{t('Schlüssel für die Anmeldung')}</legend>
+              <label className="check"><input type="radio" name="ssh-key-mode" checked={form.sshKeyMode === 'generate'} onChange={() => set('sshKeyMode', 'generate')} /> {editing !== null && editing.has_private_key === true ? t('Neues Schlüsselpaar von Meridian erzeugen lassen (ersetzt das bisherige)') : t('Schlüsselpaar von Meridian erzeugen lassen (empfohlen)')}</label>
+              {form.sshKeyMode === 'generate' && <span className="hint">{t('Der private Schlüssel entsteht in Meridian, wird verschlüsselt gespeichert und nie angezeigt oder kopiert. Du bekommst nach dem Speichern nur den öffentlichen Teil zum Eintragen auf dem Server.')}</span>}
+              {editing !== null && editing.has_private_key === true && <label className="check"><input type="radio" name="ssh-key-mode" checked={form.sshKeyMode === 'keep'} onChange={() => set('sshKeyMode', 'keep')} /> {t('Gespeicherten Schlüssel behalten')}</label>}
+              <label className="check"><input type="radio" name="ssh-key-mode" checked={form.sshKeyMode === 'paste'} onChange={() => set('sshKeyMode', 'paste')} /> {t('Eigenen privaten Schlüssel einfügen')}</label>
+              {errors['ssh.private_key'] !== undefined && <span className="field__error">{errors['ssh.private_key']}</span>}
+            </fieldset>
+            {form.sshKeyMode === 'paste' && (
+              <FormField label={t('Privater Schlüssel')} error={errors['ssh.private_key']} hint={t('OpenSSH- oder PEM-Schlüssel ohne Passphrase. Wird verschlüsselt gespeichert und nie wieder angezeigt.')}>
+                {(aria) => <textarea {...aria} className="input input--mono" name="ssh-private-key" rows={4} required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshPrivateKey} onChange={(e) => set('sshPrivateKey', e.target.value)} />}
+              </FormField>
+            )}
+            {form.sshKeyMode === 'keep' && editing?.ssh?.public_key !== undefined && <SshPublicKey publicKey={editing.ssh.public_key} />}
           </>
         )}
         {docker && (

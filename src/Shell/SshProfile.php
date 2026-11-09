@@ -19,20 +19,35 @@ final class SshProfile
         public readonly string $username,
         public readonly string $hostKey,
         #[\SensitiveParameter] ?string $privateKey,
+        public readonly ?string $publicKey = null,
     ) {
         $this->privateKey = $privateKey === null ? null : new Sealed($privateKey);
     }
-    /** @param array<mixed> $data */
-    public static function validate(#[\SensitiveParameter] array $data): self
+    /**
+     * @param array<mixed> $data   Eingabe der API oder (mit $stored) die gespeicherten Metadaten
+     * @param bool         $stored Gespeicherte Metadaten dürfen `public_key` tragen; die API darf es nie setzen
+     */
+    public static function validate(#[\SensitiveParameter] array $data, bool $stored = false): self
     {
-        if (array_diff(array_keys($data), ['host','port','username','host_key','private_key']) !== []) {
+        if (array_diff(array_keys($data), $stored ? ['host','port','username','host_key','public_key'] : ['host','port','username','host_key','private_key','generate_key']) !== []) {
             throw new InvalidShellTarget('ssh', 'Unbekanntes SSH-Feld.');
+        }
+        $generate = $data['generate_key'] ?? false;
+        if (!is_bool($generate)) {
+            throw new InvalidShellTarget('ssh.generate_key', 'generate_key muss true oder false sein.');
+        }
+        if ($generate && is_string($data['private_key'] ?? null) && trim($data['private_key']) !== '') {
+            throw new InvalidShellTarget('ssh.private_key', 'Entweder einen eigenen Schlüssel einfügen oder von Meridian erzeugen lassen, nicht beides.');
         }
         $host = $data['host'] ?? null;
         $port = $data['port'] ?? 22;
         $user = $data['username'] ?? null;
         $hostKey = $data['host_key'] ?? null;
         $key = $data['private_key'] ?? null;
+        if ($generate) {
+            // Der private Teil bleibt auf dem Server (verschlüsselt gespeichert); nur der öffentliche geht an die Oberfläche.
+            $key = SshKeyPair::generate()['private'];
+        }
         if (!is_string($host) || strlen($host) > 253 || $host === '' || $host !== trim($host)
             || (filter_var($host, FILTER_VALIDATE_IP) === false && preg_match('/^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/D', $host) !== 1)
             || str_contains($host, '..')) {
@@ -71,16 +86,28 @@ final class SshProfile
             }
         }
         // Eine .pub-Zeile endet üblicherweise auf einen Kommentar (root@server); gespeichert wird nur Typ und Schlüssel.
-        return new self($host, $port, $user, $parts[1] . ' ' . $parts[2], $key);
+        $public = null;
+        if ($stored) {
+            $public = $data['public_key'] ?? null;
+            if ($public !== null && (!is_string($public) || preg_match('/^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521)) [A-Za-z0-9+\/=]+$/D', $public) !== 1)) {
+                throw new InvalidShellTarget('ssh.public_key', 'Gespeicherter öffentlicher Schlüssel ist ungültig.');
+            }
+        } elseif ($key !== null) {
+            $public = SshKeyPair::publicFromPrivate($key);
+        }
+
+        return new self($host, $port, $user, $parts[1] . ' ' . $parts[2], $key, $public);
     }
     public function privateKey(): ?string
     {
         return $this->privateKey?->open();
     }
-    /** @return array{host:string,port:int,username:string,host_key:string} */
+    /** @return array{host:string,port:int,username:string,host_key:string,public_key?:string} */
     public function metadata(): array
     {
-        return ['host' => $this->host,'port' => $this->port,'username' => $this->username,'host_key' => $this->hostKey];
+        $metadata = ['host' => $this->host,'port' => $this->port,'username' => $this->username,'host_key' => $this->hostKey];
+
+        return $this->publicKey === null ? $metadata : $metadata + ['public_key' => $this->publicKey];
     }
     /** @return array<string,mixed> */
     public function __debugInfo(): array

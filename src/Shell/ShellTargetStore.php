@@ -177,7 +177,7 @@ final class ShellTargetStore
                     'default' => $input->defaultUser,
                     'note' => $input->note,
                     'id' => $id,
-                    'ssh' => $input->ssh === null ? null : json_encode($input->ssh->metadata(), JSON_THROW_ON_ERROR),
+                    'ssh' => $input->ssh === null ? null : json_encode($this->sshMetadataForUpdate($input->ssh, $old), JSON_THROW_ON_ERROR),
                     'ssh_key' => $this->encryptSshKey($input, false),
                 ],
             );
@@ -202,13 +202,29 @@ final class ShellTargetStore
      * Zahl der Shell-Jobs, die auf diesen Ort zeigen (Art und Name; bei einer Kategorie nur Jobs dieser Kategorie).
      * Ohne Entschlüsselung: gelesen wird nur `config_json` (keine Geheimnisse).
      */
+    /**
+     * Metadaten beim Ändern: Ohne neuen privaten Schlüssel bleibt der gespeicherte Schlüssel stehen, also auch sein
+     * öffentlicher Teil; mit neuem Schlüssel gilt der öffentliche Teil des neuen (oder keiner, bei RSA/ECDSA-PEM).
+     *
+     * @return array{host:string,port:int,username:string,host_key:string,public_key?:string}
+     */
+    private function sshMetadataForUpdate(SshProfile $profile, ShellTargetRecord $old): array
+    {
+        $metadata = $profile->metadata();
+        if ($profile->privateKey() === null && isset($old->ssh['public_key'])) {
+            $metadata['public_key'] = $old->ssh['public_key'];
+        }
+
+        return $metadata;
+    }
+
     private function encryptSshKey(#[\SensitiveParameter] ShellTargetInput $input, bool $creating): ?string
     {
         if ($input->target->kind !== ShellTargetKind::Ssh) {
             return null;
         }
         if ($creating && ($input->ssh === null || $input->ssh->privateKey() === null)) {
-            throw new InvalidShellTarget('ssh.private_key', 'Für den SSH-Ausführungsort einen privaten Schlüssel angeben.');
+            throw new InvalidShellTarget('ssh.private_key', 'Für den SSH-Ausführungsort einen privaten Schlüssel einfügen oder von Meridian erzeugen lassen.');
         }
         $key = $input->ssh?->privateKey();
         if ($key === null) {
@@ -339,7 +355,7 @@ final class ShellTargetStore
                 if (!is_array($metadata)) {
                     return null;
                 }
-                $ssh = SshProfile::validate($metadata)->metadata();
+                $ssh = SshProfile::validate($metadata, true)->metadata();
             } catch (\JsonException|InvalidShellTarget) {
                 return null;
             }

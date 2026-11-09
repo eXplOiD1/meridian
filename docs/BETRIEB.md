@@ -188,9 +188,9 @@ Ein Ausführungsort der Art **SSH-Server** führt das Skript auf einem anderen R
 
 **Einrichten**
 
-1. Auf dem Zielserver einen eigenen Benutzer und ein eigenes Schlüsselpaar ohne Passphrase anlegen, den öffentlichen Schlüssel in `~/.ssh/authorized_keys` eintragen und die Rechte des Benutzers auf das Nötige beschränken.
-2. Den Server-Schlüssel holen und den Fingerabdruck prüfen: `ssh-keyscan -t ed25519 server.example.org`.
-3. In Meridian unter Einstellungen → Ausführungsorte „SSH-Server“ anlegen: Server, Port, Benutzer, öffentlicher Server-Schlüssel und privater Schlüssel. Der private Schlüssel wird verschlüsselt gespeichert und nie wieder angezeigt. Beim Bearbeiten lässt ein leeres Feld den gespeicherten Schlüssel stehen.
+1. Auf dem Zielserver einen eigenen Benutzer mit möglichst wenigen Rechten anlegen (nicht root).
+2. Den Server-Schlüssel holen und den Fingerabdruck prüfen: `cat /etc/ssh/ssh_host_ed25519_key.pub` auf dem Server, oder von einem anderen Rechner `ssh-keyscan -t ed25519 server.example.org` und `ssh-keygen -lf` vergleichen. Eine Zeile mit Kommentar am Ende (`root@server`) ist erlaubt; gespeichert wird nur Typ und Schlüssel.
+3. In Meridian unter Einstellungen → Ausführungsorte „SSH-Server“ anlegen: Server, Port, Benutzer, öffentlicher Server-Schlüssel. Beim Schlüssel für die Anmeldung ist **„Schlüsselpaar von Meridian erzeugen lassen“** voreingestellt: Meridian erzeugt ein ed25519-Paar ohne Passphrase, speichert den privaten Teil verschlüsselt und zeigt ihn **nie** an. Nach dem Speichern erscheint der öffentliche Teil mit einem fertigen Befehl, den du auf dem Server als der Zielbenutzer ausführst (er trägt den Schlüssel in `~/.ssh/authorized_keys` ein). Wer einen eigenen Schlüssel mitbringt, wählt „Eigenen privaten Schlüssel einfügen“ (OpenSSH oder PEM, ohne Passphrase). Beim Bearbeiten lässt „Gespeicherten Schlüssel behalten“ den Schlüssel stehen; der öffentliche Teil bleibt dort abrufbar. „Neues Schlüsselpaar erzeugen“ ersetzt den alten, dann muss der neue öffentliche Teil auf den Server, sonst schlägt die Anmeldung fehl.
 4. SSH ist ab Werk aus, weil der Shell-Worker ohne Netz läuft:
    - **Docker:** in `.env` `MERIDIAN_SSH_ENABLE=1` und `MERIDIAN_SHELL_NETWORK=bridge` setzen, dann `docker compose up -d`.
    - **systemd (ohne Docker):** Dort gibt es keine Compose-Variablen. Drei Schritte, jeweils auf dem Meridian-Rechner:
