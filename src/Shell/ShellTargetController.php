@@ -10,6 +10,7 @@ namespace Meridian\Shell;
 use Meridian\Auth\AuditLog;
 use Meridian\Auth\AuthService;
 use Meridian\Auth\CsrfGuard;
+use Meridian\Auth\Session;
 use Meridian\Config;
 use Meridian\Runner\Shell\ShellRules;
 use Meridian\Http\ClientIp;
@@ -71,11 +72,10 @@ final class ShellTargetController
 
     public function list(#[\SensitiveParameter] Request $request): Response
     {
-        $session = $this->sessionAuth->authenticate($request);
-        if ($session === null) {
-            return JsonReply::error(401, 'Nicht angemeldet.');
+        $session = $this->authorize($request, false);
+        if ($session instanceof Response) {
+            return $session;
         }
-        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
         return JsonReply::json(['targets' => array_map($this->present(...), $this->store->all())]);
     }
@@ -87,14 +87,10 @@ final class ShellTargetController
      */
     public function hostKey(#[\SensitiveParameter] Request $request): Response
     {
-        $session = $this->sessionAuth->authenticate($request);
-        if ($session === null) {
-            return JsonReply::error(401, 'Nicht angemeldet.');
+        $session = $this->authorize($request, true);
+        if ($session instanceof Response) {
+            return $session;
         }
-        if (!$this->csrf->check($request, $session->token)) {
-            return JsonReply::csrfFailed();
-        }
-        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
         $data = JsonBody::object($request->getContent(), 1024);
         if ($data === null || array_diff(array_keys($data), ['host', 'port']) !== []) {
@@ -119,14 +115,10 @@ final class ShellTargetController
 
     public function add(#[\SensitiveParameter] Request $request): Response
     {
-        $session = $this->sessionAuth->authenticate($request);
-        if ($session === null) {
-            return JsonReply::error(401, 'Nicht angemeldet.');
+        $session = $this->authorize($request, true);
+        if ($session instanceof Response) {
+            return $session;
         }
-        if (!$this->csrf->check($request, $session->token)) {
-            return JsonReply::csrfFailed();
-        }
-        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
         [$kind, $name, $categoryId, $users, $default, $note, $password, $ssh] = self::input($request);
         try {
@@ -145,14 +137,10 @@ final class ShellTargetController
 
     public function update(#[\SensitiveParameter] Request $request): Response
     {
-        $session = $this->sessionAuth->authenticate($request);
-        if ($session === null) {
-            return JsonReply::error(401, 'Nicht angemeldet.');
+        $session = $this->authorize($request, true);
+        if ($session instanceof Response) {
+            return $session;
         }
-        if (!$this->csrf->check($request, $session->token)) {
-            return JsonReply::csrfFailed();
-        }
-        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
         [$kind, $name, $categoryId, $users, $default, $note, $password, $ssh] = self::input($request);
         $id = $request->attributes->getString('id');
@@ -179,14 +167,10 @@ final class ShellTargetController
 
     public function remove(#[\SensitiveParameter] Request $request): Response
     {
-        $session = $this->sessionAuth->authenticate($request);
-        if ($session === null) {
-            return JsonReply::error(401, 'Nicht angemeldet.');
+        $session = $this->authorize($request, true);
+        if ($session instanceof Response) {
+            return $session;
         }
-        if (!$this->csrf->check($request, $session->token)) {
-            return JsonReply::csrfFailed();
-        }
-        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
         $id = $request->attributes->getString('id');
         $record = preg_match('/^[1-9][0-9]{0,17}$/D', $id) === 1 ? $this->store->remove((int) $id, $session->userId, $this->audit) : null;
@@ -195,6 +179,25 @@ final class ShellTargetController
         }
 
         return new Response(null, 204, ['Cache-Control' => 'no-store']);
+    }
+
+    /**
+     * Anmeldung, bei ändernden Anfragen CSRF, dann das Recht `shell.targets` (in dieser Reihenfolge).
+     *
+     * @return Session|Response die Sitzung, oder die fertige Fehlerantwort (401/403 über AccessDenied)
+     */
+    private function authorize(#[\SensitiveParameter] Request $request, bool $mutating): Session|Response
+    {
+        $session = $this->sessionAuth->authenticate($request);
+        if ($session === null) {
+            return JsonReply::error(401, 'Nicht angemeldet.');
+        }
+        if ($mutating && !$this->csrf->check($request, $session->token)) {
+            return JsonReply::csrfFailed();
+        }
+        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
+
+        return $session;
     }
 
     /**

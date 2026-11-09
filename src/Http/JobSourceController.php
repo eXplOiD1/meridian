@@ -11,11 +11,9 @@ use Meridian\Auth\AuditLog;
 use Meridian\Auth\Clock;
 use Meridian\Auth\CsrfGuard;
 use Meridian\Database\Connection;
-use Meridian\Database\Timestamp;
 use Meridian\Job\JobRepository;
 use Meridian\Job\JobSourceReader;
 use Meridian\Job\JobSourceUnreadable;
-use Meridian\Job\Row;
 use Meridian\Runner\JobType;
 use Meridian\Security\AccessControl;
 use Meridian\Security\Permission;
@@ -136,20 +134,7 @@ final class JobSourceController
      */
     private function retryAfter(int $userId): ?int
     {
-        $now = $this->clock->now();
-        $row = $this->db->fetchOne(
-            'SELECT COUNT(*) AS n, MIN(CAST(strftime(\'%s\', created_at) AS INTEGER)) AS oldest FROM audit_log
-              WHERE user_id = :user AND action = :action AND julianday(created_at) > julianday(:since)',
-            ['user' => $userId, 'action' => self::AUDIT_ACTION, 'since' => Timestamp::format($now->modify('-1 hour'))],
-        );
-        if ($row === null || Row::int($row, 'n') < self::MAX_PER_HOUR) {
-            return null;
-        }
-        // Ältester Abruf im Fenster (Unix-Sekunden); frei wird es, sobald er eine Stunde alt ist.
-        $oldest = Row::intOrNull($row, 'oldest');
-        $seconds = $oldest === null ? 3600 : $oldest + 3600 - $now->getTimestamp();
-
-        return max(1, min(3600, $seconds));
+        return AuditRateLimit::retryAfter($this->db, $this->clock, $userId, self::MAX_PER_HOUR, self::AUDIT_ACTION);
     }
 
     /**

@@ -14,7 +14,9 @@ namespace Meridian\Shell;
 final class SshKeyPair
 {
     private const MAGIC = "openssh-key-v1\0";
-    private const TYPES = '/^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521))$/D';
+    /** Die erlaubten Schlüsseltypen (Muster ohne Begrenzer); auch {@see SshProfile} prüft damit. */
+    public const TYPE_PATTERN = 'ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521)';
+    private const TYPES = '/^(' . self::TYPE_PATTERN . ')$/D';
 
     /** @return array{private: string, public: string} */
     public static function generate(): array

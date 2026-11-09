@@ -4,10 +4,11 @@
 import { useId, useCallback, useEffect, useState } from 'react';
 import { Modal, ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
+import { CategoryOptions } from '../components/CategoryOptions';
 import { Confirm } from '../components/Confirm';
 import { FormField } from '../components/FormField';
-import { ApiError, request } from '../lib/api';
-import { errorMessage } from '../lib/errors';
+import { request } from '../lib/api';
+import { errorMessage, reportSaveError, runAction } from '../lib/errors';
 import type { CategoryRef, Monitor, Profile, StatusPage, StatusPageItem } from '../types';
 import { getLang, t } from '../i18n';
 
@@ -74,12 +75,7 @@ function PageForm({ draft, setDraft, categories, candidates, errors, busy, submi
         <FormField label={t('Kategorie der Seite')} error={errors.category_id} hint={t('Bestimmt, wer die Seite bearbeiten darf.')}>
           {(aria) => (
             <select {...aria} className="input" name="page-category" value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}>
-              {categories.length === 0 && <option value="">{t('Keine')}</option>}
-              {categories.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                </option>
-              ))}
+              <CategoryOptions categories={categories} />
             </select>
           )}
         </FormField>
@@ -153,6 +149,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
   const [categories, setCategories] = useState<CategoryRef[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Draft>(draftOf(null, ''));
@@ -176,7 +173,10 @@ export function StatusPages({ profile }: { profile: Profile }) {
         setCategories(reply.categories);
         setDraft((current) => (current.categoryId === '' && reply.categories[0] !== undefined ? { ...current, categoryId: String(reply.categories[0].id) } : current));
       })
-      .catch(() => setCategories([]));
+      .catch((caught) => {
+        setCategories([]);
+        setCategoryError(errorMessage(caught));
+      });
     Promise.all([
       request<{ jobs: Array<{ id: number; name: string }> }>('GET', '/api/jobs').catch(() => ({ jobs: [] })),
       request<{ monitors: Monitor[] }>('GET', '/api/monitors').catch(() => ({ monitors: [] })),
@@ -206,12 +206,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
       await load();
       return true;
     } catch (caught) {
-      if (caught instanceof ApiError && caught.status === 422) {
-        setErrors(caught.fields);
-        setFormError(t('Bitte die markierten Felder korrigieren.'));
-      } else {
-        setFormError(errorMessage(caught));
-      }
+      reportSaveError(caught, setErrors, setFormError);
       return false;
     } finally {
       setBusy(false);
@@ -219,16 +214,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
   }
 
   async function act(run: () => Promise<void>): Promise<void> {
-    setBusy(true);
-    setFormError(null);
-    try {
-      await run();
-      await load();
-    } catch (caught) {
-      setFormError(errorMessage(caught));
-    } finally {
-      setBusy(false);
-    }
+    await runAction(run, load, setBusy, setFormError);
   }
 
   return (
@@ -239,6 +225,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
         <p className="card__lead">
           {t('Eine Seite zum Weitergeben, auch an Menschen ohne Konto: sie zeigt, ob ausgewählte Jobs und Überwachungen laufen. Der Link ist geheim und nicht erratbar; wer ihn kennt, sieht die Seite. Bei Bedarf einen neuen Link erzeugen, der alte gilt dann sofort nicht mehr.')}</p>
         {loadError !== null && <Alert tone="err">{loadError}</Alert>}
+        {categoryError !== null && <Alert tone="warn">{t('Kategorien konnten nicht geladen werden:')} {categoryError}</Alert>}
         {!creating && editing === null && formError !== null && <Alert tone="err">{formError}</Alert>}
         {pages !== null && pages.length === 0 && <p className="card__lead">{t('Noch keine Statusseite angelegt.')}</p>}
         {pages !== null && pages.length > 0 && (

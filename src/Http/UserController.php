@@ -309,32 +309,9 @@ final class UserController
      */
     private static function body(#[\SensitiveParameter] Request $request, array $required, array $optional = []): array
     {
-        $data = JsonBody::object($request->getContent(), self::MAX_BODY, 5);
-        $message = 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 8 KiB).';
-        if ($data === null) {
-            throw ValidationFailed::field('body', $message);
-        }
-        if ($data !== [] && array_is_list($data)) {
-            throw ValidationFailed::field('body', $message);
-        }
+        $data = JsonBody::objectOrFail($request->getContent(), self::MAX_BODY, 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 8 KiB).', 5);
 
-        $errors = [];
-        foreach ($required as $key) {
-            if (!array_key_exists($key, $data)) {
-                $errors[$key] = 'Pflichtfeld fehlt.';
-            }
-        }
-        if ($errors === []) {
-            foreach (array_keys($data) as $key) {
-                if (!in_array((string) $key, [...$required, ...$optional], true)) {
-                    $errors['body'] = 'Unbekannte Felder im Anfragekörper. Erlaubt: ' . implode(', ', [...$required, ...$optional]) . '.';
-                    break;
-                }
-            }
-        }
-        if ($errors !== []) {
-            throw new ValidationFailed($errors);
-        }
+        JsonBody::requireFields($data, $required, $optional);
 
         return $data;
     }

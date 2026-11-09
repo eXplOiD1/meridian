@@ -227,13 +227,7 @@ final class MonitorController
      */
     private static function body(#[\SensitiveParameter] Request $request): array
     {
-        $data = JsonBody::object($request->getContent(), self::MAX_BODY, 4);
-        if ($data === null) {
-            throw ValidationFailed::field('body', 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).');
-        }
-        if ($data !== [] && array_is_list($data)) {
-            throw ValidationFailed::field('body', 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).');
-        }
+        $data = JsonBody::objectOrFail($request->getContent(), self::MAX_BODY, 'Der Anfragekörper muss ein JSON-Objekt sein (höchstens 4 KiB).', 4);
 
         return $data;
     }

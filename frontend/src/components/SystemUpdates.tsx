@@ -16,16 +16,30 @@ export function SystemUpdates({ csrf }: { csrf: string }) {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const initialCheck = useRef(false);
-  const load = useCallback(async () => { try { const next = await request<UpdateStatus>('GET', '/api/admin/updates'); setStatus(next); report(next); setError(null); } catch { setError(t('Update-Dienst vorübergehend nicht erreichbar. Die Seite verbindet sich erneut.')); } }, [report]);
+  const load = useCallback(async () => {
+    try {
+      const next = await request<UpdateStatus>('GET', '/api/admin/updates');
+      setStatus(next);
+      report(next);
+      setError(null);
+    } catch {
+      setError(t('Update-Dienst vorübergehend nicht erreichbar. Die Seite verbindet sich erneut.'));
+    }
+  }, [report]);
   useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 5000); return () => clearInterval(timer); }, [load]);
   useEffect(() => {
     if (!status?.configured || initialCheck.current) return;
     initialCheck.current = true;
     if (!status.busy && !status.pending) void action('check');
   }, [status]);
+  /** Eine Anfrage an den Update-Dienst ist unterwegs: Seite und Hinweis im Menü zeigen „wartet“. */
+  function markPending() {
+    setStatus(previous => previous ? { ...previous, pending: true } : previous);
+    report({ configured: true, pending: true });
+  }
   async function action(kind: 'check' | 'install' | 'channel/main' | 'channel/beta') {
     setSending(true);
-    try { await request('POST', '/api/admin/updates/' + kind, { csrf }); setStatus(previous => previous ? { ...previous, pending: true } : previous); report({ configured: true, pending: true }); }
+    try { await request('POST', '/api/admin/updates/' + kind, { csrf }); markPending(); }
     catch (caught) { setError(caught instanceof Error ? caught.message : t('Update fehlgeschlagen.')); }
     finally { setSending(false); }
   }
@@ -50,6 +64,6 @@ export function SystemUpdates({ csrf }: { csrf: string }) {
     {!working && status?.phase === 'failed' && <Alert tone="warn">{status.message ? t(status.message) : t('Update fehlgeschlagen.')}</Alert>}
     <div className="row"><button className="btn btn--ghost" disabled={disabled} onClick={() => void action('check')}>{t('Updates prüfen')}</button>{!working && status?.available && status.phase !== 'failed' && <Confirm actionsBelow label={t('Jetzt aktualisieren')} question={t('Laufende Jobs werden beendet, Daten und Schlüssel gesichert und Meridian neu gestartet. Währenddessen ist die Oberfläche kurz nicht erreichbar.')} confirmLabel={t('Jetzt aktualisieren')} disabled={disabled} onConfirm={() => void action('install')} />}</div>
   </section>
-  <UpdateSource csrf={csrf} info={status?.source} disabled={Boolean(disabled)} onSaved={() => { setStatus(previous => previous ? { ...previous, pending: true } : previous); report({ configured: true, pending: true }); }} />
+  <UpdateSource csrf={csrf} info={status?.source} disabled={Boolean(disabled)} onSaved={markPending} />
   </>;
 }

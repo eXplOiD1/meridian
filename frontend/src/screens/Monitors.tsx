@@ -5,10 +5,11 @@ import { useId, useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Modal, ModalActions } from '../components/Modal';
 import { Alert } from '../components/Alert';
+import { CategoryOptions } from '../components/CategoryOptions';
 import { Confirm } from '../components/Confirm';
 import { FormField } from '../components/FormField';
 import { ApiError, request } from '../lib/api';
-import { errorMessage } from '../lib/errors';
+import { errorMessage, reportSaveError, runAction } from '../lib/errors';
 import { formatTime } from '../lib/format';
 import { canEditHttp } from '../lib/permissions';
 import type { CategoryRef, Monitor, MonitorKind, MonitorState, NotificationChannelName, Profile } from '../types';
@@ -200,12 +201,7 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
         <FormField label={t('Kategorie')} error={errors.category_id}>
           {(aria) => (
             <select {...aria} className="input" name="monitor-category" value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}>
-              {categories.length === 0 && <option value="">{t('Keine')}</option>}
-              {categories.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                </option>
-              ))}
+              <CategoryOptions categories={categories} />
             </select>
           )}
         </FormField>
@@ -308,6 +304,11 @@ function MonitorForm({ draft, setDraft, categories, errors, busy, submitLabel, e
   );
 }
 
+/** Felder, die nur eine Prüfung einer Web-Adresse hat (für Speichern und Testlauf gleich). */
+function httpCheckFields(draft: Draft): { expected_status: string; max_response_ms: number } {
+  return { expected_status: draft.expectedStatus.trim(), max_response_ms: Math.round(Number(draft.maxResponse) * 1000) };
+}
+
 function payload(draft: Draft, editing: boolean): { body: Record<string, unknown> } | { error: Record<string, string> } {
   const interval = toSeconds(draft.value, draft.unit);
   const active = draft.kind !== 'heartbeat';
@@ -332,7 +333,7 @@ function payload(draft: Draft, editing: boolean): { body: Record<string, unknown
   if (active) {
     body.fail_after = failAfter;
     if (draft.target.trim() !== '') body.target = draft.target.trim();
-    if (draft.kind === 'http') { body.expected_status = draft.expectedStatus.trim(); body.max_response_ms = Math.round(Number(draft.maxResponse) * 1000); }
+    if (draft.kind === 'http') Object.assign(body, httpCheckFields(draft));
   } else {
     body.grace_seconds = grace;
   }
@@ -345,6 +346,7 @@ export function Monitors({ profile }: { profile: Profile }) {
   const [monitors, setMonitors] = useState<Monitor[] | null>(null);
   const [categories, setCategories] = useState<CategoryRef[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Draft>(emptyDraft(''));
@@ -372,7 +374,10 @@ export function Monitors({ profile }: { profile: Profile }) {
         setCategories(reply.categories);
         setDraft((current) => (current.categoryId === '' && reply.categories[0] !== undefined ? { ...current, categoryId: String(reply.categories[0].id) } : current));
       })
-      .catch(() => setCategories([]));
+      .catch((caught) => {
+        setCategories([]);
+        setCategoryError(errorMessage(caught));
+      });
   }, [load]);
 
   async function submit(method: 'POST' | 'PUT', path: string, d: Draft): Promise<boolean> {
@@ -390,12 +395,7 @@ export function Monitors({ profile }: { profile: Profile }) {
       await load();
       return true;
     } catch (caught) {
-      if (caught instanceof ApiError && caught.status === 422) {
-        setErrors(caught.fields);
-        setFormError(t('Bitte die markierten Felder korrigieren.'));
-      } else {
-        setFormError(errorMessage(caught));
-      }
+      reportSaveError(caught, setErrors, setFormError);
       return false;
     } finally {
       setBusy(false);
@@ -432,12 +432,7 @@ export function Monitors({ profile }: { profile: Profile }) {
       const reply = await request<{ ok: boolean; latency_ms: number | null; note: string | null }>('POST', path, { csrf, body });
       setTestResult({ source: key === 'form' ? 'form' : 'row', label, ok: reply.ok, latency: reply.latency_ms, note: reply.note });
     } catch (caught) {
-      if (caught instanceof ApiError && caught.status === 422) {
-        setErrors(caught.fields);
-        setFormError(t('Bitte die markierten Felder korrigieren.'));
-      } else {
-        setFormError(errorMessage(caught));
-      }
+      reportSaveError(caught, setErrors, setFormError);
     } finally {
       setTesting(null);
     }
@@ -446,21 +441,12 @@ export function Monitors({ profile }: { profile: Profile }) {
   function testBody(d: Draft): Record<string, unknown> {
     const body: Record<string, unknown> = {};
     if (d.target.trim() !== '') body.target = d.target.trim();
-    if (d.kind === 'http') { body.expected_status = d.expectedStatus.trim(); body.max_response_ms = Math.round(Number(d.maxResponse) * 1000); }
+    if (d.kind === 'http') Object.assign(body, httpCheckFields(d));
     return body;
   }
 
   async function act(run: () => Promise<void>): Promise<void> {
-    setBusy(true);
-    setFormError(null);
-    try {
-      await run();
-      await load();
-    } catch (caught) {
-      setFormError(errorMessage(caught));
-    } finally {
-      setBusy(false);
-    }
+    await runAction(run, load, setBusy, setFormError);
   }
 
   return (
@@ -471,6 +457,7 @@ export function Monitors({ profile }: { profile: Profile }) {
         <p className="card__lead">
           {t('Meridian prüft eine Web-Adresse, einen Netzwerk-Port oder einen Host per Ping, oder wartet auf das Lebenszeichen eines Skripts, einer Sicherung oder eines Routers. Bleibt die Rückmeldung aus, meldet Meridian den Ausfall und danach die Rückkehr.')}</p>
         {loadError !== null && <Alert tone="err">{loadError}</Alert>}
+        {categoryError !== null && <Alert tone="warn">{t('Kategorien konnten nicht geladen werden:')} {categoryError}</Alert>}
         {!creating && editing === null && formError !== null && <Alert tone="err">{formError}</Alert>}
         {issued !== null && <IssuedToken issued={issued} onClose={() => setIssued(null)} />}
         {testResult !== null && testResult.source === 'row' && <TestResultAlert result={testResult} />}
