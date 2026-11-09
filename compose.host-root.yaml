@@ -47,6 +47,11 @@ services:
       MERIDIAN_UPDATE_MODE: docker
       MERIDIAN_DOCKER_PROXY_ENABLE: '1'
       MERIDIAN_COMPACT_STACK: '1'
+      # Update source (fixed here, never chosen in the UI): github (default) or gitlab; docs/BETRIEB.md, "Privates Repository".
+      MERIDIAN_UPDATE_SOURCE: ${MERIDIAN_UPDATE_SOURCE:-github}
+      MERIDIAN_UPDATE_REPO: ${MERIDIAN_UPDATE_REPO:-eXplOiD1/meridian}
+      MERIDIAN_UPDATE_GITLAB_URL: ${MERIDIAN_UPDATE_GITLAB_URL:-}
+      MERIDIAN_UPDATE_REGISTRY: ${MERIDIAN_UPDATE_REGISTRY:-}
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - meridian-data:/var/lib/meridian
@@ -138,6 +143,8 @@ services:
       MERIDIAN_TIMEZONE: Europe/Berlin
       MERIDIAN_DOCKER_PROXY: unix:///run/meridian-docker/docker.sock
       MERIDIAN_SHELL_HOST_SOCKETS: default=/run/meridian-host/default.sock,web=/run/meridian-host/default.sock
+      # SSH-Ausführungsorte: nur mit 1 und ausgehendem Netz (MERIDIAN_SHELL_NETWORK=bridge) nutzbar.
+      MERIDIAN_SSH_ENABLE: ${MERIDIAN_SSH_ENABLE:-0}
     volumes:
     - meridian-data:/var/lib/meridian
     - meridian-secrets:/etc/meridian:ro
@@ -154,7 +161,7 @@ services:
     - worker:run
     - --type=shell
     - --child
-    network_mode: none
+    network_mode: ${MERIDIAN_SHELL_NETWORK:-none}
     init: true
     stop_grace_period: 40s
     healthcheck:
