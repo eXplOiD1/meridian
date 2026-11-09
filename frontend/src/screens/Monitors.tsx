@@ -346,6 +346,7 @@ export function Monitors({ profile }: { profile: Profile }) {
   const [monitors, setMonitors] = useState<Monitor[] | null>(null);
   const [categories, setCategories] = useState<CategoryRef[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Draft>(emptyDraft(''));
@@ -373,7 +374,10 @@ export function Monitors({ profile }: { profile: Profile }) {
         setCategories(reply.categories);
         setDraft((current) => (current.categoryId === '' && reply.categories[0] !== undefined ? { ...current, categoryId: String(reply.categories[0].id) } : current));
       })
-      .catch(() => setCategories([]));
+      .catch((caught) => {
+        setCategories([]);
+        setCategoryError(errorMessage(caught));
+      });
   }, [load]);
 
   async function submit(method: 'POST' | 'PUT', path: string, d: Draft): Promise<boolean> {
@@ -453,6 +457,7 @@ export function Monitors({ profile }: { profile: Profile }) {
         <p className="card__lead">
           {t('Meridian prüft eine Web-Adresse, einen Netzwerk-Port oder einen Host per Ping, oder wartet auf das Lebenszeichen eines Skripts, einer Sicherung oder eines Routers. Bleibt die Rückmeldung aus, meldet Meridian den Ausfall und danach die Rückkehr.')}</p>
         {loadError !== null && <Alert tone="err">{loadError}</Alert>}
+        {categoryError !== null && <Alert tone="warn">{t('Kategorien konnten nicht geladen werden:')} {categoryError}</Alert>}
         {!creating && editing === null && formError !== null && <Alert tone="err">{formError}</Alert>}
         {issued !== null && <IssuedToken issued={issued} onClose={() => setIssued(null)} />}
         {testResult !== null && testResult.source === 'row' && <TestResultAlert result={testResult} />}

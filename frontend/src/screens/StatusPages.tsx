@@ -149,6 +149,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
   const [categories, setCategories] = useState<CategoryRef[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Draft>(draftOf(null, ''));
@@ -172,7 +173,10 @@ export function StatusPages({ profile }: { profile: Profile }) {
         setCategories(reply.categories);
         setDraft((current) => (current.categoryId === '' && reply.categories[0] !== undefined ? { ...current, categoryId: String(reply.categories[0].id) } : current));
       })
-      .catch(() => setCategories([]));
+      .catch((caught) => {
+        setCategories([]);
+        setCategoryError(errorMessage(caught));
+      });
     Promise.all([
       request<{ jobs: Array<{ id: number; name: string }> }>('GET', '/api/jobs').catch(() => ({ jobs: [] })),
       request<{ monitors: Monitor[] }>('GET', '/api/monitors').catch(() => ({ monitors: [] })),
@@ -221,6 +225,7 @@ export function StatusPages({ profile }: { profile: Profile }) {
         <p className="card__lead">
           {t('Eine Seite zum Weitergeben, auch an Menschen ohne Konto: sie zeigt, ob ausgewählte Jobs und Überwachungen laufen. Der Link ist geheim und nicht erratbar; wer ihn kennt, sieht die Seite. Bei Bedarf einen neuen Link erzeugen, der alte gilt dann sofort nicht mehr.')}</p>
         {loadError !== null && <Alert tone="err">{loadError}</Alert>}
+        {categoryError !== null && <Alert tone="warn">{t('Kategorien konnten nicht geladen werden:')} {categoryError}</Alert>}
         {!creating && editing === null && formError !== null && <Alert tone="err">{formError}</Alert>}
         {pages !== null && pages.length === 0 && <p className="card__lead">{t('Noch keine Statusseite angelegt.')}</p>}
         {pages !== null && pages.length > 0 && (

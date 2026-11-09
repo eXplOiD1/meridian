@@ -343,6 +343,7 @@ export const EN: Record<string, string> = {
   "Lauf-Details: {name}": "Run details: {name}",
   "Höchstens {n} s (Einstellung des Administrators).": "At most {n} s (administrator setting).",
   "Gespeicherte Werte konnten nicht geladen werden:": "Stored values could not be loaded:",
+  "Kategorien konnten nicht geladen werden:": "Categories could not be loaded:",
   "Übernommen: {method}, {n} Header{body}. Bitte prüfen und speichern.": "Imported: {method}, {n} headers{body}. Please check and save.",
   "Nicht übernommen:": "Not imported:",
   "Weiterleitungen: ganze Zahl von 0 bis 5.": "Redirects: whole number from 0 to 5.",

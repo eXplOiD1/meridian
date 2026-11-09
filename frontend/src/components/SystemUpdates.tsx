@@ -32,9 +32,14 @@ export function SystemUpdates({ csrf }: { csrf: string }) {
     initialCheck.current = true;
     if (!status.busy && !status.pending) void action('check');
   }, [status]);
+  /** Eine Anfrage an den Update-Dienst ist unterwegs: Seite und Hinweis im Menü zeigen „wartet“. */
+  function markPending() {
+    setStatus(previous => previous ? { ...previous, pending: true } : previous);
+    report({ configured: true, pending: true });
+  }
   async function action(kind: 'check' | 'install' | 'channel/main' | 'channel/beta') {
     setSending(true);
-    try { await request('POST', '/api/admin/updates/' + kind, { csrf }); setStatus(previous => previous ? { ...previous, pending: true } : previous); report({ configured: true, pending: true }); }
+    try { await request('POST', '/api/admin/updates/' + kind, { csrf }); markPending(); }
     catch (caught) { setError(caught instanceof Error ? caught.message : t('Update fehlgeschlagen.')); }
     finally { setSending(false); }
   }
@@ -59,6 +64,6 @@ export function SystemUpdates({ csrf }: { csrf: string }) {
     {!working && status?.phase === 'failed' && <Alert tone="warn">{status.message ? t(status.message) : t('Update fehlgeschlagen.')}</Alert>}
     <div className="row"><button className="btn btn--ghost" disabled={disabled} onClick={() => void action('check')}>{t('Updates prüfen')}</button>{!working && status?.available && status.phase !== 'failed' && <Confirm actionsBelow label={t('Jetzt aktualisieren')} question={t('Laufende Jobs werden beendet, Daten und Schlüssel gesichert und Meridian neu gestartet. Währenddessen ist die Oberfläche kurz nicht erreichbar.')} confirmLabel={t('Jetzt aktualisieren')} disabled={disabled} onConfirm={() => void action('install')} />}</div>
   </section>
-  <UpdateSource csrf={csrf} info={status?.source} disabled={Boolean(disabled)} onSaved={() => { setStatus(previous => previous ? { ...previous, pending: true } : previous); report({ configured: true, pending: true }); }} />
+  <UpdateSource csrf={csrf} info={status?.source} disabled={Boolean(disabled)} onSaved={markPending} />
   </>;
 }
