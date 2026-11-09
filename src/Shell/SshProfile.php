@@ -48,9 +48,7 @@ final class SshProfile
             // Der private Teil bleibt auf dem Server (verschlüsselt gespeichert); nur der öffentliche geht an die Oberfläche.
             $key = SshKeyPair::generate()['private'];
         }
-        if (!is_string($host) || strlen($host) > 253 || $host === '' || $host !== trim($host)
-            || (filter_var($host, FILTER_VALIDATE_IP) === false && preg_match('/^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/D', $host) !== 1)
-            || str_contains($host, '..')) {
+        if (!self::isValidHost($host)) {
             throw new InvalidShellTarget('ssh.host', 'SSH-Server: Hostname oder IP-Adresse ohne URL, Benutzer oder Optionen angeben.');
         }
         if (!is_int($port) || $port < 1 || $port > 65535) {
@@ -97,6 +95,12 @@ final class SshProfile
         }
 
         return new self($host, $port, $user, $parts[1] . ' ' . $parts[2], $key, $public);
+    }
+    /** Hostname oder IP-Adresse, nie mit Option, URL oder Leerzeichen; derselbe Test für das Anlegen und für den Schlüsselabruf. */
+    public static function isValidHost(mixed $host): bool
+    {
+        return is_string($host) && $host !== '' && strlen($host) <= 253 && $host === trim($host) && !str_contains($host, '..')
+            && (filter_var($host, FILTER_VALIDATE_IP) !== false || preg_match('/^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/D', $host) === 1);
     }
     public function privateKey(): ?string
     {
