@@ -148,7 +148,7 @@ final class AppFactory
         (new InternalTargetController($sessionAuth, $csrf, $users, $access, $audit, new InternalTargetStore($db, $clock, $infrastructure), $masker))->register($kernel);
         (new \Meridian\Automation\Controller($db, $sessionAuth, $csrf, $users, $auth, $access, $audit, $clock, $config, $box, $masker, $jobService))->register($kernel);
         // Ausführungsorte für Shell-Jobs (shell.targets, nur Admin) und die Auswahl im Job-Editor (jobs.edit_shell).
-        (new ShellTargetController($sessionAuth, $csrf, $users, $access, $audit, new ShellTargetStore($db, $clock), $masker, $auth, $config))->register($kernel);
+        (new ShellTargetController($sessionAuth, $csrf, $users, $access, $audit, new ShellTargetStore($db, $clock, $box), $masker, $auth, $config))->register($kernel);
         // Herzschlag-Überwachung (ADR 0011): Verwaltung mit Sitzung, Ping ohne Sitzung (Token ist die Berechtigung).
         $monitors = new \Meridian\Monitor\MonitorRepository($db);
         (new MonitorController($sessionAuth, $csrf, $users, $access, $monitors, new \Meridian\Monitor\MonitorService($db, $monitors, new \Meridian\Monitor\MonitorValidator($categories), $access, $audit, $clock, $box), $masker, new \Meridian\Settings\Settings($db, $clock)))->register($kernel);

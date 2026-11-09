@@ -904,6 +904,19 @@ function ShellTargets({ csrf }: { csrf: string }) {
         {ssh && (
           <>
             <Alert tone="warn">{t('Das Skript läuft auf dem Server, nicht in Meridian. Der Worker braucht dafür ausgehendes Netz (MERIDIAN_SSH_ENABLE=1, MERIDIAN_SHELL_NETWORK). Verwende einen eigenen Schlüssel ohne Passphrase mit möglichst wenigen Rechten auf dem Server.')}</Alert>
+            <details className="fold">
+              <summary>{t('Wie komme ich an die Schlüssel?')}</summary>
+              <p><strong>{t('1. Server-Schlüssel (öffentlich)')}</strong> {t('Er sagt Meridian, dass es wirklich mit deinem Server spricht. Auf dem Server:')}</p>
+              <p><code>cat /etc/ssh/ssh_host_ed25519_key.pub</code></p>
+              <p className="hint">{t('Die ganze Zeile einfügen (ssh-ed25519 AAAA…). Ein Kommentar am Ende, z. B. root@server, ist erlaubt und wird nicht gespeichert. Von einem anderen Rechner geht ssh-keyscan -t ed25519 SERVER; dann den Fingerabdruck mit ssh-keygen -lf prüfen und mit dem Fingerabdruck auf dem Server vergleichen (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub). Nie ungeprüft einfügen.')}</p>
+              <p><strong>{t('2. Eigenes Schlüsselpaar für Meridian')}</strong> {t('Auf deinem Rechner oder auf dem Server:')}</p>
+              <p><code>ssh-keygen -t ed25519 -N "" -C meridian -f meridian_key</code></p>
+              <p className="hint">{t('Das erzeugt meridian_key (privat) und meridian_key.pub (öffentlich). Den ganzen Inhalt von meridian_key (von -----BEGIN bis -----END) bei „Privater Schlüssel“ einfügen. Ohne Passphrase, weil geplante Jobs keine eingeben können.')}</p>
+              <p><strong>{t('3. Öffentlichen Teil auf dem Server erlauben')}</strong> {t('Auf dem Server als der Benutzer, der die Jobs ausführen soll:')}</p>
+              <p><code>cat meridian_key.pub &gt;&gt; ~/.ssh/authorized_keys</code></p>
+              <p className="hint">{t('Der Ordner ~/.ssh braucht die Rechte 700, die Datei authorized_keys 600.')}</p>
+              <p><strong>{t('4. Aufräumen')}</strong> {t('Lösche meridian_key danach vom Rechner. Meridian speichert ihn verschlüsselt und zeigt ihn nie wieder. Nimm einen Benutzer mit möglichst wenigen Rechten, nicht root.')}</p>
+            </details>
             <div className="grid-2">
               <FormField label={t('Server')} error={errors['ssh.host']} hint={t('Hostname oder IP-Adresse, z. B. web01.example.org.')}>
                 {(aria) => <input {...aria} className="input input--mono" name="ssh-host" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshHost} onChange={(e) => set('sshHost', e.target.value)} />}
