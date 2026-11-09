@@ -138,6 +138,35 @@ DOCKER_CONFIG=/var/lib/meridian-updater/docker docker login ghcr.io -u BENUTZER
   Protokollzeile `operation failed during checking HTTPError 404` im Container nennt den Statuscode.
 - Das Token wird nur an die eine Adresse der Prüfung gesendet, folgt keiner Weiterleitung und steht nie in Status, Protokoll oder Antwort.
 
+### GitLab als Quelle einrichten
+
+1. **Quellcode nach GitLab bringen.** Deploy-Gate veröffentlicht nach GitHub. Für GitLab spiegelst du das Repository, entweder in
+   GitLab als Pull-Spiegel von GitHub (in GitLab Premium oder bei selbst gehostetem GitLab verfügbar) oder du pushst zusätzlich dorthin.
+   Der Update-Dienst vergleicht die Commit-Kennung; sie bleibt gleich, solange der Spiegel dieselben Commits übernimmt.
+2. **Images bauen.** `.gitlab-ci.yml` im Repository baut bei jedem Push auf `main` und `beta` dieselben vier Images wie die
+   GitHub-Pipeline in die Registry des Projekts (`$CI_REGISTRY_IMAGE/meridian`, `…/meridian-sandbox`, jeweils mit `sha-<Commit>`;
+   `updater-` und `host-` als Tag-Präfix an `meridian`). Die Container Registry muss im Projekt aktiv sein, und die Pipeline braucht
+   einen Runner mit Docker-in-Docker (privilegiert).
+3. **Compose auf die GitLab-Images stellen** mit einer einzigen Variable (Datei `.env` neben der `compose.yaml`):
+   ```
+   MERIDIAN_REGISTRY=registry.gitlab.com/gruppe/projekt
+   ```
+   Sie gilt für alle Images (`meridian`, `meridian-sandbox`, Updater, Host). Die einzelnen Variablen `MERIDIAN_IMAGE`,
+   `MERIDIAN_SANDBOX_IMAGE`, `MERIDIAN_UPDATER_IMAGE` und `MERIDIAN_HOST_IMAGE` haben weiterhin Vorrang, z. B. für `candidate`.
+4. **Update-Quelle** in der Oberfläche auf GitLab stellen: Repository `gruppe/projekt`, bei selbst gehostetem GitLab die Adresse und die
+   Registry (dieselbe wie `MERIDIAN_REGISTRY`). Trage sie auch in `MERIDIAN_REGISTRY` ein; sonst startet ein erneutes Bereitstellen der
+   Compose-Datei wieder mit den alten Images.
+5. **Zugang bei privatem Projekt:** Die Registry eines privaten GitLab-Projekts ist immer privat (anders als bei GitHub lässt sich ein
+   Paket nicht einzeln öffentlich stellen). Lege ein Projekt-Zugriffstoken (`read_api`) und ein Deploy-Token (`read_registry`) an und melde
+   den Docker-Host einmal an (`docker login registry.gitlab.com`). Ist das Projekt öffentlich, braucht nichts davon ein Token.
+
+**Gilt auch für GitHub:** Auf `beta` veröffentlicht die Pipeline nur `candidate` und `sha-<Commit>`; die Tags `latest` und
+`updater-latest` gibt es nur auf `main`. Willst du auf dem Beta-Kanal den neuen Update-Dienst vor einem Main-Stand einsetzen, nimm
+`MERIDIAN_UPDATER_IMAGE=ghcr.io/exploid1/meridian:updater-candidate`.
+
+**GitHub-Images ohne Anmeldung:** Pakete auf `ghcr.io` haben eine eigene Sichtbarkeit, unabhängig vom Repository. Sind sie öffentlich, laden
+Host und Update-Dienst sie ohne Zugangsdaten, auch wenn das Repository privat ist. Nur die Abfrage der aktuellen Version braucht dann noch das Token.
+
 **Zurück zur alten Version:** Migrationen laufen nur vorwärts. Wer zurück will, spielt die Sicherung von vor dem Update ein
 (Abschnitt Wiederherstellung) und startet die alte Version.
 

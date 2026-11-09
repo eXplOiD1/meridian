@@ -87,6 +87,7 @@ export function UpdateSource({ csrf, info, disabled, onSaved }: { csrf: string; 
       <FormField label={t('Image-Registry')} error={errors.registry} hint={t('Präfix der Images, z. B. ghcr.io/besitzer oder registry.gitlab.com/gruppe/projekt. Leer = aus dem Repository abgeleitet; bei selbst gehostetem GitLab Pflicht.')}>
         {(aria) => <input {...aria} className="input" value={form.registry} maxLength={200} spellCheck={false} autoComplete="off" disabled={disabled || busy} onChange={(event) => set('registry', event.target.value)} />}
       </FormField>
+      {form.kind !== (info?.kind ?? 'github') && <Alert tone="info">{t('Beim Wechsel der Quelle dieselbe Registry auch als MERIDIAN_REGISTRY in der Compose-Umgebung eintragen, sonst startet ein erneutes Bereitstellen wieder mit den alten Images.')}</Alert>}
       <FormField label={t('Benutzername für die Registry')} error={errors.username} hint={t('Nötig, wenn die Images privat sind. Leer lassen, wenn nur das Repository privat ist.')}>
         {(aria) => <input {...aria} className="input" value={form.username} maxLength={100} spellCheck={false} autoComplete="off" disabled={disabled || busy} onChange={(event) => set('username', event.target.value)} />}
       </FormField>
