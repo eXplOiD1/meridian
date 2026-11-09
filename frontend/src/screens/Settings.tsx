@@ -903,7 +903,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
         </div>
         {ssh && (
           <>
-            <Alert tone="warn">{t('Das Skript läuft auf dem Server, nicht in Meridian. Der Worker braucht dafür ausgehendes Netz (MERIDIAN_SSH_ENABLE=1, MERIDIAN_SHELL_NETWORK). Verwende einen eigenen Schlüssel ohne Passphrase mit möglichst wenigen Rechten auf dem Server.')}</Alert>
+            <Alert tone="warn">{t('Das Skript läuft auf dem Server, nicht in Meridian. Der Worker braucht dafür ausgehendes Netz. Docker: MERIDIAN_SSH_ENABLE=1 und MERIDIAN_SHELL_NETWORK=bridge. Ohne Docker (systemd): MERIDIAN_SSH_ENABLE=1 in /etc/meridian/meridian.env, den SSH-Client installieren und die Netzsperre der Unit aufheben (siehe Betriebshandbuch). Verwende einen eigenen Schlüssel ohne Passphrase mit möglichst wenigen Rechten auf dem Server.')}</Alert>
             <details className="fold">
               <summary>{t('Wie komme ich an die Schlüssel?')}</summary>
               <p><strong>{t('1. Server-Schlüssel (öffentlich)')}</strong> {t('Er sagt Meridian, dass es wirklich mit deinem Server spricht. Auf dem Server:')}</p>

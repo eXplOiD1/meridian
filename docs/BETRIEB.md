@@ -193,7 +193,18 @@ Ein Ausführungsort der Art **SSH-Server** führt das Skript auf einem anderen R
 3. In Meridian unter Einstellungen → Ausführungsorte „SSH-Server“ anlegen: Server, Port, Benutzer, öffentlicher Server-Schlüssel und privater Schlüssel. Der private Schlüssel wird verschlüsselt gespeichert und nie wieder angezeigt. Beim Bearbeiten lässt ein leeres Feld den gespeicherten Schlüssel stehen.
 4. SSH ist ab Werk aus, weil der Shell-Worker ohne Netz läuft:
    - **Docker:** in `.env` `MERIDIAN_SSH_ENABLE=1` und `MERIDIAN_SHELL_NETWORK=bridge` setzen, dann `docker compose up -d`.
-   - **systemd:** `MERIDIAN_SSH_ENABLE=1` in die Umgebung von `meridian-worker-shell` eintragen und per Drop-in `IPAddressDeny=any` sowie `RestrictAddressFamilies=AF_UNIX` für diese Unit aufheben (`sudo systemctl edit meridian-worker-shell`, `[Service]` mit leerem `IPAddressDeny=` und `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6`).
+   - **systemd (ohne Docker):** Dort gibt es keine Compose-Variablen. Drei Schritte, jeweils auf dem Meridian-Rechner:
+     1. Den SSH-Client installieren, falls er fehlt (`apt install openssh-client`); `setsid` gehört zu `util-linux` und ist meist vorhanden. Ohne `ssh` bricht der Lauf mit „SSH-Ausführung nicht eingerichtet: Auf diesem Rechner fehlt der SSH-Client …“ ab.
+     2. In `/etc/meridian/meridian.env` die Zeile `MERIDIAN_SSH_ENABLE=1` ergänzen.
+     3. Die Netzsperre der Unit aufheben (`sudo systemctl edit meridian-worker-shell`), denn die Unit erlaubt ab Werk nur lokale Sockets:
+        ```
+        [Service]
+        IPAddressDeny=
+        RestrictAddressFamilies=
+        RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+        ```
+        Danach `sudo systemctl restart meridian-worker-shell`. Die Zeile `IPAddressDeny=` muss leer stehen, sonst bleibt die Sperre bestehen.
+   - Ohne Schritt 2 und 3 bleibt der Ort angelegt, aber jeder Lauf schlägt mit einer festen Meldung fehl; nichts verbindet sich heimlich.
 
 **Was Meridian absichert**
 
