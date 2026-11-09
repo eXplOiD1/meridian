@@ -23,7 +23,7 @@ export function SshPublicKey({ publicKey }: { publicKey: string }) {
 
   return (
     <div className="stack">
-      <p className="hint">{t('Öffentlicher Schlüssel dieses Orts (nicht geheim):')}</p>
+      <p className="hint">{t('Anmelde-Schlüssel von Meridian, öffentlicher Teil (nicht geheim):')}</p>
       <p><code>{publicKey}</code></p>
       <p className="hint">{t('Auf dem Server als der Benutzer, der die Jobs ausführen soll, eintragen:')}</p>
       <p><code>{command}</code></p>

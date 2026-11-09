@@ -55,6 +55,7 @@ final class ShellTargetController
         private readonly SecretMasker $masker,
         private readonly AuthService $auth,
         private readonly Config $config,
+        private readonly ?SshHostKeyScanner $scanner = null,
     ) {
     }
 
@@ -62,6 +63,7 @@ final class ShellTargetController
     {
         $kernel->get('shell_targets_list', '/api/settings/shell-targets', $this->list(...));
         $kernel->post('shell_targets_add', '/api/settings/shell-targets', $this->add(...));
+        $kernel->post('shell_targets_hostkey', '/api/settings/shell-targets/ssh-hostkey', $this->hostKey(...));
         $kernel->put('shell_targets_update', '/api/settings/shell-targets/{id}', $this->update(...), ['id' => '[1-9][0-9]{0,17}']);
         $kernel->delete('shell_targets_remove', '/api/settings/shell-targets/{id}', $this->remove(...), ['id' => '[1-9][0-9]{0,17}']);
         $kernel->get('shell_targets_usable', '/api/shell/targets', $this->usable(...));
@@ -76,6 +78,43 @@ final class ShellTargetController
         $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
 
         return JsonReply::json(['targets' => array_map($this->present(...), $this->store->all())]);
+    }
+
+    /**
+     * Ruft den Host-Schlüssel eines SSH-Servers ab, damit er nicht von Hand kopiert werden muss. Der Abruf kommt von
+     * Meridian aus (dem Rechner, der später auch verbindet) und ist nur so sicher wie das Netz dazwischen: Die Antwort
+     * enthält den Fingerabdruck, den man auf dem Server gegenprüft. Nur mit `shell.targets`, CSRF, Audit.
+     */
+    public function hostKey(#[\SensitiveParameter] Request $request): Response
+    {
+        $session = $this->sessionAuth->authenticate($request);
+        if ($session === null) {
+            return JsonReply::error(401, 'Nicht angemeldet.');
+        }
+        if (!$this->csrf->check($request, $session->token)) {
+            return JsonReply::csrfFailed();
+        }
+        $this->access->require($this->users->grantsFor($session->userId), Permission::ManageShellTargets);
+
+        $data = JsonBody::object($request->getContent(), 1024);
+        if ($data === null || array_diff(array_keys($data), ['host', 'port']) !== []) {
+            throw ValidationFailed::field('body', 'Erlaubt sind host und port.');
+        }
+        $host = $data['host'] ?? null;
+        $port = $data['port'] ?? 22;
+        if (!is_string($host) || !is_int($port)) {
+            throw ValidationFailed::field('host', 'Hostname oder IP-Adresse und einen ganzzahligen Port angeben.');
+        }
+        try {
+            $found = ($this->scanner ?? new SshHostKeyScanner())->scan($host, $port);
+        } catch (InvalidShellTarget $e) {
+            throw ValidationFailed::field($e->field, $e->getMessage());
+        } catch (SshHostKeyScanFailed $e) {
+            return JsonReply::error($e->httpStatus, $e->getMessage());
+        }
+        $this->audit->record($session->userId, 'shell.hostkey_scanned', $host . ':' . $port);
+
+        return JsonReply::json($found);
     }
 
     public function add(#[\SensitiveParameter] Request $request): Response

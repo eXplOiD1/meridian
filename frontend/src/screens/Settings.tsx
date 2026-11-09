@@ -613,7 +613,10 @@ function ShellTargets({ csrf }: { csrf: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [keyNotice, setKeyNotice] = useState<{ name: string; key: string } | null>(null);
+  const [keyNotice, setKeyNotice] = useState<{ name: string; key: string; host: string; user: string } | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanInfo, setScanInfo] = useState<{ fingerprint: string; type: string; host: string; port: string } | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<ShellTargetEntry | null>(null);
@@ -685,6 +688,25 @@ function ShellTargets({ csrf }: { csrf: string }) {
     setForm(EMPTY_SHELL_FORM);
   }
 
+  async function scanHostKey(): Promise<void> {
+    setScanning(true);
+    setScanError(null);
+    setScanInfo(null);
+    const portText = form.sshPort.trim();
+    try {
+      const found = await request<{ host_key: string; fingerprint: string; type: string }>('POST', '/api/settings/shell-targets/ssh-hostkey', {
+        csrf,
+        body: { host: form.sshHost.trim(), port: /^\d+$/.test(portText) ? Number.parseInt(portText, 10) : portText },
+      });
+      set('sshHostKey', found.host_key);
+      setScanInfo({ fingerprint: found.fingerprint, type: found.type, host: form.sshHost.trim(), port: portText });
+    } catch (caught) {
+      setScanError(errorMessage(caught));
+    } finally {
+      setScanning(false);
+    }
+  }
+
   async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
     setBusy(true);
@@ -692,6 +714,8 @@ function ShellTargets({ csrf }: { csrf: string }) {
     setFormError(null);
     setNotice(null);
     setKeyNotice(null);
+    setScanInfo(null);
+    setScanError(null);
     const generated = ssh && form.sshKeyMode === 'generate';
     const body = {
       kind: form.kind,
@@ -719,7 +743,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       if (editing !== null) {
         const result = await request<{ target: ShellTargetEntry; affected_jobs: number }>('PUT', '/api/settings/shell-targets/' + String(editing.id), { csrf, body });
         setTargets((current) => current?.map((entry) => (entry.id === result.target.id ? result.target : entry)) ?? current);
-        if (generated && result.target.ssh?.public_key !== undefined) setKeyNotice({ name: result.target.name, key: result.target.ssh.public_key });
+        if (generated && result.target.ssh?.public_key !== undefined) setKeyNotice({ name: result.target.name, key: result.target.ssh.public_key, host: result.target.ssh.host, user: result.target.ssh.username });
         setOpen(false);
         setEditing(null);
         setForm(EMPTY_SHELL_FORM);
@@ -732,7 +756,7 @@ function ShellTargets({ csrf }: { csrf: string }) {
       }
       const result = await request<{ target: ShellTargetEntry }>('POST', '/api/settings/shell-targets', { csrf, body });
       setTargets((current) => [...(current ?? []), result.target]);
-      if (generated && result.target.ssh?.public_key !== undefined) setKeyNotice({ name: result.target.name, key: result.target.ssh.public_key });
+      if (generated && result.target.ssh?.public_key !== undefined) setKeyNotice({ name: result.target.name, key: result.target.ssh.public_key, host: result.target.ssh.host, user: result.target.ssh.username });
       setForm({ ...EMPTY_SHELL_FORM, kind: form.kind });
       setOpen(false);
       setNotice(t('Ausführungsort angelegt. Er steht ab sofort im Job-Editor zur Wahl.'));
@@ -781,13 +805,21 @@ function ShellTargets({ csrf }: { csrf: string }) {
 
       {loadError !== null && <Alert tone="err">{loadError}</Alert>}
       {notice !== null && <Alert tone="ok">{notice}</Alert>}
-      {keyNotice !== null && (
-        <div className="card">
-          <h3>{t('Nächster Schritt: Schlüssel auf dem Server eintragen')}</h3>
-          <p className="hint">{t('Ohne diesen Eintrag lehnt der Server die Anmeldung von „{name}“ ab.', { name: keyNotice.name })}</p>
-          <SshPublicKey publicKey={keyNotice.key} />
-        </div>
-      )}
+      <Modal open={keyNotice !== null} title={t('Schlüssel auf dem Server eintragen')} onClose={() => setKeyNotice(null)}>
+        {keyNotice !== null && (
+          <>
+            <Alert tone="warn">{t('Der Ort „{name}“ ist gespeichert, aber der Server lehnt die Anmeldung ab, bis dieser Schlüssel dort eingetragen ist.', { name: keyNotice.name })}</Alert>
+            <ol className="steps">
+              <li>{t('Befehl kopieren (Knopf unten).')}</li>
+              <li>{t('Auf dem Server {host} als Benutzer {user} im Terminal einfügen und ausführen. Nicht als root, außer root ist der Benutzer des Ortes.', { host: keyNotice.host, user: keyNotice.user })}</li>
+              <li>{t('Danach im Job auf „Testlauf“ klicken.')}</li>
+            </ol>
+            <SshPublicKey publicKey={keyNotice.key} />
+            <p className="hint">{t('Dieser Schlüssel ist der Anmelde-Schlüssel von Meridian. Er ist ein anderer als der Server-Schlüssel im Formular und darf nicht dort eingetragen werden.')}</p>
+            <ModalActions showCancel={false}><button type="button" className="btn" onClick={() => setKeyNotice(null)}>{t('Fertig')}</button></ModalActions>
+          </>
+        )}
+      </Modal>
       {targets === null && loadError === null && <p className="hint">{t('Lädt …')}</p>}
       {targets !== null && (
         <div className="table-wrap">
@@ -940,11 +972,17 @@ function ShellTargets({ csrf }: { csrf: string }) {
             <FormField label={t('Benutzer auf dem Server')} error={errors['ssh.username']}>
               {(aria) => <input {...aria} className="input input--mono" name="ssh-username" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshUser} onChange={(e) => set('sshUser', e.target.value)} />}
             </FormField>
-            <FormField label={t('Öffentlicher Server-Schlüssel')} error={errors['ssh.host_key']} hint={t('Der geprüfte Schlüssel des Servers, z. B. ssh-ed25519 AAAA… (ssh-keyscan -t ed25519 Server; Fingerabdruck vorher prüfen). Meridian verbindet sich nur mit genau diesem Schlüssel.')}>
-              {(aria) => <input {...aria} className="input input--mono" name="ssh-host-key" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshHostKey} onChange={(e) => set('sshHostKey', e.target.value)} />}
+            <FormField label={t('Server-Schlüssel (Host-Key des Zielservers)')} error={errors['ssh.host_key']} hint={t('Das ist der Schlüssel des Servers, damit Meridian sicher den richtigen Rechner trifft. Er hat nichts mit dem Anmelde-Schlüssel unten zu tun. Am einfachsten über „Server-Schlüssel abrufen“. Meridian verbindet sich nur mit genau diesem Schlüssel.')}>
+              {(aria) => <input {...aria} className="input input--mono" name="ssh-host-key" required autoComplete="off" autoCapitalize="off" spellCheck={false} value={form.sshHostKey} onChange={(e) => { set('sshHostKey', e.target.value); setScanInfo(null); }} />}
             </FormField>
+            <div className="row">
+              <button type="button" className="btn btn--ghost btn--small" disabled={scanning || form.sshHost.trim() === ''} onClick={() => void scanHostKey()}>{scanning ? t('Wird abgerufen …') : t('Server-Schlüssel abrufen')}</button>
+            </div>
+            {scanError !== null && <Alert tone="warn">{scanError}</Alert>}
+            {scanInfo !== null && <Alert tone="info">{t('Von {host}:{port} abgerufen. Fingerabdruck: {fingerprint}. Vergleiche ihn auf dem Server mit ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub; nur bei Übereinstimmung speichern.', { host: scanInfo.host, port: scanInfo.port, fingerprint: scanInfo.fingerprint })}</Alert>}
             <fieldset className="field">
-              <legend className="field__label">{t('Schlüssel für die Anmeldung')}</legend>
+              <legend className="field__label">{t('Anmelde-Schlüssel von Meridian')}</legend>
+              <span className="hint">{t('Mit diesem Schlüssel meldet sich Meridian am Server an. Sein öffentlicher Teil gehört auf den Server (authorized_keys), nicht in das Feld „Server-Schlüssel“ oben.')}</span>
               <label className="check"><input type="radio" name="ssh-key-mode" checked={form.sshKeyMode === 'generate'} onChange={() => set('sshKeyMode', 'generate')} /> {editing !== null && editing.has_private_key === true ? t('Neues Schlüsselpaar von Meridian erzeugen lassen (ersetzt das bisherige)') : t('Schlüsselpaar von Meridian erzeugen lassen (empfohlen)')}</label>
               {form.sshKeyMode === 'generate' && <span className="hint">{t('Der private Schlüssel entsteht in Meridian, wird verschlüsselt gespeichert und nie angezeigt oder kopiert. Du bekommst nach dem Speichern nur den öffentlichen Teil zum Eintragen auf dem Server.')}</span>}
               {editing !== null && editing.has_private_key === true && <label className="check"><input type="radio" name="ssh-key-mode" checked={form.sshKeyMode === 'keep'} onChange={() => set('sshKeyMode', 'keep')} /> {t('Gespeicherten Schlüssel behalten')}</label>}
